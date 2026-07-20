@@ -1,0 +1,106 @@
+<div class="table-responsive">
+  <table class="table w-100" style="table-layout: fixed; width: 100%;">
+    <thead>
+      <tr>
+        <th style="width: 5%;">#</th>
+        <th style="width: 20%;">Latitud</th>
+        <th style="width: 20%;">Longitud</th>
+        <th style="width: 25%;">Ubicación</th>
+        <th style="width: 20%;">Lugar</th>
+        <th style="width: 10%;">Creado</th>
+        <th style="width: 10%;">Acción</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% const startPos = typeof startIndex === 'number' ? startIndex : 1; %>
+      <% if (!ubicaciones || ubicaciones.length === 0) { %>
+        <tr>
+          <td colspan="7" class="text-center">No hay coincidencias</td>
+        </tr>
+      <% } else { %>
+        <% ubicaciones.forEach(function(item, index) { %>
+        <tr class="location-row" data-latitude="<%= item.latitude %>" data-longitude="<%= item.longitude %>" data-ubicacion="<%= item.ubicacion %>" data-lugar="<%= item.lugar %>" tabindex="0" role="button" style="cursor: pointer;">
+          <th scope="row"><%= startPos + index %></th>
+          <td><%= item.latitude %></td>
+          <td><%= item.longitude %></td>
+          <td><%= item.ubicacion %></td>
+          <td><%= item.lugar %></td>
+          <td><%= item.created_at ? new Date(item.created_at).toLocaleDateString('es-ES') : '' %></td>
+          <td>
+            <button type="button" class="btn btn-sm btn-outline-primary copy-location-btn" data-latitude="<%= item.latitude %>" data-longitude="<%= item.longitude %>" data-ubicacion="<%= item.ubicacion %>" data-lugar="<%= item.lugar %>">Copiar</button>
+          </td>
+        </tr>
+        <% }); %>
+      <% } %>
+    </tbody>
+  </table>
+</div>
+
+<% if (typeof currentPage === 'number' && typeof totalPages === 'number' && totalPages > 1) { %>
+<nav aria-label="Paginación de ubicaciones">
+  <div class="d-flex justify-content-center align-items-center mt-3 gap-2">
+    <ul class="pagination mb-0">
+      <% const buildPageLink = (page) => {
+           const query = new URLSearchParams({ search: searchTerm || '', page, pageSize: pageSize || 10 }).toString();
+           return `/ubicaciones?${query}`;
+         };
+      %>
+
+      <li class="page-item <%= currentPage === 1 ? 'disabled' : '' %>">
+        <a class="page-link" href="<%= buildPageLink(currentPage - 1) %>" data-page="<%= currentPage - 1 %>" tabindex="-1">Anterior</a>
+      </li>
+
+      <% 
+         const maxPagesToShow = 10;
+         let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
+         let endPage = startPage + maxPagesToShow - 1;
+         if (endPage > totalPages) {
+           endPage = totalPages;
+           startPage = Math.max(1, endPage - maxPagesToShow + 1);
+         }
+      %>
+
+      <% if (startPage > 1) { %>
+        <li class="page-item">
+          <a class="page-link" href="<%= buildPageLink(1) %>" data-page="1">1</a>
+        </li>
+        <% if (startPage > 2) { %>
+          <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+        <% } %>
+      <% } %>
+
+      <% for (let page = startPage; page <= endPage; page++) { %>
+        <li class="page-item <%= page === currentPage ? 'active' : '' %>">
+          <a class="page-link" href="<%= buildPageLink(page) %>" data-page="<%= page %>"><%= page %></a>
+        </li>
+      <% } %>
+
+      <% if (endPage < totalPages) { %>
+        <% if (endPage < totalPages - 1) { %>
+          <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+        <% } %>
+        <li class="page-item">
+          <a class="page-link" href="<%= buildPageLink(totalPages) %>" data-page="<%= totalPages %>"><%= totalPages %></a>
+        </li>
+      <% } %>
+
+      <li class="page-item <%= currentPage === totalPages ? 'disabled' : '' %>">
+        <a class="page-link" href="<%= buildPageLink(currentPage + 1) %>" data-page="<%= currentPage + 1 %>">Siguiente</a>
+      </li>
+    </ul>
+
+    <div class="d-flex align-items-center gap-2">
+      <label for="pageSizeControl" class="mb-0">Filas por página:</label>
+      <form id="pageSizeForm" action="/ubicaciones" method="GET" class="m-0 p-0">
+        <input type="hidden" name="search" value="<%= searchTerm || '' %>">
+        <input type="hidden" name="page" value="<%= currentPage %>">
+        <select id="pageSizeControl" name="pageSize" class="form-select form-select-sm" style="width: auto; display: inline-block;">
+          <option value="10" <%= pageSize === 10 ? 'selected' : '' %>>10</option>
+          <option value="20" <%= pageSize === 20 ? 'selected' : '' %>>20</option>
+          <option value="50" <%= pageSize === 50 ? 'selected' : '' %>>50</option>
+        </select>
+      </form>
+    </div>
+  </div>
+</nav>
+<% } %>

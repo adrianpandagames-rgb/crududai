@@ -1,0 +1,541 @@
+s<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <%- include('../includes/head') %>
+  </head>
+  <body>
+    <%- include('../includes/header') %>
+
+    <div id="imeiToast" style="position: fixed; top: 20px; right: 20px; z-index: 2000; min-width: 320px; max-width: 420px; background: #fff3cd; color: #856404; border: 1px solid #ffeeba; border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.15); padding: 14px 16px; display: none;">
+      <div style="font-weight: 600; margin-bottom: 4px;">Atención</div>
+      <div id="imeiToastMessage"></div>
+    </div>
+
+    <div class="container" style="margin-top: 80px !important">
+      <div class="row justify-content-md-center mb-5">
+        <div class="col-md-12 mt-5">
+          <h2 class="text-center title">
+            UNIDAD DE ANALISIS E INTELIGENCIA - IMEI
+            <hr />
+          </h2>
+        </div>
+      </div>
+
+      <% if (typeof message !== 'undefined' && message) { %>
+      <div class="row justify-content-md-center mb-4">
+        <div class="col-md-12">
+          <div class="alert <%= messageType === 'error' ? 'alert-danger' : 'alert-success' %>">
+            <%= message %>
+          </div>
+        </div>
+      </div>
+      <% } %>
+
+      <div class="row justify-content-md-center mb-5">
+        <div class="col-md-4 mb-5">
+          <div class="card p-4">
+            <h3 class="text-center mb-4">
+              Registrar IMEI
+              <hr />
+            </h3>
+
+            <form id="imeiForm" action="/imei/register" method="POST">
+              <div class="mb-3">
+                <label for="imeiBase" class="form-label">IMEI</label>
+                <div class="row g-2">
+                  <div class="col-9">
+                    <input
+                      type="text"
+                      id="imeiBase"
+                      name="imeiBase"
+                      class="form-control"
+                      inputmode="numeric"
+                      pattern="\d{14}"
+                      maxlength="14"
+                      placeholder="14 dígitos"
+                      required
+                      autocomplete="off"
+                      autocapitalize="none"
+                      spellcheck="false"
+                    />
+                  </div>
+                  <div class="col-3">
+                    <input
+                      type="text"
+                      id="imeiCheckDigit"
+                      name="imeiCheckDigit"
+                      class="form-control text-center"
+                      aria-label="Dígito verificador"
+                      readonly
+                    />
+                  </div>
+                </div>
+                <input type="hidden" id="imei" name="imei" />
+              </div>
+              <div class="row g-3">
+                <div id="objetivoInputsContainer" class="col-md-8">
+                  <div class="mb-3 objetivo-input-group">
+                    <label class="form-label">Objetivo 1</label>
+                    <input type="text" name="numObjetivo[]" class="form-control" required autocomplete="off" autocapitalize="none" spellcheck="false" />
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="mb-3">
+                    <label for="objetivoCount" class="form-label">Cantidad de objetivos</label>
+                    <input
+                      type="number"
+                      id="objetivoCount"
+                      name="objetivoCount"
+                      class="form-control"
+                      min="1"
+                      step="1"
+                      value="1"
+                      required
+                    />
+                    <div class="form-text">Ingresa un número mayor o igual a 1.</div>
+                  </div>
+                </div>
+              </div>
+              <div class="mb-3 mt-3">
+                <label for="nucObjetivo" class="form-label">NUC</label>
+                <input type="text" id="nucObjetivo" inputmode="numeric" pattern="\d{5}" maxlength="5" name="nucObjetivo" placeholder="Ingrese NUC a 5 dígitos" class="form-control" required autocomplete="off" autocapitalize="none" spellcheck="false" />
+              </div>
+              <div class="mb-3">
+                <label for="anoImei">Año</label>
+                <select id="anoImei" name="ano" class="form-select" required>
+                  <option value="" disabled selected>Seleccionar una opción</option>
+                  <option value="2023">2023</option>
+                  <option value="2024">2024</option>
+                  <option value="2025">2025</option>
+                  <option value="2026">2026</option>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label for="cursoImei">Tipo</label>
+                <select id="cursoImei" name="curso_dc" class="form-select" required>
+                  <option value="" disabled selected>Seleccionar una opción</option>
+                  <option value="Solución">Solución</option>
+                  <option value="Seguimiento">Seguimiento</option>
+                </select>
+              </div>
+              <button type="submit" class="btn btn-primary w-100">Registrar IMEI</button>
+            </form>
+          </div>
+        </div>
+
+        <div class="col-md-8 py-3 custom_table">
+          <h3 class="text-center">
+            Lista de IMEI
+            <hr />
+          </h3>
+
+          <div class="mb-3 d-flex justify-content-end">
+            <form id="imeiSearchForm" class="d-flex align-items-center" action="/imei" method="GET">
+              <input type="hidden" name="pageSize" value="<%= pageSize || 10 %>" />
+              <input type="hidden" name="page" value="1" />
+              <input
+                type="text"
+                id="imeiSearch"
+                name="search"
+                class="form-control form-control-sm"
+                placeholder="Buscar IMEI, objetivo, NUC, año, tipo o marca/modelo"
+                value="<%= searchTerm || '' %>"
+                style="min-width: 260px;"
+                autocomplete="off"
+                autocapitalize="none"
+                spellcheck="false"
+              />
+            </form>
+          </div>
+
+          <div id="imeiResultsContainer">
+            <%- include('../partials/imei-results') %>
+          </div>
+
+          <script>
+            document.getElementById('pageSizeControl')?.addEventListener('change', function() {
+              const pageInput = document.querySelector('#pageSizeForm input[name="page"]');
+              if (pageInput) {
+                pageInput.value = '1';
+              }
+              this.form.submit();
+            });
+          </script>
+
+          <script>
+            const imeiSearchInput = document.getElementById('imeiSearch');
+            const imeiSearchForm = document.getElementById('imeiSearchForm');
+            const imeiResultsContainer = document.getElementById('imeiResultsContainer');
+
+            const loadImeiResults = async (searchValue = '', page = 1) => {
+              if (!imeiResultsContainer || !imeiSearchInput) return;
+
+              const params = new URLSearchParams({
+                search: searchValue,
+                page,
+                pageSize: document.querySelector('#pageSizeForm select[name="pageSize"]')?.value || '<%= pageSize || 10 %>',
+                fragment: '1',
+              });
+
+              try {
+                const response = await fetch(`/imei?${params.toString()}`);
+                const html = await response.text();
+                if (response.ok) {
+                  imeiResultsContainer.innerHTML = html;
+                  attachImeiResultHandlers();
+                  restoreImeiSearchFocus();
+                }
+              } catch (error) {
+                console.error('IMEI search failed:', error);
+              }
+            };
+
+            const attachImeiResultHandlers = () => {
+              if (!imeiResultsContainer) return;
+
+              if (imeiResultsContainer._handlersAttached) return;
+              imeiResultsContainer._handlersAttached = true;
+
+              // Delegate pagination link clicks
+              imeiResultsContainer.addEventListener('click', (e) => {
+                const a = e.target.closest('.page-link');
+                if (!a) return;
+                const page = a.getAttribute('data-page');
+                if (!page) return;
+                e.preventDefault();
+                loadImeiResults(imeiSearchInput.value || '', Number(page));
+              });
+
+              // Handle page size changes inside the fragment
+              imeiResultsContainer.addEventListener('change', (e) => {
+                const target = e.target;
+                if (target && target.id === 'pageSizeControl') {
+                  loadImeiResults(imeiSearchInput.value || '', 1);
+                }
+              });
+            };
+
+            if (imeiSearchInput && imeiSearchForm) {
+              let searchTimer;
+
+              imeiSearchInput.addEventListener('keydown', function(event) {
+                if (event.key === 'Escape') {
+                  this.value = '';
+                  loadImeiResults(this.value, 1);
+                }
+              });
+
+              imeiSearchInput.addEventListener('input', function() {
+                clearTimeout(searchTimer);
+                searchTimer = setTimeout(() => {
+                  loadImeiResults(this.value, 1);
+                }, 250);
+              });
+
+              imeiSearchForm.addEventListener('submit', function(event) {
+                event.preventDefault();
+                loadImeiResults(imeiSearchInput.value, 1);
+              });
+            }
+
+            window.addEventListener('load', () => {
+              if (imeiSearchInput) {
+                imeiSearchInput.focus();
+                const inputLength = imeiSearchInput.value.length;
+                imeiSearchInput.setSelectionRange(inputLength, inputLength);
+              }
+              loadImeiResults(imeiSearchInput?.value || '', 1);
+            });
+          </script>
+
+          <!-- Exact duplicates modal -->
+          <div class="modal fade" id="imeiDuplicatesModal" tabindex="-1" role="dialog" aria-labelledby="imeiDuplicatesModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h5 class="modal-title" id="imeiDuplicatesModalLabel">IMEIs duplicados</h5>
+                  <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
+                    <span aria-hidden="true">&times;</span>
+                  </button>
+                </div>
+                <div class="modal-body">
+                  <p>El IMEI ya existe exactamente para el mismo objetivo, NUC, año y tipo:</p>
+                  <div class="table-responsive">
+                    <table class="table table-sm table-bordered">
+                      <thead>
+                        <tr>
+                          <th>IMEI</th>
+                          <th>Objetivo</th>
+                          <th>NUC</th>
+                          <th>Año</th>
+                          <th>Tipo</th>
+                        </tr>
+                      </thead>
+                      <tbody id="imeiDuplicatesTableBody"></tbody>
+                    </table>
+                  </div>
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Partial matches modal -->
+          <div class="modal fade" id="imeiPartialsModal" tabindex="-1" role="dialog" aria-labelledby="imeiPartialsModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h5 class="modal-title" id="imeiPartialsModalLabel">Coincidencias parciales</h5>
+                  <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
+                    <span aria-hidden="true">&times;</span>
+                  </button>
+                </div>
+                <div class="modal-body">
+                  <p>Ese IMEI se insertó, pero ya existe con el mismo número en otros objetivos, NUC o años:</p>
+                  <div class="table-responsive">
+                    <table class="table table-sm table-bordered">
+                      <thead>
+                        <tr>
+                          <th>IMEI</th>
+                          <th>Objetivo</th>
+                          <th>NUC</th>
+                          <th>Año</th>
+                          <th>Tipo</th>
+                          <th>Tipo de coincidencia</th>
+                        </tr>
+                      </thead>
+                      <tbody id="imeiPartialsTableBody"></tbody>
+                    </table>
+                  </div>
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const imeiForm = document.getElementById('imeiForm');
+      const imeiBaseInput = document.getElementById('imeiBase');
+      const imeiCheckDigitInput = document.getElementById('imeiCheckDigit');
+      const imeiFullInput = document.getElementById('imei');
+      const objetivoCountSelect = document.getElementById('objetivoCount');
+      const objetivoInputsContainer = document.getElementById('objetivoInputsContainer');
+
+      const calculateImeiCheckDigit = (base) => {
+        let sum = 0;
+
+        for (let i = 0; i < base.length; i++) {
+          let digit = Number(base[i]);
+          if (i % 2 === 1) {
+            digit *= 2;
+          }
+          sum += Math.floor(digit / 10) + (digit % 10);
+        }
+
+        return String((10 - (sum % 10)) % 10);
+      };
+
+      const updateImeiCheckDigit = () => {
+        const base = imeiBaseInput.value.replace(/\D/g, '').slice(0, 14);
+        imeiBaseInput.value = base;
+
+        if (base.length === 14) {
+          const checkDigit = calculateImeiCheckDigit(base);
+          imeiCheckDigitInput.value = checkDigit;
+          imeiFullInput.value = base + checkDigit;
+          return true;
+        }
+
+        imeiCheckDigitInput.value = '';
+        imeiFullInput.value = '';
+        return false;
+      };
+
+      imeiBaseInput?.addEventListener('input', updateImeiCheckDigit);
+
+      imeiForm?.addEventListener('submit', (event) => {
+        if (!updateImeiCheckDigit()) {
+          event.preventDefault();
+          imeiBaseInput.focus();
+          imeiBaseInput.reportValidity();
+        }
+      });
+
+      const buildObjetivoInput = (index) => {
+        return `
+          <div class="mb-3 objetivo-input-group">
+            <label class="form-label">Objetivo ${index + 1}</label>
+            <input type="text" name="numObjetivo[]" class="form-control" required />
+          </div>
+        `;
+      };
+
+      const renderObjetivoInputs = (count) => {
+        const safeCount = Math.max(count, 1);
+        objetivoInputsContainer.innerHTML = '';
+        for (let i = 0; i < safeCount; i++) {
+          objetivoInputsContainer.insertAdjacentHTML('beforeend', buildObjetivoInput(i));
+        }
+      };
+
+      const updateObjetivoInputs = (value) => {
+        const count = Number(value);
+        if (Number.isNaN(count) || count < 1) {
+          renderObjetivoInputs(1);
+          return;
+        }
+
+        renderObjetivoInputs(count);
+      };
+
+      objetivoCountSelect?.addEventListener('input', (event) => {
+        updateObjetivoInputs(event.target.value);
+      });
+
+
+      renderObjetivoInputs(Number(objetivoCountSelect?.value || 1));
+
+    </script>
+
+    <%- include('../includes/scripts') %>
+    <script>
+      const queryParams = new URLSearchParams(window.location.search);
+      const duplicatesParam = queryParams.get('exactDuplicates');
+      const partialsParam = queryParams.get('partials');
+      const toastMessage = queryParams.get('toastMessage');
+      const hadLargeModalParams = queryParams.has('exactDuplicates') || queryParams.has('partials');
+
+      const showImeiToast = (message) => {
+        const toast = document.getElementById('imeiToast');
+        const toastMessageEl = document.getElementById('imeiToastMessage');
+        if (!toast || !toastMessageEl || !message) return;
+
+        toastMessageEl.textContent = message;
+        toast.style.display = 'block';
+        toast.style.opacity = '1';
+
+        clearTimeout(showImeiToast.timeoutId);
+        showImeiToast.timeoutId = setTimeout(() => {
+          toast.style.display = 'none';
+        }, 5000);
+      };
+
+      if (toastMessage) {
+        showImeiToast(toastMessage);
+      }
+
+      if (duplicatesParam) {
+        try {
+          const duplicates = JSON.parse(duplicatesParam);
+          const tableBody = document.getElementById('imeiDuplicatesTableBody');
+          if (Array.isArray(duplicates) && tableBody) {
+            duplicates.forEach((dup) => {
+              const row = document.createElement('tr');
+              row.innerHTML = `
+                <td>${dup.imei || ''}</td>
+                <td>${dup.numObjetivo || ''}</td>
+                <td>${dup.nuc || ''}</td>
+                <td>${dup.ano || ''}</td>
+                <td>${dup.tipo || ''}</td>
+              `;
+              tableBody.appendChild(row);
+            });
+            $('#imeiDuplicatesModal').modal('show');
+          }
+        } catch (error) {
+          console.error('Failed to parse IMEI duplicate data:', error);
+        }
+      }
+
+      if (partialsParam) {
+        try {
+          const partials = JSON.parse(partialsParam);
+          const tableBody = document.getElementById('imeiPartialsTableBody');
+          if (Array.isArray(partials) && tableBody) {
+            partials.forEach((dup) => {
+              const row = document.createElement('tr');
+              row.innerHTML = `
+                <td>${dup.imei || ''}</td>
+                <td>${dup.numObjetivo || ''}</td>
+                <td>${dup.nuc || ''}</td>
+                <td>${dup.ano || ''}</td>
+                <td>${dup.tipo || ''}</td>
+                <td>${dup.issue || ''}</td>
+              `;
+              tableBody.appendChild(row);
+            });
+            $('#imeiPartialsModal').modal('show');
+          }
+        } catch (error) {
+          console.error('Failed to parse IMEI partials data:', error);
+        }
+      }
+
+      if (hadLargeModalParams) {
+        queryParams.delete('exactDuplicates');
+        queryParams.delete('partials');
+        const cleanQuery = queryParams.toString();
+        const cleanUrl = window.location.pathname + (cleanQuery ? `?${cleanQuery}` : '');
+        window.history.replaceState({}, '', cleanUrl);
+      }
+
+      async function copyTextToClipboard(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+          try {
+            await navigator.clipboard.writeText(text);
+            return true;
+          } catch (error) {
+            console.warn('Clipboard API unavailable, using fallback.', error);
+          }
+        }
+
+        const temporaryInput = document.createElement('textarea');
+        temporaryInput.value = text;
+        temporaryInput.setAttribute('readonly', '');
+        temporaryInput.style.position = 'fixed';
+        temporaryInput.style.opacity = '0';
+        temporaryInput.style.pointerEvents = 'none';
+        document.body.appendChild(temporaryInput);
+        temporaryInput.select();
+        temporaryInput.setSelectionRange(0, temporaryInput.value.length);
+
+        const copied = document.execCommand('copy');
+        document.body.removeChild(temporaryInput);
+        return copied;
+      }
+
+      document.addEventListener('click', async function(event) {
+        const button = event.target.closest('.copy-imei-btn');
+        if (!button) return;
+
+        event.preventDefault();
+
+        const imei = button.getAttribute('data-imei') || '';
+        const brand = button.getAttribute('data-brand') || '';
+        const model = button.getAttribute('data-model') || '';
+        const rightText = `Marca: ${brand} Modelo: ${model}`;
+        const textToCopy = [imei, rightText].join('\t');
+
+        try {
+          const copied = await copyTextToClipboard(textToCopy);
+          if (!copied) throw new Error('Copy command was rejected.');
+          const originalText = button.textContent;
+          button.textContent = 'Copiado';
+          setTimeout(() => {
+            button.textContent = originalText;
+          }, 1500);
+        } catch (error) {
+          console.error('Unable to copy IMEI details:', error);
+          alert('No se pudo copiar al portapapeles.');
+        }
+      });
+    </script>
+  </body>
+</html>

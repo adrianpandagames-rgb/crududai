@@ -1,0 +1,102 @@
+<div class="table-responsive">
+  <table class="table w-100" style="table-layout: fixed; width: 100%;">
+    <thead>
+      <tr>
+        <th style="width: 5%;">#</th>
+        <th style="width: 20%;">Objetivo</th>
+        <th style="width: 25%;">Contactos</th>
+        <th style="width: 12%;">NUC</th>
+        <th style="width: 11%;">Año</th>
+        <th style="width: 12%;">Tipo</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% const startPos = typeof startIndex === 'number' ? startIndex : 1; %>
+      <% if (!objetivos || objetivos.length === 0) { %>
+        <tr>
+          <td colspan="5" class="text-center">No hay coincidencias</td>
+        </tr>
+      <% } else { %>
+        <% objetivos.forEach(function(objetivo, index) { %>
+        <tr>
+          <th scope="row"><%= startPos + index %></th>
+          <td><%= objetivo.numObjetivo %></td>
+          <td><%= objetivo.contacto %></td>
+          <td><%= objetivo.nuc %></td>
+          <td><%= objetivo.ano %></td>
+          <td><%= objetivo.tipo %></td>
+        </tr>
+        <% }); %>
+      <% } %>
+    </tbody>
+  </table>
+</div>
+
+<% if (typeof currentPage === 'number' && typeof totalPages === 'number' && totalPages > 1) { %>
+<nav aria-label="Paginación de contactos">
+  <div class="d-flex justify-content-center align-items-center mt-3 gap-2">
+    <ul class="pagination mb-0">
+      <% const buildPageLink = (page) => {
+           const query = new URLSearchParams({ numObjetivo: searchTerm || '', page, pageSize: pageSize || 10 }).toString();
+           return `/Crud?${query}`;
+         };
+      %>
+
+      <li class="page-item <%= currentPage === 1 ? 'disabled' : '' %>">
+        <a class="page-link" href="<%= buildPageLink(currentPage - 1) %>" data-page="<%= currentPage - 1 %>" tabindex="-1">Anterior</a>
+      </li>
+
+      <% 
+         const maxPagesToShow = 10;
+         let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
+         let endPage = startPage + maxPagesToShow - 1;
+         if (endPage > totalPages) {
+           endPage = totalPages;
+           startPage = Math.max(1, endPage - maxPagesToShow + 1);
+         }
+      %>
+
+      <% if (startPage > 1) { %>
+        <li class="page-item">
+          <a class="page-link" href="<%= buildPageLink(1) %>" data-page="1">1</a>
+        </li>
+        <% if (startPage > 2) { %>
+          <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+        <% } %>
+      <% } %>
+
+      <% for (let page = startPage; page <= endPage; page++) { %>
+        <li class="page-item <%= page === currentPage ? 'active' : '' %>">
+          <a class="page-link" href="<%= buildPageLink(page) %>" data-page="<%= page %>"><%= page %></a>
+        </li>
+      <% } %>
+
+      <% if (endPage < totalPages) { %>
+        <% if (endPage < totalPages - 1) { %>
+          <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+        <% } %>
+        <li class="page-item">
+          <a class="page-link" href="<%= buildPageLink(totalPages) %>" data-page="<%= totalPages %>"><%= totalPages %></a>
+        </li>
+      <% } %>
+
+      <li class="page-item <%= currentPage === totalPages ? 'disabled' : '' %>">
+        <a class="page-link" href="<%= buildPageLink(currentPage + 1) %>" data-page="<%= currentPage + 1 %>">Siguiente</a>
+      </li>
+    </ul>
+
+    <div class="d-flex align-items-center gap-2">
+      <label for="pageSizeControl" class="mb-0">Filas por página:</label>
+      <form id="pageSizeForm" action="/Crud" method="GET" class="m-0 p-0">
+        <input type="hidden" name="numObjetivo" value="<%= searchTerm || '' %>">
+        <input type="hidden" name="page" value="<%= currentPage %>">
+        <select id="pageSizeControl" name="pageSize" class="form-select form-select-sm" style="width: auto; display: inline-block;">
+          <option value="10" <%= pageSize === 10 ? 'selected' : '' %>>10</option>
+          <option value="20" <%= pageSize === 20 ? 'selected' : '' %>>20</option>
+          <option value="50" <%= pageSize === 50 ? 'selected' : '' %>>50</option>
+        </select>
+      </form>
+    </div>
+  </div>
+</nav>
+<% } %>

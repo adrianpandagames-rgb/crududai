@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <%- include('../includes/head') %>
+  </head>
+  <body>
+    <%- include('../includes/header') %>
+
+    <div class="container" style="margin-top: 80px !important">
+      <div class="row justify-content-md-center mb-5">
+        <div class="col-md-12 mt-5">
+          <h2 class="text-center title">
+            REGISTRO DE ANTENAS DE RADIOFRECUENCIA  (POSICIONAMIENTO GEOGRÁFICO)
+                        <hr />
+          </h2>
+        </div>
+      </div>
+
+      <% if (typeof message !== 'undefined' && message) { %>
+      <div class="row justify-content-md-center mb-4">
+        <div class="col-md-12">
+          <div class="alert <%= messageType === 'error' ? 'alert-danger' : 'alert-success' %>">
+            <%= message %>
+          </div>
+        </div>
+      </div>
+      <% } %>
+
+      <div class="row justify-content-md-center mb-4">
+        <div class="col-md-4 mb-4">
+          <div class="card p-4">
+            <h3 class="text-center mb-4">Agregar ubicación</h3>
+            <form action="/ubicaciones/register" method="POST">
+              <div class="mb-3">
+                <label for="coordinates" class="form-label">Coordenadas</label>
+                <input type="text" id="coordinates" name="coordinates" class="form-control" placeholder="Ej. 19.432608, -99.133209 o 29°10'12.84&quot;N 111°1'21.01&quot;W" required autocomplete="off" autocapitalize="none" spellcheck="false" />
+                <div class="form-text">Ingresa latitud y longitud en el mismo campo, separadas por coma o espacio. También aceptamos formato DMS como 29°10'12.84&quot;N 111°1'21.01&quot;W.</div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Mapa</label>
+                <div id="map" style="height: 320px; width: 100%; border-radius: 8px; border: 1px solid #ddd;"></div>
+                <div class="form-text">Haz clic en el mapa para seleccionar una ubicación.</div>
+              </div>
+              <div class="mb-3">
+                <label for="ubicacion" class="form-label">Ubicación</label>
+                <input type="text" id="ubicacion" name="ubicacion" class="form-control" placeholder="Nombre de la ubicación" required autocomplete="off" autocapitalize="none" spellcheck="false" />
+              </div>
+              <div class="mb-3">
+                <label for="lugar" class="form-label">Lugar</label>
+                <input type="text" id="lugar" name="lugar" class="form-control" placeholder="Descripción del lugar" required autocomplete="off" autocapitalize="none" spellcheck="false" />
+              </div>
+              <button type="submit" class="btn btn-primary w-100">Registrar ubicación</button>
+            </form>
+          </div>
+        </div>
+
+        <div class="col-md-8 py-3 custom_table">
+          <h3 class="text-center">Lista de ubicaciones</h3>
+          <hr />
+
+          <div class="mb-3 d-flex justify-content-end">
+            <form id="ubicacionesSearchForm" class="d-flex align-items-center" action="/ubicaciones" method="GET">
+              <input type="hidden" name="pageSize" value="<%= pageSize || 10 %>" />
+              <input type="hidden" name="page" value="1" />
+              <input
+                type="text"
+                id="ubicacionesSearch"
+                name="search"
+                class="form-control form-control-sm"
+                placeholder="Buscar coordenadas (lat,long), ubicación o lugar"
+                value="<%= searchTerm || '' %>"
+                style="min-width: 240px;"
+                autocomplete="off"
+                autocapitalize="none"
+                spellcheck="false"
+              />
+            </form>
+          </div>
+
+          <div id="ubicacionesResultsContainer">
+            <%- include('../partials/ubicaciones-results') %>
+          </div>
+
+          <script>
+            document.getElementById('pageSizeControl')?.addEventListener('change', function() {
+              const pageInput = document.querySelector('#pageSizeForm input[name="page"]');
+              if (pageInput) {
+                pageInput.value = '1';
+              }
+              this.form.submit();
+            });
+          </script>
+
+          <script>
+            const ubicacionesSearchInput = document.getElementById('ubicacionesSearch');
+            const ubicacionesSearchForm = document.getElementById('ubicacionesSearchForm');
+            const ubicacionesResultsContainer = document.getElementById('ubicacionesResultsContainer');
+
+            const loadUbicacionesResults = async (searchValue = '', page = 1) => {
+              if (!ubicacionesResultsContainer || !ubicacionesSearchInput) return;
+
+              const params = new URLSearchParams({
+                search: searchValue,
+                page,
+                pageSize: document.querySelector('#pageSizeForm select[name="pageSize"]')?.value || '<%= pageSize || 10 %>',
+                fragment: '1',
+              });
+
+              try {
+                const response = await fetch(`/ubicaciones?${params.toString()}`);
+                const html = await response.text();
+                if (response.ok) {
+                  ubicacionesResultsContainer.innerHTML = html;
+                  attachUbicacionesResultHandlers();
+                }
+              } catch (error) {
+                console.error('Ubicaciones search failed:', error);
+              }
+            };
+
+            const attachUbicacionesResultHandlers = () => {
+              if (!ubicacionesResultsContainer) return;
+
+              if (ubicacionesResultsContainer._handlersAttached) return;
+              ubicacionesResultsContainer._handlersAttached = true;
+
+              ubicacionesResultsContainer.addEventListener('click', (e) => {
+                const a = e.target.closest('.page-link');
+                if (!a) return;
+                const page = a.getAttribute('data-page');
+                if (!page) return;
+                e.preventDefault();
+                loadUbicacionesResults(ubicacionesSearchInput.value || '', Number(page));
+              });
+
+              ubicacionesResultsContainer.addEventListener('change', (e) => {
+                const target = e.target;
+                if (target && target.id === 'pageSizeControl') {
+                  loadUbicacionesResults(ubicacionesSearchInput.value || '', 1);
+                }
+              });
+            };
+
+            if (ubicacionesSearchInput && ubicacionesSearchForm) {
+              let searchTimer;
+
+              ubicacionesSearchInput.addEventListener('keydown', function(event) {
+                if (event.key === 'Escape') {
+                  this.value = '';
+                  loadUbicacionesResults(this.value, 1);
+                }
+              });
+
+              ubicacionesSearchInput.addEventListener('input', function() {
+                clearTimeout(searchTimer);
+                searchTimer = setTimeout(() => {
+                  loadUbicacionesResults(this.value, 1);
+                }, 250);
+              });
+
+              ubicacionesSearchForm.addEventListener('submit', function(event) {
+                event.preventDefault();
+                loadUbicacionesResults(ubicacionesSearchInput.value, 1);
+              });
+            }
+
+            window.addEventListener('load', () => {
+              loadUbicacionesResults(ubicacionesSearchInput?.value || '', 1);
+            });
+          </script>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const mapContainer = document.getElementById('map');
+      const coordinatesInput = document.getElementById('coordinates');
+      const defaultCenter = { lat: 19.432608, lng: -99.133209 };
+      let mapInstance = null;
+      let markerInstance = null;
+
+      const showMapUnavailable = (message = 'Configura GOOGLE_MAPS_API_KEY para ver el mapa.') => {
+        if (mapContainer) {
+          mapContainer.innerHTML = `<div class="d-flex align-items-center justify-content-center h-100 text-muted" style="height:100%; min-height: 320px;">${message}</div>`;
+        }
+      };
+
+      const parseCoordinateValue = (value) => {
+        const normalizedValue = String(value || '').trim();
+        if (!normalizedValue) {
+          return null;
+        }
+
+        const numericValue = Number(normalizedValue);
+        if (!Number.isNaN(numericValue) && String(numericValue) === normalizedValue.replace(/^[+]/, '')) {
+          return numericValue;
+        }
+
+        const dmsMatch = normalizedValue.match(/^(\d{1,3})\s*[°º]\s*(\d{1,2})\s*['’]\s*(\d{1,2}(?:\.\d+)?)\s*["″]?\s*([NSEW])$/i);
+        if (!dmsMatch) {
+          return null;
+        }
+
+        let decimalValue = Number(dmsMatch[1]) + Number(dmsMatch[2]) / 60 + Number(dmsMatch[3]) / 3600;
+        const hemisphere = dmsMatch[4].toUpperCase();
+        if (hemisphere === 'S' || hemisphere === 'W') {
+          decimalValue = -decimalValue;
+        }
+
+        return decimalValue;
+      };
+
+      const parseCoordinates = (value) => {
+        if (!value) {
+          return null;
+        }
+
+        const cleanedValue = String(value).trim();
+        const parts = cleanedValue.split(/[\s,;]+/).filter(Boolean);
+        if (parts.length !== 2) {
+          return null;
+        }
+
+        const latitude = parseCoordinateValue(parts[0]);
+        const longitude = parseCoordinateValue(parts[1]);
+        if (latitude === null || longitude === null) {
+          return null;
+        }
+
+        return { lat: latitude, lng: longitude };
+      };
+
+      const updateMapFromInput = (map, marker) => {
+        const parsed = parseCoordinates(coordinatesInput?.value || '');
+        if (!parsed) {
+          return;
+        }
+
+        map.setCenter(parsed);
+        marker.setPosition(parsed);
+        marker.setVisible(true);
+      };
+
+      const focusLocationOnMap = (latitude, longitude) => {
+        if (!mapInstance || !markerInstance) {
+          return;
+        }
+
+        const parsed = parseCoordinates(`${latitude}, ${longitude}`);
+        if (!parsed) {
+          return;
+        }
+
+        coordinatesInput.value = `${parsed.lat.toFixed(6)}, ${parsed.lng.toFixed(6)}`;
+        mapInstance.setCenter(parsed);
+        markerInstance.setPosition(parsed);
+        markerInstance.setVisible(true);
+      };
+
+      window.initMap = function () {
+        if (!mapContainer || !coordinatesInput) {
+          return;
+        }
+
+        const initialPosition = parseCoordinates(coordinatesInput.value) || defaultCenter;
+        mapInstance = new google.maps.Map(mapContainer, {
+          center: initialPosition,
+          zoom: 12,
+          streetViewControl: false,
+        });
+
+        markerInstance = new google.maps.Marker({
+          position: initialPosition,
+          map: mapInstance,
+          draggable: true,
+        });
+
+        mapInstance.addListener('click', (event) => {
+          const clickedPosition = {
+            lat: event.latLng.lat(),
+            lng: event.latLng.lng(),
+          };
+
+          markerInstance.setPosition(clickedPosition);
+          markerInstance.setVisible(true);
+          coordinatesInput.value = `${clickedPosition.lat.toFixed(6)}, ${clickedPosition.lng.toFixed(6)}`;
+        });
+
+        markerInstance.addListener('dragend', (event) => {
+          const draggedPosition = {
+            lat: event.latLng.lat(),
+            lng: event.latLng.lng(),
+          };
+          coordinatesInput.value = `${draggedPosition.lat.toFixed(6)}, ${draggedPosition.lng.toFixed(6)}`;
+        });
+
+        coordinatesInput.addEventListener('change', () => {
+          updateMapFromInput(mapInstance, markerInstance);
+        });
+
+        coordinatesInput.addEventListener('blur', () => {
+          updateMapFromInput(mapInstance, markerInstance);
+        });
+      };
+
+      window.gm_authFailure = function () {
+        showMapUnavailable('La clave de Google Maps no es válida o no tiene habilitada la API de Maps JavaScript.');
+      };
+
+      if (typeof google === 'undefined' || !google.maps) {
+        showMapUnavailable();
+      }
+
+      async function copyTextToClipboard(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+          try {
+            await navigator.clipboard.writeText(text);
+            return true;
+          } catch (error) {
+            console.warn('Clipboard API unavailable, using fallback.', error);
+          }
+        }
+
+        const temporaryInput = document.createElement('textarea');
+        temporaryInput.value = text;
+        temporaryInput.setAttribute('readonly', '');
+        temporaryInput.style.position = 'fixed';
+        temporaryInput.style.opacity = '0';
+        temporaryInput.style.pointerEvents = 'none';
+        document.body.appendChild(temporaryInput);
+        temporaryInput.select();
+        temporaryInput.setSelectionRange(0, temporaryInput.value.length);
+
+        const copied = document.execCommand('copy');
+        document.body.removeChild(temporaryInput);
+        return copied;
+      }
+
+      document.addEventListener('click', async function(event) {
+        const button = event.target.closest('.copy-location-btn');
+        if (button) {
+          event.preventDefault();
+          const ubicacion = button.getAttribute('data-ubicacion') || '';
+          const lugar = button.getAttribute('data-lugar') || '';
+
+          const textToCopy = [ubicacion, lugar].join('\t');
+
+          try {
+            const copied = await copyTextToClipboard(textToCopy);
+            if (!copied) throw new Error('Copy command was rejected.');
+            button.textContent = 'Copiado';
+            setTimeout(() => {
+              button.textContent = 'Copiar';
+            }, 1500);
+          } catch (error) {
+            console.error('Unable to copy location details:', error);
+            alert('No se pudo copiar al portapapeles.');
+          }
+          return;
+        }
+
+        const row = event.target.closest('.location-row');
+        if (!row) return;
+
+        const latitude = row.getAttribute('data-latitude') || '';
+        const longitude = row.getAttribute('data-longitude') || '';
+        focusLocationOnMap(latitude, longitude);
+      });
+
+      document.addEventListener('keydown', function(event) {
+        if ((event.key === 'Enter' || event.key === ' ') && event.target.classList.contains('location-row')) {
+          event.preventDefault();
+          const latitude = event.target.getAttribute('data-latitude') || '';
+          const longitude = event.target.getAttribute('data-longitude') || '';
+          focusLocationOnMap(latitude, longitude);
+        }
+      });
+    </script>
+    <% if (googleMapsApiKey) { %>
+    <script>
+      const googleMapsScript = document.createElement('script');
+      googleMapsScript.src = 'https://maps.googleapis.com/maps/api/js?key=<%= googleMapsApiKey %>&callback=initMap';
+      googleMapsScript.async = true;
+      googleMapsScript.defer = true;
+      googleMapsScript.onerror = function () {
+        showMapUnavailable('No se pudo cargar Google Maps. Revisa la clave o la habilitación de la API.');
+      };
+      document.body.appendChild(googleMapsScript);
+    </script>
+    <% } else { %>
+    <script>
+      showMapUnavailable();
+    </script>
+    <% } %>
+    <%- include('../includes/scripts') %>
+  </body>
+</html>

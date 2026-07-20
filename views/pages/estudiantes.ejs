@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <%- include('../includes/head') %>
+  </head>
+  <body>
+    <%- include('../includes/header') %>
+
+    <div class="container" style="margin-top: 80px !important">
+      <div class="row justify-content-md-center mb-5">
+        <div class="col-md-12 mt-5">
+          <h2 class="text-center title">
+            UNIDAD DE ANALISIS E INTELIGENCIA
+            <hr />
+          </h2>
+        </div>
+      </div>
+
+      <% if (typeof message !== 'undefined' && message) { %>
+      <div class="row justify-content-md-center mb-4">
+        <div class="col-md-12">
+          <div class="alert <%= messageType === 'error' ? 'alert-danger' : 'alert-success' %>">
+            <%= message %>
+          </div>
+        </div>
+      </div>
+      <% } %>
+
+      <div class="row justify-content-md-center mb-5">
+        <div class="col-md-4 mb-5">
+          <div class="card p-4">
+            <h3 class="text-center mb-4">
+              Registrar Objetivo
+              <hr />
+            </h3>
+
+            <h5 class="mb-3">Formulario</h5>
+            <form id="multiActionForm" action="/Crud" method="GET">
+              <div class="mb-3">
+                <label for="numObjetivo" class="form-label"> Objetivo </label>
+                <input type="text" id="numObjetivo" name="numObjetivo" class="form-control" value="<%= typeof searchTerm !== 'undefined' ? searchTerm : '' %>" autocomplete="off" autocapitalize="none" spellcheck="false" />
+              </div>
+              <div class="mb-3">
+                <label for="nucObjetivo" class="form-label"> NUC </label>
+                <input type="text" id="nucObjetivo" inputmode="numeric" pattern="\d{5}" maxlength="5" name="nucObjetivo" placeholder="Ingrese NUC a 5 digitos" class="form-control" autocomplete="off" autocapitalize="none" spellcheck="false" />
+              </div>
+              <div class="mb-3">
+                <label for="ano_dc">Año</label>
+                <select id="ano_dc" name="ano" class="form-select">
+                  <option value="" disabled selected>Seleccionar una opción</option>
+                  <option value="2023">2023</option>
+                  <option value="2024">2024</option>
+                  <option value="2025">2025</option>
+                  <option value="2026">2026</option>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label for="curso_dc">Curso</label>
+                <select id="curso_dc" name="curso_dc" class="form-select">
+                  <option value="" disabled selected>Seleccionar una opción</option>
+                  <option value="Solución">Solución</option>
+                  <option value="Seguimiento">Seguimiento</option>
+                </select>
+              </div>
+             <h5 class="mb-3">Importar CSV</h5>
+            <p class="small text-muted mb-3">CSV header debe incluir la columna: <strong>contactos</strong>.</p>
+              <div class="mb-3">
+                <label for="csvFile" class="form-label">Archivo CSV</label>
+                <input type="file" id="csvFile" name="csvFile" accept=".csv" class="form-control" />
+              </div>
+              <div class="d-flex mt-4 mb-4">
+                <button class="btn btn-secondary flex-fill" type="button" id="importCsvButton" data-target="/Crud/import-csv" data-method="POST" data-require="all">Importar contactos</button>
+              </div>
+            </form>
+            <script>
+              const form = document.getElementById('multiActionForm');
+              const objetivoInput = document.getElementById('numObjetivo');
+              const nucInput = document.getElementById('nucObjetivo');
+              const anoSelect = document.getElementById('ano_dc');
+              const cursoSelect = document.getElementById('curso_dc');
+              const csvInput = document.getElementById('csvFile');
+
+document.getElementById('importCsvButton').addEventListener('click', function(event) {
+                validateAndImportCSV(form);
+              });
+
+              form.addEventListener('submit', function(event) {
+                const submitter = event.submitter;
+
+                if (submitter && submitter.hasAttribute('data-target')) {
+                  const target = submitter.getAttribute('data-target');
+                  const method = submitter.getAttribute('data-method');
+                  
+                  if (target !== '/Crud/import-csv') {
+                    form.action = target;
+                    if (method) {
+                      form.method = method;
+                    }
+                    form.enctype = 'application/x-www-form-urlencoded';
+                  }
+                }
+
+                if (submitter && submitter.dataset.require === 'objective') {
+                  objetivoInput.required = false;
+                  nucInput.required = false;
+                  anoSelect.required = false;
+                  cursoSelect.required = false;
+                  csvInput.required = false;
+                } else if (submitter && submitter.dataset.require === 'all') {
+                  objetivoInput.required = true;
+                  nucInput.required = true;
+                  anoSelect.required = true;
+                  cursoSelect.required = true;
+                  csvInput.required = true;
+                }
+              });
+
+              function validateAndImportCSV(form, submitter) {
+                const numObjetivo = objetivoInput.value.trim();
+                const nucObjetivo = nucInput.value.trim();
+                const ano = anoSelect.value;
+                const curso_dc = cursoSelect.value;
+                const csvFile = csvInput.files[0];
+
+                if (!numObjetivo || !nucObjetivo || !ano || !curso_dc || !csvFile) {
+                  alert('Todos los campos son requeridos');
+                  return;
+                }
+
+                // Leer CSV y extraer contactos
+                const reader = new FileReader();
+                reader.onload = async function(e) {
+                  try {
+                    const csv = e.target.result;
+                    const lines = csv.split(/\r?\n/).map(line => line.trim()).filter(line => line !== '');
+                    
+                    let headerIndex = -1;
+                    let headers = [];
+                    let contactos = [];
+
+                    for (let i = 0; i < lines.length; i++) {
+                      const row = parseCSVRow(lines[i]).map(h => h.trim().toLowerCase());
+                      if (row.some(v => v === 'contactos')) {
+                        headerIndex = i;
+                        headers = row;
+                        break;
+                      }
+                    }
+
+                    if (headerIndex === -1) {
+                      alert('CSV header debe incluir la columna: contactos');
+                      return;
+                    }
+
+                    const contactColumnIndex = headers.findIndex(v => v === 'contactos');
+                    for (let i = headerIndex + 1; i < lines.length; i++) {
+                      const values = parseCSVRow(lines[i]);
+                      const contactoValue = values[contactColumnIndex] ? values[contactColumnIndex].trim() : '';
+                      if (contactoValue !== '' && /^\d+$/.test(contactoValue)) {
+                        contactos.push(contactoValue);
+                      }
+                    }
+
+                    if (contactos.length === 0) {
+                      alert('CSV no contiene contactos válidos');
+                      return;
+                    }
+
+                    // Enviar validación al servidor antes de importar
+                    const formData = new FormData(form);
+                    const response = await fetch('/Crud/import-csv?validateOnly=true', {
+                      method: 'POST',
+                      referrerPolicy: 'no-referrer',
+                      body: formData
+                    });
+
+                    const result = await response.json();
+                    
+                    if (result.status === 'duplicado_detectado' || result.status === 'confirm_followup') {
+                      const confirmMessage = result.duplicado.message ||
+                        `La línea ${result.duplicado.numObjetivo} ya está registrada con los mismos contactos.\nTipo actual: ${result.duplicado.tipoExistente}.\n\n¿Desea conservarlo como Seguimiento?`;
+                      if (confirm(confirmMessage)) {
+                        await submitRealImport(form, true);
+                      } else {
+                        alert('Importación cancelada.');
+                      }
+                    } else if (result.status === 'ready') {
+                      await submitRealImport(form, false);
+                    } else if (result.status === 'success') {
+                      window.location.href = result.redirect;
+                    } else {
+                      alert('Error: ' + result.message);
+                    }
+                  } catch (error) {
+                    console.error(error);
+                    alert('Error procesando CSV: ' + error.message);
+                  }
+                };
+                reader.readAsText(csvFile);
+              }
+
+              let pendingDuplicateForm = null;
+              let pendingDuplicateData = null;
+
+              async function submitRealImport(form, forceFollowup = false) {
+                const formData = new FormData(form);
+                if (forceFollowup) {
+                  formData.set('curso_dc', 'Seguimiento');
+                  formData.append('forceFollowup', 'true');
+                }
+
+                const response = await fetch('/Crud/import-csv', {
+                  method: 'POST',
+                  referrerPolicy: 'no-referrer',
+                  body: formData
+                });
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                  sessionStorage.setItem('crudImportPartials', JSON.stringify(data.partialMatches || []));
+                  window.location.href = data.redirect;
+                } else if (data.status === 'duplicado_detectado' || data.status === 'confirm_followup') {
+                  alert('No se completó el registro: ' + (data.duplicado?.message || data.message));
+                } else {
+                  alert('Error: ' + data.message);
+                }
+              }
+
+              function parseCSVRow(row) {
+                const result = [];
+                let current = '';
+                let insideQuotes = false;
+
+                for (let i = 0; i < row.length; i++) {
+                  const char = row[i];
+                  const nextChar = row[i + 1];
+
+                  if (char === '"') {
+                    if (insideQuotes && nextChar === '"') {
+                      current += '"';
+                      i++;
+                    } else {
+                      insideQuotes = !insideQuotes;
+                    }
+                  } else if (char === ',' && !insideQuotes) {
+                    result.push(current);
+                    current = '';
+                  } else {
+                    current += char;
+                  }
+                }
+                result.push(current);
+                return result;
+              }
+
+              function showDuplicadoModal(duplicado, form) {
+                $('#duplicadoObjetivoModal').data('form', form).modal('show');
+                document.getElementById('duplicadoObjetivoMessage').innerHTML = 
+                  `La línea <strong>${duplicado.numObjetivo}</strong> ya está registrada con los mismos contactos.` +
+                  `<br>Tipo actual: <strong>${duplicado.tipoExistente}</strong>`;
+              }
+
+              window.confirmarGuardarComoSeguimiento = function(form) {
+                const cursoSelect = document.getElementById('curso_dc');
+                cursoSelect.value = 'Seguimiento';
+                
+                const formData = new FormData(form);
+                formData.append('forceFollowup', 'true');
+
+                fetch('/Crud/import-csv', {
+                  method: 'POST',
+                  referrerPolicy: 'no-referrer',
+                  body: formData
+                }).then(response => {
+                  return response.json();
+                }).then(data => {
+                  $('#duplicadoObjetivoModal').modal('hide');
+                  if (data.status === 'success') {
+                    window.location.href = data.redirect;
+                  } else {
+                    alert('Error: ' + data.message);
+                  }
+                }).catch(error => {
+                  console.error('Error:', error);
+                  alert('Error al procesar la solicitud');
+                });
+              };
+
+              window.cancelarImport = function() {
+                $('#duplicadoObjetivoModal').modal('hide');
+              };
+
+              let searchTimer;
+
+              const loadContactosResults = async (searchValue = '', page = 1) => {
+                const resultadosContainer = document.getElementById('contactosResultsContainer');
+                if (!resultadosContainer) return;
+
+                const params = new URLSearchParams({
+                  numObjetivo: searchValue,
+                  page,
+                  pageSize: document.querySelector('#pageSizeForm select[name="pageSize"]')?.value || '<%= typeof pageSize !== "undefined" ? pageSize : 10 %>',
+                  fragment: '1',
+                });
+
+                try {
+                  const response = await fetch(`/Crud?${params.toString()}`);
+                  const html = await response.text();
+                  if (response.ok) {
+                    resultadosContainer.innerHTML = html;
+                    attachContactosResultHandlers();
+                  }
+                } catch (error) {
+                  console.error('Contactos search failed:', error);
+                }
+              };
+
+              const attachContactosResultHandlers = () => {
+                const resultadosContainer = document.getElementById('contactosResultsContainer');
+                if (!resultadosContainer) return;
+                if (resultadosContainer._handlersAttached) return;
+                resultadosContainer._handlersAttached = true;
+
+                resultadosContainer.addEventListener('click', (e) => {
+                  const a = e.target.closest('.page-link');
+                  if (!a) return;
+                  const page = a.getAttribute('data-page');
+                  if (!page) return;
+                  e.preventDefault();
+                  const searchInput = document.getElementById('contactosSearch');
+                  loadContactosResults(searchInput?.value || '', Number(page));
+                });
+
+                resultadosContainer.addEventListener('change', (e) => {
+                  const target = e.target;
+                  if (target && target.id === 'pageSizeControl') {
+                    const searchInput = document.getElementById('contactosSearch');
+                    loadContactosResults(searchInput?.value || '', 1);
+                  }
+                });
+              };
+
+              const initContactosSearch = () => {
+                const contactosSearchInput = document.getElementById('contactosSearch');
+                if (!contactosSearchInput) return;
+
+                contactosSearchInput.addEventListener('keydown', function(event) {
+                  if (event.key === 'Escape') {
+                    this.value = '';
+                    loadContactosResults(this.value, 1);
+                  }
+                });
+
+                contactosSearchInput.addEventListener('input', function() {
+                  clearTimeout(searchTimer);
+                  searchTimer = setTimeout(() => {
+                    loadContactosResults(this.value, 1);
+                  }, 250);
+                });
+
+                loadContactosResults(contactosSearchInput.value || '', 1);
+              };
+
+              window.addEventListener('DOMContentLoaded', initContactosSearch);
+            </script>
+            <br />
+          </div>
+        </div>
+
+        <%- include('./contactos') %>
+      </div>
+    </div>
+
+
+    <!-- Duplicado Objetivo modal -->
+    <div class="modal fade" id="duplicadoObjetivoModal" tabindex="-1" role="dialog" aria-labelledby="duplicadoObjetivoLabel" aria-hidden="true">
+      <div class="modal-dialog modal-sm" role="document">
+        <div class="modal-content">
+          <div class="modal-header bg-warning">
+            <h5 class="modal-title" id="duplicadoObjetivoLabel">Objetivo duplicado detectado</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <p id="duplicadoObjetivoMessage"></p>
+            <p class="mt-3"><strong>¿Qué desea hacer?</strong></p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="cancelarImport()">Descartar</button>
+            <button type="button" class="btn btn-primary" onclick="confirmarGuardarComoSeguimiento($('#multiActionForm')[0])">Guardar como Seguimiento</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Partial matches modal -->
+    <div class="modal fade" id="partialsModal" tabindex="-1" role="dialog" aria-labelledby="partialsModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="partialsModalLabel">Coincidencias parciales</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <p>Algunos contactos se insertaron, pero ya existen con el mismo número en otros objetivos, NUC o años:</p>
+            <div class="table-responsive">
+              <table class="table table-sm table-bordered">
+                <thead>
+                  <tr>
+                    <th>Contacto</th>
+                    <th>Objetivo</th>
+                    <th>NUC</th>
+                    <th>Año</th>
+                    <th>Tipo</th>
+                  </tr>
+                </thead>
+                <tbody id="partialsTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <%- include('../includes/scripts') %>
+    <script>
+      const partialsParam = sessionStorage.getItem('crudImportPartials');
+      if (partialsParam) {
+        try {
+          const partials = JSON.parse(partialsParam);
+          sessionStorage.removeItem('crudImportPartials');
+          const partialsBody = document.getElementById('partialsTableBody');
+          if (Array.isArray(partials) && partialsBody && partials.length > 0) {
+            partials.forEach((dup) => {
+              const row = document.createElement('tr');
+              row.innerHTML = `
+                <td>${dup.contacto || ''}</td>
+                <td>${dup.numObjetivo || ''}</td>
+                <td>${dup.nuc || ''}</td>
+                <td>${dup.ano || ''}</td>
+                <td>${dup.tipo || ''}</td>
+              `;
+              partialsBody.appendChild(row);
+            });
+            $('#partialsModal').modal('show');
+          }
+        } catch (error) {
+          console.error('Failed to parse partial matches:', error);
+        }
+      }
+    </script>
+  </body>
+</html>

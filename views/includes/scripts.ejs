@@ -1,0 +1,26 @@
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.1.1/js/bootstrap.min.js"></script>
+<script>
+(function () {
+  const IDLE_TIMEOUT_MS = 10 * 60 * 1000;
+  let idleTimer;
+
+  const resetIdleTimer = () => {
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => {
+      fetch('/logout', {
+        method: 'GET',
+        credentials: 'same-origin'
+      }).finally(() => {
+        window.location.replace('/');
+      });
+    }, IDLE_TIMEOUT_MS);
+  };
+
+  ['mousemove', 'keydown', 'click', 'scroll', 'touchstart', 'touchmove'].forEach((eventName) => {
+    document.addEventListener(eventName, resetIdleTimer, { passive: true });
+  });
+
+  resetIdleTimer();
+})();
+</script>

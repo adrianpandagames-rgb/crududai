@@ -1,0 +1,118 @@
+<div class="table-responsive">
+  <table class="table w-100" style="table-layout: fixed; width: 100%;">
+    <thead>
+      <tr>
+        <th style="width: 4%;">#</th>
+        <th style="width: 16%;">IMEI</th>
+        <th style="width: 18%;">Objetivo</th>
+        <th style="width: 10%;">NUC</th>
+        <th style="width: 8%;">Año</th>
+        <th style="width: 10%;">Tipo</th>
+        <th style="width: 14%;">Marca</th>
+        <th style="width: 14%;">Modelo</th>
+        <th style="width: 10%;">Acción</th>
+      </tr>
+    </thead>
+    <tbody id="imeiTableBody">
+      <% const startPos = typeof startIndex === 'number' ? startIndex : 1; %>
+      <% if (!imeis || imeis.length === 0) { %>
+        <tr id="imeiNoResultsRow">
+          <td colspan="9" class="text-center">No hay coincidencias</td>
+        </tr>
+      <% } else { %>
+        <% imeis.forEach(function(item, index) { %>
+        <tr data-imei-row>
+          <th scope="row"><%= startPos + index %></th>
+          <td><%= item.imei %></td>
+          <td><%= item.numObjetivo %></td>
+          <td><%= item.nuc %></td>
+          <td><%= item.ano %></td>
+          <td><%= item.tipo %></td>
+          <td><%= item.brand_name || '—' %></td>
+          <td><%= item.modelo || '—' %></td>
+          <td>
+            <button type="button" class="btn btn-sm btn-outline-primary copy-imei-btn"
+              data-imei="<%= item.imei %>"
+              data-brand="<%= item.brand_name || '' %>"
+              data-model="<%= item.modelo || '' %>">
+              Copiar
+            </button>
+          </td>
+        </tr>
+        <% }); %>
+        <tr id="imeiNoResultsRow" class="d-none">
+          <td colspan="9" class="text-center">No hay coincidencias</td>
+        </tr>
+      <% } %>
+    </tbody>
+  </table>
+</div>
+
+<% if (typeof currentPage === 'number' && typeof totalPages === 'number' && totalPages > 1) { %>
+<nav aria-label="Paginación de IMEIs">
+  <div class="d-flex justify-content-center align-items-center mt-3 gap-2">
+    <ul class="pagination mb-0">
+      <% const buildPageLink = (page) => {
+           const query = new URLSearchParams({ search: searchTerm || '', page, pageSize: pageSize || 10 }).toString();
+           return `/imei?${query}`;
+         };
+      %>
+
+      <li class="page-item <%= currentPage === 1 ? 'disabled' : '' %>">
+        <a class="page-link" href="<%= buildPageLink(currentPage - 1) %>" data-page="<%= currentPage - 1 %>" tabindex="-1">Anterior</a>
+      </li>
+
+      <% 
+         const maxPagesToShow = 10;
+         let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
+         let endPage = startPage + maxPagesToShow - 1;
+         if (endPage > totalPages) {
+           endPage = totalPages;
+           startPage = Math.max(1, endPage - maxPagesToShow + 1);
+         }
+      %>
+
+      <% if (startPage > 1) { %>
+        <li class="page-item">
+          <a class="page-link" href="<%= buildPageLink(1) %>" data-page="1">1</a>
+        </li>
+        <% if (startPage > 2) { %>
+          <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+        <% } %>
+      <% } %>
+
+      <% for (let page = startPage; page <= endPage; page++) { %>
+        <li class="page-item <%= page === currentPage ? 'active' : '' %>">
+          <a class="page-link" href="<%= buildPageLink(page) %>" data-page="<%= page %>"><%= page %></a>
+        </li>
+      <% } %>
+
+      <% if (endPage < totalPages) { %>
+        <% if (endPage < totalPages - 1) { %>
+          <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+        <% } %>
+        <li class="page-item">
+          <a class="page-link" href="<%= buildPageLink(totalPages) %>" data-page="<%= totalPages %>"><%= totalPages %></a>
+        </li>
+      <% } %>
+
+      <li class="page-item <%= currentPage === totalPages ? 'disabled' : '' %>">
+        <a class="page-link" href="<%= buildPageLink(currentPage + 1) %>" data-page="<%= currentPage + 1 %>">Siguiente</a>
+      </li>
+    </ul>
+
+    <div class="d-flex align-items-center gap-2">
+      <label for="pageSizeControl" class="mb-0">Filas por página:</label>
+      <form id="pageSizeForm" action="/imei" method="GET" class="m-0 p-0">
+        <input type="hidden" name="search" value="<%= searchTerm || '' %>">
+        <input type="hidden" name="page" value="<%= currentPage %>">
+        <select id="pageSizeControl" name="pageSize" class="form-select form-select-sm" style="width: auto; display: inline-block;">
+          <option value="10" <%= pageSize === 10 ? 'selected' : '' %>>10</option>
+          <option value="20" <%= pageSize === 20 ? 'selected' : '' %>>20</option>
+          <option value="50" <%= pageSize === 50 ? 'selected' : '' %>>50</option>
+        </select>
+      </form>
+    </div>
+  </div>
+</nav>
+<% } %>
