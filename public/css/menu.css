@@ -69,6 +69,7 @@ a {
 .header .menu {
   clear: both;
   max-height: 0;
+  overflow: hidden;
   transition: max-height 0.2s ease-out;
 }
 
@@ -151,9 +152,38 @@ a {
     clear: none;
     float: right;
     max-height: none;
+    overflow: visible;
   }
   .header .menu-icon {
     display: none;
+  }
+}
+
+@media (max-width: 576px) {
+  .header {
+    padding: 0 12px;
+    min-height: 64px;
+  }
+
+  .header .menu {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 64px;
+    background: #fff;
+    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+  }
+
+  .header li a {
+    padding: 14px 16px;
+  }
+
+  .logo img {
+    width: 40px;
+  }
+
+  .logo-text {
+    font-size: 0.9rem;
   }
 }
 

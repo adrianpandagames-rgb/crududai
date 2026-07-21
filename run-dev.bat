@@ -1,4 +1,4 @@
 @echo off
-cd /d "c:\Users\UDAI-ALC\Documents\CRUD-Nodejs-Express-MySQL"
+cd /d "C:\Users\UDAI-ALC\Documents\crududai"
 call npm run dev
 pause

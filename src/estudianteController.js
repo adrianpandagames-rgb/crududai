@@ -452,10 +452,34 @@ export const verificarObjetivoConContactos = async (numObjetivo, nuc, ano, nuevo
 export const listarEstudiantes = async (searchTerm = "", page = 1, pageSize = 10) => {
   try {
     const offset = (page - 1) * pageSize;
-    const hasSearch = searchTerm && searchTerm.toString().trim() !== "";
+    const normalizedSearchTerm = searchTerm.toString().trim();
+    const hasSearch = normalizedSearchTerm !== "";
 
     if (hasSearch) {
-      const term = `%${searchTerm.toString().trim()}%`;
+      const colonTerms = normalizedSearchTerm.split(':').map((value) => value.trim()).filter(Boolean);
+      if (colonTerms.length === 2) {
+        const [termA, termB] = colonTerms;
+        const [rows] = await pool.query(
+          `SELECT objetivo.numObjetivo, contactos.contacto, objetivo.nuc, objetivo.tipo, objetivo.ano
+           FROM objetivo
+           INNER JOIN contactos ON objetivo.idObjetivo = contactos.idObjetivo
+           WHERE (objetivo.numObjetivo = ? AND contactos.contacto LIKE ?)
+              OR (objetivo.numObjetivo = ? AND contactos.contacto LIKE ?)
+           LIMIT ? OFFSET ?`,
+          [termA, `%${termB}%`, termB, `%${termA}%`, pageSize, offset]
+        );
+        const [countRows] = await pool.query(
+          `SELECT COUNT(*) AS count
+           FROM objetivo
+           INNER JOIN contactos ON objetivo.idObjetivo = contactos.idObjetivo
+           WHERE (objetivo.numObjetivo = ? AND contactos.contacto LIKE ?)
+              OR (objetivo.numObjetivo = ? AND contactos.contacto LIKE ?)`,
+          [termA, `%${termB}%`, termB, `%${termA}%`]
+        );
+        return { rows, total: countRows[0].count };
+      }
+
+      const term = `%${normalizedSearchTerm}%`;
       const [rows] = await pool.query(
         "SELECT objetivo.numObjetivo, contactos.contacto, objetivo.nuc, objetivo.tipo, objetivo.ano FROM objetivo INNER JOIN contactos ON objetivo.idObjetivo = contactos.idObjetivo WHERE CONCAT_WS('|', objetivo.numObjetivo, contactos.contacto, objetivo.nuc, objetivo.tipo, objetivo.ano) LIKE ? LIMIT ? OFFSET ?",
         [term, pageSize, offset]

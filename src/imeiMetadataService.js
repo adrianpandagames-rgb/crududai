@@ -3,7 +3,7 @@ import https from 'https';
 
 const IMEI_HOST = 'dash.imei.info';
 const IMEI_SERVICE_ID = process.env.IMEI_SERVICE_ID || '0';
-const IMEI_API_KEY = process.env.IMEI_API_KEY || 'fe7877b4-de9f-4eb6-8cfd-08cb1c99677c';
+const IMEI_API_KEY = process.env.IMEI_API_KEY || '44b89972-2697-48c4-a618-e65237579e26';
 
 export const shouldRetryImeiMetadata = (row) => {
   if (!row) {
@@ -40,42 +40,6 @@ const ensureImeiMetadataColumns = async () => {
       throw error;
     }
   }
-};
-
-const checkImeiAccountApi = () => {
-  const path = `/api/account/account/?API_KEY=${encodeURIComponent(IMEI_API_KEY)}`;
-
-  return new Promise((resolve) => {
-    const options = {
-      hostname: IMEI_HOST,
-      path,
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        'User-Agent': 'nodejs-imei-client/1.0',
-      },
-      timeout: 10000,
-    };
-
-    const req = https.request(options, (response) => {
-      const { statusCode } = response;
-      let data = '';
-      response.on('data', (chunk) => {
-        data += chunk;
-      });
-      response.on('end', () => {
-        resolve(statusCode === 200);
-      });
-    });
-
-    req.on('error', () => resolve(false));
-    req.on('timeout', () => {
-      req.destroy();
-      resolve(false);
-    });
-
-    req.end();
-  });
 };
 
 const fetchImeiMetadata = async (imei) => {
@@ -130,11 +94,6 @@ const fetchImeiMetadata = async (imei) => {
 
     return response;
   };
-
-  const accountOk = await checkImeiAccountApi();
-  if (!accountOk) {
-    return { brand_name: null, modelo: null, raw: null, available: false };
-  }
 
   return makeAttempt(1);
 };

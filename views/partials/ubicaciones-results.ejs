@@ -1,13 +1,12 @@
 <div class="table-responsive">
-  <table class="table w-100" style="table-layout: fixed; width: 100%;">
+  <table class="table w-100 ubicaciones-results-table">
     <thead>
       <tr>
         <th style="width: 5%;">#</th>
         <th style="width: 20%;">Latitud</th>
         <th style="width: 20%;">Longitud</th>
-        <th style="width: 25%;">Ubicación</th>
+        <th style="width: 30%;">Ubicación</th>
         <th style="width: 20%;">Lugar</th>
-        <th style="width: 10%;">Creado</th>
         <th style="width: 10%;">Acción</th>
       </tr>
     </thead>
@@ -25,7 +24,6 @@
           <td><%= item.longitude %></td>
           <td><%= item.ubicacion %></td>
           <td><%= item.lugar %></td>
-          <td><%= item.created_at ? new Date(item.created_at).toLocaleDateString('es-ES') : '' %></td>
           <td>
             <button type="button" class="btn btn-sm btn-outline-primary copy-location-btn" data-latitude="<%= item.latitude %>" data-longitude="<%= item.longitude %>" data-ubicacion="<%= item.ubicacion %>" data-lugar="<%= item.lugar %>">Copiar</button>
           </td>

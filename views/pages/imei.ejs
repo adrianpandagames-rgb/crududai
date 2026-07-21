@@ -129,18 +129,17 @@ s<!DOCTYPE html>
             <hr />
           </h3>
 
-          <div class="mb-3 d-flex justify-content-end">
-            <form id="imeiSearchForm" class="d-flex align-items-center" action="/imei" method="GET">
+          <div class="mb-3 d-flex justify-content-end flex-wrap">
+            <form id="imeiSearchForm" class="imei-search-form d-flex align-items-center flex-wrap gap-2" action="/imei" method="GET">
               <input type="hidden" name="pageSize" value="<%= pageSize || 10 %>" />
               <input type="hidden" name="page" value="1" />
               <input
                 type="text"
                 id="imeiSearch"
                 name="search"
-                class="form-control form-control-sm"
+                class="form-control form-control-sm imei-search-input"
                 placeholder="Buscar IMEI, objetivo, NUC, año, tipo o marca/modelo"
                 value="<%= searchTerm || '' %>"
-                style="min-width: 260px;"
                 autocomplete="off"
                 autocapitalize="none"
                 spellcheck="false"

@@ -96,7 +96,7 @@ const checkImeiAccountApi = (apiKey) => {
 };
 
 const fetchImeiMetadata = (imei) => {
-  const apiKey = process.env.IMEI_API_KEY || "fe7877b4-de9f-4eb6-8cfd-08cb1c99677c";
+  const apiKey = process.env.IMEI_API_KEY || "44b89972-2697-48c4-a618-e65237579e26";
   const serviceId = process.env.IMEI_SERVICE_ID || "0";
   const host = "dash.imei.info";
   const path = `/api/check/${serviceId}/?API_KEY=${encodeURIComponent(apiKey)}&imei=${encodeURIComponent(imei)}`;

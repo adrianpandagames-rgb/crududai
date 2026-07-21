@@ -2,25 +2,162 @@ body {
   margin: 0;
   background-color: #fafff9;
   font-family: "Ubuntu", sans-serif;
+  color: #1f2937;
 }
 
 .title {
   color: #3f9435;
-  font-size: 20px;
+  font-size: clamp(1.1rem, 2.2vw, 1.6rem);
   font-weight: 900;
 }
+
 form {
   background-color: #fff;
-  padding: 5px 10px;
+  padding: 12px 14px;
   border-radius: 10px;
   box-shadow: 0px 17px 26px -8px rgba(151, 172, 193, 0.6);
 }
+
 .custom_table {
   background-color: #fff;
   box-shadow: 0px 2px 97px 7px rgba(151, 172, 193, 0.6);
   border-radius: 5px;
+  overflow: hidden;
 }
+
 .container {
-  min-width: 95% !important;
+  width: min(100%, 1400px) !important;
   margin: 0 auto;
+  padding: 0 12px;
+}
+
+.card {
+  border: 0;
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+}
+
+.table-responsive {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table {
+  min-width: 720px;
+}
+
+.custom_table .table-responsive {
+  border-radius: 8px;
+}
+
+.custom_table .table {
+  min-width: 760px;
+  margin-bottom: 0;
+  table-layout: fixed;
+}
+
+.custom_table .table th,
+.custom_table .table td {
+  vertical-align: top;
+}
+
+.ubicaciones-results-table td:nth-child(4),
+.ubicaciones-results-table td:nth-child(5) {
+  white-space: normal;
+  word-break: break-word;
+}
+
+.custom_table th,
+.custom_table td {
+  white-space: normal;
+  word-break: break-word;
+}
+
+.custom_table .copy-imei-btn {
+  white-space: nowrap;
+}
+
+.imei-search-form,
+.location-search-form,
+.contactos-search-form {
+  width: 100%;
+  justify-content: flex-end;
+}
+
+.imei-search-form input,
+.location-search-form input,
+.contactos-search-form input {
+  min-width: min(100%, 260px);
+}
+
+.pagination {
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.page-link {
+  padding: 0.45rem 0.7rem;
+}
+
+.form-control,
+.form-select,
+.btn {
+  font-size: 1rem;
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 0 10px;
+  }
+
+  form {
+    padding: 10px;
+  }
+
+  .card {
+    padding: 1rem !important;
+  }
+
+  .table {
+    min-width: 640px;
+  }
+
+  .custom_table {
+    padding: 0.75rem !important;
+  }
+
+  .imei-search-form,
+  .location-search-form,
+  .contactos-search-form {
+    justify-content: stretch;
+  }
+
+  .imei-search-form input,
+  .location-search-form input,
+  .contactos-search-form input {
+    width: 100%;
+    min-width: 100%;
+  }
+}
+
+@media (max-width: 576px) {
+  .container {
+    padding: 0 8px;
+  }
+
+  .title {
+    margin-top: 1rem;
+  }
+
+  .btn {
+    width: 100%;
+  }
+
+  .pagination {
+    gap: 0.3rem;
+  }
+
+  .page-link {
+    padding: 0.35rem 0.55rem;
+  }
 }
