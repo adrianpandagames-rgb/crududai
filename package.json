@@ -7,7 +7,8 @@
   "scripts": {
     "test": "node --test",
     "dev": "nodemon app.js",
-    "start": "node app.js"
+    "start": "node app.js",
+    "package:win": "pkg . --targets node18-win-x64 --output dist/correlatador.exe"
   },
   "keywords": [],
   "author": "",
@@ -24,6 +25,7 @@
   },
   "devDependencies": {
     "mocha": "^11.7.6",
-    "nodemon": "^3.1.14"
+    "nodemon": "^3.1.14",
+    "pkg": "^5.8.8"
   }
 }

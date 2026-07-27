@@ -510,6 +510,36 @@ s<!DOCTYPE html>
         return copied;
       }
 
+      async function copyImeiToClipboard(imei, details) {
+        const text = `${imei}\t${details}\r\n`;
+
+        if (navigator.clipboard && window.isSecureContext && window.ClipboardItem) {
+          const table = document.createElement('table');
+          const row = table.insertRow();
+
+          [imei, details].forEach((value) => {
+            const cell = row.insertCell();
+            cell.style.whiteSpace = 'nowrap';
+            cell.style.setProperty('mso-wrap-style', 'none');
+            cell.textContent = value;
+          });
+
+          try {
+            await navigator.clipboard.write([
+              new ClipboardItem({
+                'text/plain': new Blob([text], { type: 'text/plain' }),
+                'text/html': new Blob([table.outerHTML], { type: 'text/html' }),
+              }),
+            ]);
+            return true;
+          } catch (error) {
+            console.warn('Rich clipboard copy unavailable, using text fallback.', error);
+          }
+        }
+
+        return copyTextToClipboard(text);
+      }
+
       document.addEventListener('click', async function(event) {
         const button = event.target.closest('.copy-imei-btn');
         if (!button) return;
@@ -520,10 +550,9 @@ s<!DOCTYPE html>
         const brand = button.getAttribute('data-brand') || '';
         const model = button.getAttribute('data-model') || '';
         const rightText = `Marca: ${brand} Modelo: ${model}`;
-        const textToCopy = [imei, rightText].join('\t');
 
         try {
-          const copied = await copyTextToClipboard(textToCopy);
+          const copied = await copyImeiToClipboard(imei, rightText);
           if (!copied) throw new Error('Copy command was rejected.');
           const originalText = button.textContent;
           button.textContent = 'Copiado';

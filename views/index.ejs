@@ -48,6 +48,10 @@
         const email = document.getElementById('email');
         const password = document.getElementById('password');
 
+        const STORAGE_EMAIL_KEY = 'rememberedEmail';
+        const STORAGE_PASSWORD_KEY = 'rememberedPassword';
+        const STORAGE_REMEMBER_KEY = 'rememberLogin';
+
         const updateAutocomplete = () => {
             if (rememberMe.checked) {
                 email.autocomplete = 'username';
@@ -58,15 +62,36 @@
             }
         };
 
-        rememberMe.checked = localStorage.getItem('rememberLogin') === 'true';
-        updateAutocomplete();
+        const loadRememberedCredentials = () => {
+            const rememberLogin = localStorage.getItem(STORAGE_REMEMBER_KEY) === 'true';
+            rememberMe.checked = rememberLogin;
+
+            if (rememberLogin) {
+                const storedEmail = localStorage.getItem(STORAGE_EMAIL_KEY);
+                const storedPassword = localStorage.getItem(STORAGE_PASSWORD_KEY);
+                if (storedEmail) email.value = storedEmail;
+                if (storedPassword) password.value = storedPassword;
+            }
+
+            updateAutocomplete();
+        };
+
+        const saveCredentials = () => {
+            if (rememberMe.checked) {
+                localStorage.setItem(STORAGE_REMEMBER_KEY, 'true');
+                localStorage.setItem(STORAGE_EMAIL_KEY, email.value || '');
+                localStorage.setItem(STORAGE_PASSWORD_KEY, password.value || '');
+            } else {
+                localStorage.removeItem(STORAGE_REMEMBER_KEY);
+                localStorage.removeItem(STORAGE_EMAIL_KEY);
+                localStorage.removeItem(STORAGE_PASSWORD_KEY);
+            }
+        };
+
+        loadRememberedCredentials();
 
         loginForm.addEventListener('submit', () => {
-            if (rememberMe.checked) {
-                localStorage.setItem('rememberLogin', 'true');
-            } else {
-                localStorage.removeItem('rememberLogin');
-            }
+            saveCredentials();
             updateAutocomplete();
         });
     </script>

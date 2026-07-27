@@ -228,22 +228,9 @@ const httpsOptions = {
 
 const httpsServer = https.createServer(httpsOptions, app);
 httpsServer.listen(HTTPS_PORT, HOST, () => {
-  console.log(`Servidor HTTPS en ejecución en https://${HOST}:${HTTPS_PORT}`);
   console.log(`Servidor HTTPS local en https://127.0.0.1:${HTTPS_PORT}`);
 });
 
-const httpServer = http.createServer({ maxHeaderSize: 128 * 1024 }, (req, res) => {
-  const host = req.headers.host?.split(':')[0] || '127.0.0.1';
-  res.writeHead(301, {
-    Location: `https://${host}:${HTTPS_PORT}${req.url}`,
-  });
-  res.end();
-});
-
-httpServer.listen(PORT, HOST, () => {
-  console.log(`Servidor HTTP en ejecución en http://${HOST}:${PORT}`);
-  console.log(`Servidor HTTP local en http://127.0.0.1:${PORT}`);
-});
 
 startImeiMetadataDailyJob((result) => {
   if (result && result.error) {

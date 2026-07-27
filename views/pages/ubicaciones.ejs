@@ -6,6 +6,8 @@
   <body>
     <%- include('../includes/header') %>
 
+    <script src="/public/js/clipboard-utils.js"></script>
+
     <div class="container" style="margin-top: 80px !important">
       <div class="row justify-content-md-center mb-5">
         <div class="col-md-12 mt-5">
@@ -336,6 +338,38 @@
         return copied;
       }
 
+      async function copyLocationToClipboard(ubicacion, lugar) {
+        const text = buildClipboardText([ubicacion, lugar]);
+
+        // Incluir una tabla HTML hace que Excel y otras hojas de cálculo
+        // reconozcan ambos valores como columnas independientes al pegar.
+        if (navigator.clipboard && window.isSecureContext && window.ClipboardItem) {
+          const table = document.createElement('table');
+          const row = table.insertRow();
+          [ubicacion, lugar].forEach((value) => {
+            const cell = row.insertCell();
+            // Excel respeta este estilo al pegar el contenido HTML.
+            cell.style.whiteSpace = 'nowrap';
+            cell.style.setProperty('mso-wrap-style', 'none');
+            cell.textContent = value;
+          });
+
+          try {
+            await navigator.clipboard.write([
+              new ClipboardItem({
+                'text/plain': new Blob([text], { type: 'text/plain' }),
+                'text/html': new Blob([table.outerHTML], { type: 'text/html' }),
+              }),
+            ]);
+            return true;
+          } catch (error) {
+            console.warn('Rich clipboard copy unavailable, using text fallback.', error);
+          }
+        }
+
+        return copyTextToClipboard(text);
+      }
+
       document.addEventListener('click', async function(event) {
         const button = event.target.closest('.copy-location-btn');
         if (button) {
@@ -343,10 +377,8 @@
           const ubicacion = button.getAttribute('data-ubicacion') || '';
           const lugar = button.getAttribute('data-lugar') || '';
 
-          const textToCopy = [ubicacion, lugar].join('\t');
-
           try {
-            const copied = await copyTextToClipboard(textToCopy);
+            const copied = await copyLocationToClipboard(ubicacion, lugar);
             if (!copied) throw new Error('Copy command was rejected.');
             button.textContent = 'Copiado';
             setTimeout(() => {

@@ -106,15 +106,11 @@ export const refreshImeiMetadata = async () => {
   );
 
   if (!rows.length) {
-    console.log('=== JOB IMEI: no hay registros con brand_name o modelo en NULL ===');
+    console.log('-- TAREA PROGRAMADA PARA BUSQUEDA DE IMEI: no hay registros con marca o modelo en NULL ');
     return { processed: 0, updated: 0 };
   }
 
-  console.log(`=== JOB IMEI: registros pendientes por completar: ${rows.length} ===`);
-  rows.forEach((row) => {
-    console.log(`=== JOB IMEI: pendiente -> IMEI: ${row.imei} | brand_name: ${row.brand_name ?? 'NULL'} | modelo: ${row.modelo ?? 'NULL'} ===`);
-  });
-
+  console.log(`-- TAREA PROGRAMADA PARA BUSQUEDA DE IMEI: registros pendientes por completar: ${rows.length} ===`);
   let updated = 0;
   for (const row of rows) {
     const metadata = await fetchImeiMetadata(row.imei);
@@ -133,7 +129,7 @@ export const refreshImeiMetadata = async () => {
 export const startImeiMetadataDailyJob = (callback = () => {}) => {
   let timeoutId = null;
 
-  console.log('=== JOB IMEI: programada la revisión diaria a las 12:00 ===');
+  console.log('--Tarea programada para busqueda de IMEI: programada la revisión diaria a las 12:00 ===');
 
   const scheduleNextRun = () => {
     if (timeoutId) {

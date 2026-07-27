@@ -71,7 +71,6 @@ Antes de ejecutar la aplicación asegúrate de tener instalado:
    mysql -u <usuario> -p
    CREATE DATABASE crudnodejs;
    use crudnodejs;
-   source BD/estudiantes.sql;
    source BD/imei.sql;
    ```
 
@@ -149,3 +148,37 @@ Pronto se agregarán capturas de la interfaz para mostrar el flujo principal de 
 - Revisar la información de marca y modelo recuperada desde la API de IMEI.
 
 Si deseas, también puedo preparar una versión del README en inglés o agregar ejemplos más detallados de uso.
+
+## Crear un ejecutable Windows y ejecutarlo como servicio (`correlatador`)
+
+Si quieres un "ejecutable" que pueda iniciarse y ejecutarse en segundo plano con un nombre fácil de identificar, sigue estos pasos.
+
+1) Generar el ejecutable (requiere `pkg`):
+
+```powershell
+npm install
+npm run package:win
+```
+
+El ejecutable resultante quedará en `dist\correlatador.exe`.
+
+2) Instalar como servicio de Windows (ejecutar PowerShell como Administrador):
+
+```powershell
+.\tools\install-service.ps1 -ExePath "C:\ruta\completa\a\tu\repo\dist\correlatador.exe"
+```
+
+Si omites `-ExePath`, el script usa `dist\correlatador.exe` por defecto.
+
+3) Detener y desinstalar el servicio (Administrador):
+
+```powershell
+.\tools\uninstall-service.ps1
+```
+
+Notas:
+
+- El servicio creado se llamará `correlatador` y puede gestionarse desde `services.msc` o con `Start-Service`/`Stop-Service`.
+- Asegúrate de construir el ejecutable compatible con tu arquitectura (el script usa `node18-win-x64`).
+- Si prefieres no instalar como servicio, puedes ejecutar el exe directamente; para iniciarlo sin consola usa un acceso directo con la opción de inicio minimizado.
+
