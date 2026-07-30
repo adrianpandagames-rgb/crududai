@@ -53,7 +53,7 @@ const requireAuth = (req, res, next) => {
   next();
 };
 
-app.use(['/Crud', '/imei', '/ubicaciones', '/inicio'], requireAuth);
+app.use(['/Crud', '/imei', '/ubicaciones', '/inicio', '/telefono', '/api/telefono'], requireAuth);
 
 
 

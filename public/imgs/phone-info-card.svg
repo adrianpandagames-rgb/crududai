@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="600" viewBox="0 0 900 600">
+  <rect width="900" height="600" rx="28" fill="#0f172a"/>
+  <rect x="24" y="24" width="852" height="552" rx="24" fill="#111827" stroke="#334155" stroke-width="2"/>
+  <circle cx="80" cy="88" r="10" fill="#fb7185"/>
+  <circle cx="112" cy="88" r="10" fill="#fbbf24"/>
+  <circle cx="144" cy="88" r="10" fill="#34d399"/>
+
+  <text x="80" y="180" fill="#f8fafc" font-family="Segoe UI, Arial, sans-serif" font-size="34" font-weight="700">Información del número</text>
+  <text x="80" y="220" fill="#94a3b8" font-family="Segoe UI, Arial, sans-serif" font-size="20">Resumen claro y visual de los datos del teléfono</text>
+
+  <rect x="80" y="260" width="740" height="280" rx="20" fill="#1f2937" stroke="#475569" stroke-width="1.5"/>
+
+  <rect x="108" y="292" width="316" height="86" rx="14" fill="#0f766e"/>
+  <text x="132" y="328" fill="#ecfeff" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="600">Número válido</text>
+  <text x="132" y="356" fill="#ffffff" font-family="Segoe UI, Arial, sans-serif" font-size="30" font-weight="700">Sí</text>
+
+  <rect x="452" y="292" width="316" height="86" rx="14" fill="#1d4ed8"/>
+  <text x="476" y="328" fill="#dbeafe" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="600">Número</text>
+  <text x="476" y="356" fill="#ffffff" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="700">18082803132</text>
+
+  <rect x="108" y="402" width="220" height="100" rx="14" fill="#7c3aed"/>
+  <text x="132" y="438" fill="#f5f3ff" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="600">Formato local</text>
+  <text x="132" y="468" fill="#ffffff" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="700">8082803132</text>
+
+  <rect x="344" y="402" width="220" height="100" rx="14" fill="#be185d"/>
+  <text x="368" y="438" fill="#fdf2f8" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="600">Formato internacional</text>
+  <text x="368" y="468" fill="#ffffff" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700">+18082803132</text>
+
+  <rect x="580" y="402" width="188" height="100" rx="14" fill="#b45309"/>
+  <text x="604" y="438" fill="#fffbeb" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="600">Prefijo</text>
+  <text x="604" y="468" fill="#ffffff" font-family="Segoe UI, Arial, sans-serif" font-size="28" font-weight="700">+1</text>
+
+  <text x="80" y="570" fill="#64748b" font-family="Segoe UI, Arial, sans-serif" font-size="16">País: United States of America · Ciudad: Wailuku · Operador: AT&amp;T Mobility LLC · Tipo: mobile</text>
+</svg>
