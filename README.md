@@ -92,7 +92,7 @@ IMEI_API_KEY=tu_api_key
 IMEI_SERVICE_ID=0
 ```
 
-> Si no se define una API key de IMEI, la aplicación intentará usar una por defecto, aunque su disponibilidad puede variar.
+> Nunca guardes claves reales en el repositorio. Usa variables de entorno locales en un archivo .env no versionado, y deja placeholders en .env.example o documentación.
 
 ## Ejecución
 

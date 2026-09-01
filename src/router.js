@@ -159,9 +159,15 @@ const checkImeiAccountApi = (apiKey) => {
 };
 
 const fetchImeiMetadata = (imei) => {
-  const apiKey = process.env.IMEI_API_KEY || "44b89972-2697-48c4-a618-e65237579e26";
+  const apiKey = process.env.IMEI_API_KEY;
   const serviceId = process.env.IMEI_SERVICE_ID || "0";
   const host = "dash.imei.info";
+
+  if (!apiKey) {
+    console.log('Skipping IMEI metadata lookup because IMEI_API_KEY is not configured.');
+    return Promise.resolve({ brand_name: null, modelo: null, raw: null, available: false });
+  }
+
   const path = `/api/check/${serviceId}/?API_KEY=${encodeURIComponent(apiKey)}&imei=${encodeURIComponent(imei)}`;
 
   const makeAttempt = (attemptsLeft) => {
@@ -392,7 +398,7 @@ router.get("/ubicaciones", async (req, res) => {
       totalPages,
       startIndex,
       pageSize,
-      googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY || "AIzaSyDWp9mOZqW9JTfJiJTUwk7Q2-PyaQi8K-Q",
+      googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY ,
     });
   } catch (error) {
     const { status, message } = error;

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <%- include('../includes/head') %>
+    <style>
+      .user-actions .user-action-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 54px;
+        padding: .4rem .55rem;
+        border-radius: .375rem;
+        font-size: .78rem;
+        font-weight: 600;
+        line-height: 1.2;
+        text-align: center;
+        white-space: normal;
+      }
+
+      .btn-outline-purple {
+        color: #6f42c1;
+        border-color: #6f42c1;
+      }
+
+      .btn-outline-purple:hover {
+        color: #fff;
+        background-color: #6f42c1;
+        border-color: #6f42c1;
+      }
+
+      .user-actions .user-role-button {
+        width: 118px;
+      }
+
+      .user-actions .user-password-button {
+        width: 104px;
+      }
+
+      .user-actions .user-status-button {
+        width: 112px;
+        white-space: nowrap;
+      }
+
+      @media (max-width: 767.98px) {
+        .user-management-table,
+        .user-management-table tbody,
+        .user-management-table tr,
+        .user-management-table td {
+          display: block;
+          width: 100%;
+        }
+
+        .user-management-table thead {
+          display: none;
+        }
+
+        .user-management-table tr {
+          margin-bottom: 1rem;
+          padding: .75rem;
+          border: 1px solid #dee2e6;
+          border-radius: .375rem;
+        }
+
+        .user-management-table td {
+          padding: .35rem 0;
+          text-align: left !important;
+          white-space: normal !important;
+        }
+
+        .user-management-table td::before {
+          content: attr(data-label);
+          display: block;
+          margin-bottom: .25rem;
+          font-weight: 600;
+        }
+
+        .user-actions {
+          display: flex !important;
+          flex-wrap: wrap !important;
+          justify-content: flex-start !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <%- include('../includes/header') %>
+
+    <main class="content-wrapper mt-5" style="margin-top: 80px !important">
+      <div class="container py-4" style="max-width: 1000px">
+        <h2 class="title mb-4">Administración de usuarios</h2>
+
+        <% if (message) { %><div class="alert alert-success"><%= message %></div><% } %>
+        <% if (error) { %><div class="alert alert-danger"><%= error %></div><% } %>
+        <% if (generatedPassword) { %>
+          <div class="alert alert-warning">
+            <strong>Contraseña temporal:</strong>
+            <code id="generated-password" class="ms-2"><%= generatedPassword %></code>
+            <button id="copy-password" type="button" class="btn btn-sm btn-outline-dark ms-2">Copiar</button>
+            <div class="small mt-2">Se muestra solo ahora. Compártela con el usuario mediante un canal seguro.</div>
+          </div>
+        <% } %>
+
+        <section class="card mb-4">
+          <div class="card-body">
+            <h3 class="h5">Agregar usuario</h3>
+            <p class="text-muted">Al crear el usuario, el sistema generará una contraseña segura y guardará únicamente su hash.</p>
+            <form action="/usuarios" method="POST" class="row g-2">
+              <div class="col-md-8">
+                <label class="visually-hidden" for="email">Correo</label>
+                <input class="form-control" type="email" name="email" id="email" placeholder="correo@ejemplo.com" required autocomplete="email">
+              </div>
+              <div class="col-md-4">
+                <button class="btn btn-primary w-100" type="submit">Crear y generar contraseña</button>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-body">
+            <h3 class="h5 mb-3">Usuarios</h3>
+            <div class="table-responsive user-management-table-wrapper">
+              <table class="table align-middle user-management-table">
+                <thead><tr><th>Correo</th><th>Rol</th><th>Estado</th><th class="text-end">Acciones</th></tr></thead>
+                <tbody>
+                  <% users.forEach((user) => { %>
+                    <tr>
+                      <td data-label="Correo"><%= user.email %></td>
+                      <td data-label="Rol"><span class="badge <%= Number(user.is_admin) === 1 ? 'bg-primary' : 'bg-secondary' %>"><%= Number(user.is_admin) === 1 ? 'Administrador' : 'Usuario' %></span></td>
+                      <td data-label="Estado"><span class="badge <%= Number(user.is_active) === 1 ? 'bg-success' : 'bg-danger' %>"><%= Number(user.is_active) === 1 ? 'Activo' : 'Deshabilitado' %></span></td>
+                      <td class="text-end text-nowrap" data-label="Acciones">
+                        <div class="d-inline-flex flex-nowrap gap-1 user-actions">
+                        <form action="/usuarios/<%= user.id %>/rol" method="POST" class="d-inline">
+                          <input type="hidden" name="isAdmin" value="<%= Number(user.is_admin) === 1 ? '0' : '1' %>">
+                          <button class="btn btn-sm <%= Number(user.is_admin) === 1 ? 'btn-outline-purple' : 'btn-outline-primary' %> user-action-button user-role-button" type="submit"><%= Number(user.is_admin) === 1 ? 'Quitar administrador' : 'Hacer administrador' %></button>
+                        </form>
+                        <form action="/usuarios/<%= user.id %>/restablecer-contrasena" method="POST" class="d-inline">
+                          <button class="btn btn-sm btn-outline-secondary user-action-button user-password-button" type="submit" <% if (Number(user.is_initial_admin) === 1 && user.id !== currentUser.id) { %>disabled title="Solo el administrador inicial puede cambiar su contraseña"<% } %>>Generar contraseña</button>
+                        </form>
+                        <form action="/usuarios/<%= user.id %>/estado" method="POST" class="d-inline">
+                          <input type="hidden" name="isActive" value="<%= Number(user.is_active) === 1 ? '0' : '1' %>">
+                          <button class="btn btn-sm btn-outline-<%= Number(user.is_active) === 1 ? 'danger' : 'success' %> user-action-button user-status-button" type="submit" <%= user.id === currentUser.id && Number(user.is_active) === 1 ? 'disabled' : '' %>><%= Number(user.is_active) === 1 ? 'Deshabilitar' : 'Habilitar' %></button>
+                        </form>
+                        </div>
+                      </td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <script>
+      document.getElementById('copy-password')?.addEventListener('click', async () => {
+        const password = document.getElementById('generated-password').textContent;
+        await navigator.clipboard.writeText(password);
+      });
+    </script>
+    <%- include('../includes/scripts') %>
+  </body>
+</html>

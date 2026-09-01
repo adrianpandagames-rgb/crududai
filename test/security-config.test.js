@@ -1,0 +1,17 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+
+const projectRoot = path.resolve(new URL('..', import.meta.url).pathname);
+
+const read = (relPath) => fs.readFileSync(path.join(projectRoot, relPath), 'utf8');
+
+test('no API keys are hardcoded as fallback values in source code', () => {
+  const imeiService = read('src/imeiMetadataService.js');
+  const router = read('src/router.js');
+
+  assert.doesNotMatch(imeiService, /IMEI_API_KEY\s*\|\|\s*['"][^'"]+['"]/);
+  assert.doesNotMatch(router, /IMEI_API_KEY\s*\|\|\s*['"][^'"]+['"]/);
+  assert.doesNotMatch(router, /PHONE_VALIDATION_ACCESS_KEY\s*\|\|\s*['"][^'"]+['"]/);
+});

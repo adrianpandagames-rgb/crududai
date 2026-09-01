@@ -3,7 +3,7 @@ import https from 'https';
 
 const IMEI_HOST = 'dash.imei.info';
 const IMEI_SERVICE_ID = process.env.IMEI_SERVICE_ID || '0';
-const IMEI_API_KEY = process.env.IMEI_API_KEY || '44b89972-2697-48c4-a618-e65237579e26';
+const IMEI_API_KEY = process.env.IMEI_API_KEY;
 
 export const shouldRetryImeiMetadata = (row) => {
   if (!row) {
@@ -43,6 +43,11 @@ const ensureImeiMetadataColumns = async () => {
 };
 
 const fetchImeiMetadata = async (imei) => {
+  if (!IMEI_API_KEY) {
+    console.warn('IMEI_API_KEY no está configurada; se omite la consulta de metadatos de IMEI.');
+    return { brand_name: null, modelo: null, raw: null };
+  }
+
   const path = `/api/check/${IMEI_SERVICE_ID}/?API_KEY=${encodeURIComponent(IMEI_API_KEY)}&imei=${encodeURIComponent(imei)}`;
 
   const makeAttempt = async (attemptsLeft) => {

@@ -36,7 +36,7 @@
 
             <div class="remember-group">
                 <input type="checkbox" id="rememberMe" name="rememberMe">
-                <label for="rememberMe">Recordar usuario y contraseña en este dispositivo</label>
+                <label for="rememberMe">Recordar usuario en este dispositivo</label>
             </div>
 
             <button type="submit" class="login-btn">Sign In</button>
@@ -49,7 +49,6 @@
         const password = document.getElementById('password');
 
         const STORAGE_EMAIL_KEY = 'rememberedEmail';
-        const STORAGE_PASSWORD_KEY = 'rememberedPassword';
         const STORAGE_REMEMBER_KEY = 'rememberLogin';
 
         const updateAutocomplete = () => {
@@ -68,10 +67,11 @@
 
             if (rememberLogin) {
                 const storedEmail = localStorage.getItem(STORAGE_EMAIL_KEY);
-                const storedPassword = localStorage.getItem(STORAGE_PASSWORD_KEY);
                 if (storedEmail) email.value = storedEmail;
-                if (storedPassword) password.value = storedPassword;
             }
+
+            // Delete passwords saved by older versions of the app.
+            localStorage.removeItem('rememberedPassword');
 
             updateAutocomplete();
         };
@@ -80,11 +80,9 @@
             if (rememberMe.checked) {
                 localStorage.setItem(STORAGE_REMEMBER_KEY, 'true');
                 localStorage.setItem(STORAGE_EMAIL_KEY, email.value || '');
-                localStorage.setItem(STORAGE_PASSWORD_KEY, password.value || '');
             } else {
                 localStorage.removeItem(STORAGE_REMEMBER_KEY);
                 localStorage.removeItem(STORAGE_EMAIL_KEY);
-                localStorage.removeItem(STORAGE_PASSWORD_KEY);
             }
         };
 

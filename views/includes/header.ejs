@@ -21,6 +21,14 @@
     <li>
       <a class="menu-item" href="/telefono">Líneas Internacionales</a>
     </li>
+    <% if (typeof currentUser !== 'undefined' && currentUser.isAdmin) { %>
+    <li>
+      <a class="menu-item" href="/usuarios">Usuarios</a>
+    </li>
+    <li>
+      <a class="menu-item" href="/auditoria">Auditoría</a>
+    </li>
+    <% } %>
     <li>
       <a class="menu-item logout-btn" href="/logout">Cerrar sesión</a>
     </li>

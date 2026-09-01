@@ -8,6 +8,11 @@
     "test": "node --test",
     "dev": "nodemon app.js",
     "start": "node app.js",
+    "migrate:passwords": "node scripts/hash-user-passwords.js",
+    "migrate:user-roles": "node scripts/add-user-roles.js",
+    "migrate:user-status": "node scripts/add-user-status.js",
+    "migrate:initial-admin": "node scripts/add-initial-admin.js",
+    "migrate:audit-logs": "node scripts/add-audit-logs.js",
     "package:win": "pkg . --targets node18-win-x64 --output dist/correlatador.exe"
   },
   "keywords": [],

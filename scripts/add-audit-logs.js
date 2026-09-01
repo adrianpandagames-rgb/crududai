@@ -1,0 +1,30 @@
+import 'dotenv/config';
+import mysql from 'mysql2/promise';
+
+const connection = await mysql.createConnection({
+  host: process.env.DB_HOST,
+  port: Number(process.env.DB_PORT || 3306),
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+});
+
+try {
+  await connection.query(`
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL,
+      user_email VARCHAR(255) NOT NULL,
+      method VARCHAR(10) NOT NULL,
+      request_path VARCHAR(255) NOT NULL,
+      status_code SMALLINT UNSIGNED NOT NULL,
+      ip_address VARCHAR(45) NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX audit_logs_created_at_index (created_at),
+      INDEX audit_logs_user_id_index (user_id)
+    )
+  `);
+  console.log('Audit log table is ready.');
+} finally {
+  await connection.end();
+}

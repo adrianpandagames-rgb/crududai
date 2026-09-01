@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <%- include('../includes/head') %>
+  </head>
+  <body>
+    <%- include('../includes/header') %>
+
+    <main class="content-wrapper mt-5" style="margin-top: 80px !important">
+      <div class="container py-4" style="max-width: 1200px">
+        <h2 class="title mb-4">Auditoría de cambios</h2>
+        <section class="card">
+          <div class="card-body">
+            <p class="text-muted">Se muestran los últimos 200 cambios realizados por usuarios autenticados.</p>
+            <div class="table-responsive">
+              <table class="table table-sm align-middle mb-0">
+                <thead>
+                  <tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Ruta</th><th>Estado</th><th>IP</th></tr>
+                </thead>
+                <tbody>
+                  <% if (entries.length === 0) { %>
+                    <tr><td colspan="6" class="text-center text-muted py-4">Aún no hay cambios registrados.</td></tr>
+                  <% } %>
+                  <% entries.forEach((entry) => { %>
+                    <tr>
+                      <td class="text-nowrap"><%= entry.createdAt %></td>
+                      <td><%= entry.user_email %></td>
+                      <td><span class="badge bg-secondary"><%= entry.method %></span></td>
+                      <td><code><%= entry.request_path %></code></td>
+                      <td><%= entry.status_code %></td>
+                      <td><%= entry.ip_address || '-' %></td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+    <%- include('../includes/scripts') %>
+  </body>
+</html>
