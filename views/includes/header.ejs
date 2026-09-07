@@ -7,9 +7,6 @@
   <label class="menu-icon" for="menu-btn"><span class="navicon"></span></label>
   <ul class="menu">
     <li>
-      <a class="menu-item" href="/No">NO USAR!</a>
-    </li>
-    <li>
       <a class="menu-item" href="/Crud">Líneas</a>
     </li>
     <li>
@@ -19,14 +16,20 @@
       <a class="menu-item" href="/ubicaciones">Ubicaciones</a>
     </li>
     <li>
+      <a class="menu-item" href="/ruta">Ruta</a>
+    </li>
+    <li>
       <a class="menu-item" href="/telefono">Líneas Internacionales</a>
     </li>
     <% if (typeof currentUser !== 'undefined' && currentUser.isAdmin) { %>
-    <li>
-      <a class="menu-item" href="/usuarios">Usuarios</a>
-    </li>
-    <li>
-      <a class="menu-item" href="/auditoria">Auditoría</a>
+    <li class="admin-menu">
+      <details>
+        <summary class="menu-item">Administración</summary>
+        <ul class="admin-submenu">
+          <li><a class="menu-item" href="/usuarios">Usuarios</a></li>
+          <li><a class="menu-item" href="/auditoria">Auditoría</a></li>
+        </ul>
+      </details>
     </li>
     <% } %>
     <li>

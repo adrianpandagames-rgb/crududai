@@ -23,20 +23,20 @@
             <div class="success-box"><%= success %></div>
         <% } %>
 
-        <form id="loginForm" action="/login" method="POST">
+        <form id="loginForm" action="/login" method="POST" autocomplete="on">
             <div class="input-group">
                 <label for="email">Email</label>
-                <input type="email" id="email" name="email" placeholder="Email" required autocomplete="off" autocapitalize="none" spellcheck="false">
+                <input type="email" id="email" name="email" placeholder="Email" required autocomplete="username" autocapitalize="none" spellcheck="false">
             </div>
 
             <div class="input-group">
                 <label for="password">Contraseña</label>
-                <input type="password" id="password" name="password" placeholder="Contraseña" required autocomplete="new-password" autocapitalize="none" spellcheck="false">
+                <input type="password" id="password" name="password" placeholder="Contraseña" required autocomplete="current-password" autocapitalize="none" spellcheck="false">
             </div>
 
             <div class="remember-group">
                 <input type="checkbox" id="rememberMe" name="rememberMe">
-                <label for="rememberMe">Recordar usuario en este dispositivo</label>
+                <label for="rememberMe">Recordar usuario</label>
             </div>
 
             <button type="submit" class="login-btn">Sign In</button>
@@ -52,13 +52,8 @@
         const STORAGE_REMEMBER_KEY = 'rememberLogin';
 
         const updateAutocomplete = () => {
-            if (rememberMe.checked) {
-                email.autocomplete = 'username';
-                password.autocomplete = 'current-password';
-            } else {
-                email.autocomplete = 'off';
-                password.autocomplete = 'new-password';
-            }
+            email.autocomplete = 'username';
+            password.autocomplete = 'current-password';
         };
 
         const loadRememberedCredentials = () => {

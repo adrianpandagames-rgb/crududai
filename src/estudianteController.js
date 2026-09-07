@@ -397,6 +397,18 @@ export const listarUbicaciones = async (searchTerm = "", page = 1, pageSize = 10
   }
 };
 
+export const listarUbicacionesParaRuta = async () => {
+  try {
+    const [rows] = await pool.query(
+      'SELECT idUbicacion, latitude, longitude, ubicacion, lugar FROM ubicaciones'
+    );
+    return rows;
+  } catch (error) {
+    console.log(error);
+    throw { status: 500, message: "Error al obtener ubicaciones para Ruta" };
+  }
+};
+
 export const buscarObjetivoConContactos = async (numObjetivo, nuc, ano) => {
   try {
     const [rows] = await pool.query(

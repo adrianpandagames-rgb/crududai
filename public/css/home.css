@@ -77,6 +77,95 @@ form {
   white-space: nowrap;
 }
 
+.custom_table .ruta-actions {
+  width: 175px;
+  white-space: nowrap;
+  word-break: normal;
+}
+
+.custom_table .ruta-files-table th:nth-child(3),
+.custom_table .ruta-files-table td:nth-child(3) {
+  width: 105px;
+  padding-left: 8px;
+  padding-right: 8px;
+  text-align: center;
+  white-space: nowrap;
+  word-break: normal;
+}
+
+.custom_table .ruta-files-table {
+  width: 100%;
+  min-width: 100%;
+  table-layout: auto;
+}
+
+.custom_table .ruta-files-table th,
+.custom_table .ruta-files-table td {
+  vertical-align: middle;
+}
+
+.custom_table .ruta-files-table th:first-child,
+.custom_table .ruta-files-table td:first-child {
+  min-width: 180px;
+}
+
+.custom_table .ruta-files-table th:nth-child(2),
+.custom_table .ruta-files-table td:nth-child(2) {
+  min-width: 100px;
+  white-space: nowrap;
+  word-break: normal;
+}
+
+.custom_table .ruta-actions .btn {
+  white-space: nowrap;
+}
+
+.custom_table .ruta-actions form {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.ruta-status-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+.ruta-status-ready {
+  background-color: #198754;
+}
+
+.ruta-status-pending {
+  background-color: #ffc107;
+}
+
+.ruta-status-error {
+  background-color: #dc3545;
+}
+
+.ruta-status-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  margin-top: 14px;
+  color: #4b5563;
+  font-size: 0.9rem;
+}
+
+.ruta-status-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .imei-search-form,
 .location-search-form,
 .contactos-search-form {

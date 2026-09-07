@@ -15,6 +15,7 @@ Este proyecto ofrece una interfaz web para:
 - registrar objetivos y contactos asociados;
 - almacenar IMEIs y validar posibles duplicados o coincidencias;
 - consultar metadatos de IMEI mediante una API externa;
+- importar archivos CSV compatibles con Excel en Ruta para numerar antenas y completar sus ubicaciones;
 - autenticar usuarios con sesiones y opción de recordar sesión.
 
 La aplicación usa EJS como motor de vistas y sirve contenido estático desde la carpeta public.

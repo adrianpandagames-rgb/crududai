@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <%- include('../includes/head') %>
+  </head>
+  <body>
+    <%- include('../includes/header') %>
+
+    <main class="container" style="margin-top: 80px !important">
+      <div class="row justify-content-md-center mb-5">
+        <div class="col-md-12 mt-5">
+          <h2 class="text-center title">RUTA <hr /></h2>
+        </div>
+      </div>
+
+      <% if (message) { %>
+        <div class="alert <%= messageType === 'error' ? 'alert-danger' : 'alert-success' %>"><%= message %></div>
+      <% } %>
+
+      <div class="row justify-content-md-center mb-4">
+        <div class="col-md-5 mb-4">
+          <div class="card p-4">
+            <h3 class="text-center mb-4">Importar archivo</h3>
+            <form action="/ruta/importar" method="POST" enctype="multipart/form-data">
+              <div class="mb-3">
+                <label for="linea" class="form-label">Número de línea</label>
+                <input type="text" id="linea" name="linea" class="form-control" maxlength="50" required autocomplete="off" />
+              </div>
+              <div class="mb-3">
+                <label for="archivo" class="form-label">Archivo CSV o Excel (.xlsx)</label>
+                <input type="file" id="archivo" name="archivo" class="form-control" accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required />
+                <div class="form-text">Se conservan las columnas originales. Se actualizan antena, ubicación, lugar, latitud y longitud; si alguna no existe, se agrega.</div>
+              </div>
+              <button type="submit" class="btn btn-primary w-100">Importar archivo</button>
+            </form>
+          </div>
+        </div>
+
+        <div class="col-md-7 py-3 custom_table">
+          <h3 class="text-center">Archivos de Ruta</h3>
+          <hr />
+          <div class="table-responsive">
+            <table class="table w-100 ruta-files-table">
+              <thead>
+                <tr>
+                  <th>Archivo</th>
+                  <th>Línea</th>
+                  <th>Estado</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% if (!files || files.length === 0) { %>
+                  <tr><td colspan="4" class="text-center">No hay archivos importados</td></tr>
+                <% } else { %>
+                  <% files.forEach((file) => { %>
+                    <tr>
+                      <td><%= file.name %></td>
+                      <td><%= file.lineNumber %></td>
+                      <td>
+                        <% if (file.status === 'listo') { %>
+                          <span class="ruta-status-dot ruta-status-ready" title="Listo" aria-label="Listo"></span>
+                        <% } else if (file.status === 'error') { %>
+                          <span class="ruta-status-dot ruta-status-error" title="Error: <%= file.error %>" aria-label="Error"></span>
+                        <% } else { %>
+                          <span class="ruta-status-dot ruta-status-pending" title="En proceso" aria-label="En proceso"></span>
+                        <% } %>
+                      </td>
+                      <td class="ruta-actions">
+                        <div class="d-flex align-items-center gap-2 flex-nowrap">
+                        <% if (file.status === 'listo') { %>
+                          <a class="btn btn-sm btn-outline-primary" href="/ruta/exportar/<%= file.id %>">Exportar CSV</a>
+                        <% } else { %>
+                          <button type="button" class="btn btn-sm btn-secondary" disabled>Exportar CSV</button>
+                        <% } %>
+                        <form action="/ruta/eliminar/<%= file.id %>" method="POST" class="m-0 flex-shrink-0" onsubmit="return confirm('¿Eliminar este archivo de Ruta?');">
+                          <button type="submit" class="btn btn-sm btn-outline-danger" aria-label="Eliminar archivo" title="Eliminar archivo">
+                            <i class="bi bi-trash3" aria-hidden="true"></i>
+                          </button>
+                        </form>
+                        </div>
+                      </td>
+                    </tr>
+                  <% }); %>
+                <% } %>
+              </tbody>
+            </table>
+          </div>
+          <div class="ruta-status-legend" aria-label="Significado de estados">
+            <span><i class="ruta-status-dot ruta-status-ready" aria-hidden="true"></i> Listo</span>
+            <span><i class="ruta-status-dot ruta-status-pending" aria-hidden="true"></i> En proceso</span>
+            <span><i class="ruta-status-dot ruta-status-error" aria-hidden="true"></i> Error</span>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <% if (files.some((file) => file.status === 'pendiente')) { %>
+      <script>
+        setTimeout(() => window.location.reload(), 5000);
+      </script>
+    <% } %>
+  </body>
+</html>

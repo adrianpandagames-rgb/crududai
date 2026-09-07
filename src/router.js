@@ -2,6 +2,8 @@ import express from "express";
 import multer from "multer";
 import https from "https";
 import http from "http";
+import path from "path";
+import crypto from "crypto";
 
 import {
   agregarEstudiante,
@@ -22,13 +24,89 @@ import {
   buscarObjetivoEnObjetivoImei,
   buscarObjetivoEnObjetivo,
   verificarObjetivoConContactos,
+  listarUbicacionesParaRuta,
 } from "./estudianteController.js";
 import { maskApiKeyInUrl } from "./loggingUtils.js";
+import { createRutaCsv, processRutaCsv, processRutaXlsx } from "./rutaService.js";
+import pool from "./db.js";
 
-const upload = multer({ storage: multer.memoryStorage() });
+const RUTA_MAX_FILE_SIZE = 20 * 1024 * 1024;
+const uploadStorage = multer.memoryStorage();
+const upload = multer({ storage: uploadStorage });
+const rutaUploadParser = multer({ storage: uploadStorage, limits: { fileSize: RUTA_MAX_FILE_SIZE } });
 const router = express.Router();
 const MAX_REDIRECT_ITEMS = 20;
 const PHONE_VALIDATION_API_URL = 'http://apilayer.net/api/validate';
+const rutaStorageReady = pool.query(`
+  CREATE TABLE IF NOT EXISTS ruta_archivos (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    file_uuid CHAR(36) NOT NULL UNIQUE,
+    line_number VARCHAR(50) NOT NULL,
+    original_name VARCHAR(255) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    result_csv LONGTEXT NULL,
+    row_count INT UNSIGNED NOT NULL DEFAULT 0,
+    error_message VARCHAR(500) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME NOT NULL,
+    INDEX ruta_archivos_expires_at_index (expires_at)
+  )
+`).then(() => true);
+
+const cleanExpiredRutaFiles = async () => {
+  await rutaStorageReady;
+  await pool.query('DELETE FROM ruta_archivos WHERE expires_at <= NOW()');
+};
+
+const processRutaFile = async (job, buffer, extension) => {
+  try {
+    const locations = await listarUbicacionesParaRuta();
+    const rows = extension === '.xlsx'
+      ? processRutaXlsx(buffer, locations)
+      : processRutaCsv(buffer.toString('utf8'), locations);
+    const resultCsv = '\uFEFF' + createRutaCsv(rows);
+    await pool.execute(
+      `UPDATE ruta_archivos
+       SET status = 'listo', result_csv = ?, row_count = ?, error_message = NULL
+       WHERE file_uuid = ? AND expires_at > NOW()`,
+      [resultCsv, Math.max(rows.length - 1, 0), job.id],
+    );
+  } catch (error) {
+    await pool.execute(
+      `UPDATE ruta_archivos
+       SET status = 'error', error_message = ?
+       WHERE file_uuid = ? AND expires_at > NOW()`,
+      [error.message || 'No fue posible procesar el archivo.', job.id],
+    ).catch((updateError) => console.error('Unable to update Ruta file:', updateError.message));
+  }
+};
+
+const rutaUpload = (req, res, next) => {
+  rutaUploadParser.single('archivo')(req, res, (error) => {
+    if (!error) return next();
+    const message = error.code === 'LIMIT_FILE_SIZE'
+      ? 'El archivo supera el límite de 20 MB.'
+      : 'No fue posible leer el archivo enviado.';
+    return res.redirect('/ruta?message=' + encodeURIComponent(message) + '&type=error');
+  });
+};
+
+const writeSearchAuditLog = (req, res, path, searchTerm) => {
+  const normalizedTerm = String(searchTerm || '').trim();
+  if (!normalizedTerm || !req.session) return;
+
+  res.on('finish', () => {
+    if (res.statusCode < 200 || res.statusCode >= 400) return;
+    req.app.locals.writeAuditLog?.({
+      userId: req.session.userId,
+      userEmail: req.session.email,
+      action: 'SEARCH',
+      requestPath: `${path}?search=${normalizedTerm.slice(0, 200)}`,
+      statusCode: res.statusCode,
+      ipAddress: req.ip,
+    });
+  });
+};
 
 const normalizePhoneNumber = (value) => String(value || '').replace(/\D/g, '');
 
@@ -274,6 +352,7 @@ const parseCsvRow = (line) => {
 router.get("/Crud", async (req, res) => {
   try {
     const searchTerm = req.query.numObjetivo || req.query.search || "";
+    writeSearchAuditLog(req, res, '/Crud', searchTerm);
     const page = Number.isInteger(parseInt(req.query.page, 10)) ? Math.max(parseInt(req.query.page, 10), 1) : 1;
     const pageSize = Number.isInteger(parseInt(req.query.pageSize, 10)) ? Math.max(parseInt(req.query.pageSize, 10), 1) : 10;
 
@@ -332,6 +411,7 @@ router.post('/api/telefono/validar', async (req, res) => {
 router.get("/imei", async (req, res) => {
   try {
     const searchTerm = req.query.search || "";
+    writeSearchAuditLog(req, res, '/imei', searchTerm);
     const page = Number.isInteger(parseInt(req.query.page, 10)) ? Math.max(parseInt(req.query.page, 10), 1) : 1;
     const pageSize = Number.isInteger(parseInt(req.query.pageSize, 10)) ? Math.max(parseInt(req.query.pageSize, 10), 1) : 10;
 
@@ -371,6 +451,7 @@ export { fetchImeiMetadata };
 router.get("/ubicaciones", async (req, res) => {
   try {
     const searchTerm = req.query.search || "";
+    writeSearchAuditLog(req, res, '/ubicaciones', searchTerm);
     const page = Number.isInteger(parseInt(req.query.page, 10)) ? Math.max(parseInt(req.query.page, 10), 1) : 1;
     const pageSize = Number.isInteger(parseInt(req.query.pageSize, 10)) ? Math.max(parseInt(req.query.pageSize, 10), 1) : 10;
 
@@ -426,6 +507,87 @@ router.post('/ubicaciones/register', async (req, res) => {
       ? 'La coordenada ya se encuentra registrada.'
       : 'Error al registrar la ubicación.';
     return res.redirect('/ubicaciones?message=' + encodeURIComponent(message) + '&type=error');
+  }
+});
+
+router.get('/ruta', (req, res) => {
+  Promise.resolve()
+    .then(() => cleanExpiredRutaFiles())
+    .then(async () => {
+      const [files] = await pool.query(
+        `SELECT file_uuid AS id, line_number AS lineNumber, original_name AS name,
+                status, row_count AS \`rows\`, error_message AS error
+         FROM ruta_archivos
+          ORDER BY created_at DESC, id DESC`,
+      );
+      res.render('pages/ruta', {
+        files,
+        message: req.query.message || null,
+        messageType: req.query.type || null,
+      });
+    })
+    .catch((error) => res.status(500).json({ error: error.message }));
+});
+
+router.post('/ruta/importar', rutaUpload, async (req, res) => {
+  if (!req.file) return res.redirect('/ruta?message=' + encodeURIComponent('Selecciona un archivo CSV.') + '&type=error');
+  const lineNumber = String(req.body.linea || '').trim();
+  if (!lineNumber) return res.redirect('/ruta?message=' + encodeURIComponent('Ingresa el número de línea.') + '&type=error');
+  if (lineNumber.length > 50) return res.redirect('/ruta?message=' + encodeURIComponent('El número de línea es demasiado largo.') + '&type=error');
+
+  const extension = path.extname(req.file.originalname).toLowerCase();
+  if (!['.csv', '.xlsx'].includes(extension)) {
+    return res.redirect('/ruta?message=' + encodeURIComponent('El archivo debe ser CSV o Excel (.xlsx).') + '&type=error');
+  }
+
+  const id = crypto.randomUUID();
+  await cleanExpiredRutaFiles();
+  await pool.execute(
+    `INSERT INTO ruta_archivos (file_uuid, line_number, original_name, status, expires_at)
+     VALUES (?, ?, ?, 'pendiente', DATE_ADD(NOW(), INTERVAL 2 DAY))`,
+    [id, lineNumber, req.file.originalname],
+  );
+  const job = { id };
+  setImmediate(() => processRutaFile(job, req.file.buffer, extension));
+
+  return res.redirect('/ruta?message=' + encodeURIComponent('Archivo recibido y enviado a procesamiento.') + '&type=success');
+});
+
+router.post('/ruta/eliminar/:id', async (req, res) => {
+  try {
+    await cleanExpiredRutaFiles();
+    const [result] = await pool.execute(
+      'DELETE FROM ruta_archivos WHERE file_uuid = ?',
+      [req.params.id],
+    );
+    const message = result.affectedRows === 1
+      ? 'Archivo eliminado correctamente.'
+      : 'El archivo no fue encontrado.';
+    const type = result.affectedRows === 1 ? 'success' : 'error';
+    return res.redirect('/ruta?message=' + encodeURIComponent(message) + '&type=' + type);
+  } catch (error) {
+    return res.redirect('/ruta?message=' + encodeURIComponent('No fue posible eliminar el archivo.') + '&type=error');
+  }
+});
+
+router.get('/ruta/exportar/:id', async (req, res) => {
+  try {
+    await cleanExpiredRutaFiles();
+    const [files] = await pool.execute(
+      `SELECT line_number, status, result_csv
+       FROM ruta_archivos
+       WHERE file_uuid = ? AND expires_at > NOW()
+       LIMIT 1`,
+      [req.params.id],
+    );
+    const file = files[0];
+    if (!file || file.status !== 'listo' || !file.result_csv) return res.status(404).send('El archivo todavía no está listo.');
+    const lineNumber = String(file.line_number).replace(/[^a-zA-Z0-9_-]/g, '_');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="Geoposicionamiento-${lineNumber}.csv"`);
+    return res.send(file.result_csv);
+  } catch (error) {
+    return res.status(500).send('No fue posible exportar el archivo.');
   }
 });
 

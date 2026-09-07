@@ -13,9 +13,9 @@ try {
   await connection.query(`
     CREATE TABLE IF NOT EXISTS audit_logs (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-      user_id INT NOT NULL,
+      user_id INT NULL,
       user_email VARCHAR(255) NOT NULL,
-      method VARCHAR(10) NOT NULL,
+      method VARCHAR(20) NOT NULL,
       request_path VARCHAR(255) NOT NULL,
       status_code SMALLINT UNSIGNED NOT NULL,
       ip_address VARCHAR(45) NULL,
@@ -24,6 +24,9 @@ try {
       INDEX audit_logs_user_id_index (user_id)
     )
   `);
+
+  await connection.query('ALTER TABLE audit_logs MODIFY user_id INT NULL');
+  await connection.query('ALTER TABLE audit_logs MODIFY method VARCHAR(20) NOT NULL');
   console.log('Audit log table is ready.');
 } finally {
   await connection.end();

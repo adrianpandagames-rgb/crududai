@@ -5,7 +5,7 @@ const buildSessionCookieOptions = (rememberMe = false) => ({
   httpOnly: true,
   sameSite: 'lax',
   path: '/',
-  ...(rememberMe ? { maxAge: REMEMBERED_SESSION_TIMEOUT_MS } : { maxAge: SESSION_TIMEOUT_MS }),
+  ...(rememberMe ? { maxAge: REMEMBERED_SESSION_TIMEOUT_MS } : {}),
 });
 
 const isSessionExpired = (session, now = Date.now()) => {

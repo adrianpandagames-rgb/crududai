@@ -29,6 +29,16 @@ const sessions = new Map();
 const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const NON_MUTATING_POST_PATHS = new Set(['/api/telefono/validar']);
 
+const writeAuditLog = ({ userId = null, userEmail = '', action, requestPath, statusCode, ipAddress }) => {
+  pool.execute(
+    `INSERT INTO audit_logs (user_id, user_email, method, request_path, status_code, ip_address)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [userId, userEmail, action, requestPath, statusCode, ipAddress],
+  ).catch((error) => console.error('Unable to write audit log:', error.message));
+};
+
+app.locals.writeAuditLog = writeAuditLog;
+
 const getAuthToken = (req) => {
   const cookieHeader = req.headers.cookie || '';
   const cookiePairs = cookieHeader.split(';').map((part) => part.trim());
@@ -48,11 +58,14 @@ app.use((req, res, next) => {
     const isAuditable = MUTATION_METHODS.has(req.method) && !NON_MUTATING_POST_PATHS.has(requestPath);
     if (!isAuditable || !req.session || res.statusCode < 200 || res.statusCode >= 400) return;
 
-    pool.execute(
-      `INSERT INTO audit_logs (user_id, user_email, method, request_path, status_code, ip_address)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [req.session.userId, req.session.email, req.method, requestPath, res.statusCode, req.ip],
-    ).catch((error) => console.error('Unable to write audit log:', error.message));
+    writeAuditLog({
+      userId: req.session.userId,
+      userEmail: req.session.email,
+      action: req.method,
+      requestPath,
+      statusCode: res.statusCode,
+      ipAddress: req.ip,
+    });
   });
   next();
 });
@@ -108,7 +121,7 @@ const requireAdmin = async (req, res, next) => {
   });
 };
 
-app.use(['/Crud', '/imei', '/ubicaciones', '/inicio', '/telefono', '/api/telefono'], requireAuth);
+app.use(['/Crud', '/imei', '/ubicaciones', '/ruta', '/inicio', '/telefono', '/api/telefono'], requireAuth);
 
 
 
@@ -116,9 +129,11 @@ app.use(['/Crud', '/imei', '/ubicaciones', '/inicio', '/telefono', '/api/telefon
 
 app.post('/api/login', async (req, res) => {
     const { email, password } = req.body;
+    const normalizedEmail = String(email || '').trim().toLowerCase();
 
     // 1. Basic validation
     if (!email || !password) {
+        writeAuditLog({ userEmail: normalizedEmail, action: 'LOGIN_FAILED', requestPath: '/api/login', statusCode: 400, ipAddress: req.ip });
         return res.status(400).json({ message: 'Email and password are required.' });
     }
 
@@ -127,6 +142,7 @@ app.post('/api/login', async (req, res) => {
         const [rows] = await pool.execute('SELECT * FROM users WHERE email = ? AND is_active = 1', [email]);
         
         if (rows.length === 0) {
+            writeAuditLog({ userEmail: normalizedEmail, action: 'LOGIN_FAILED', requestPath: '/api/login', statusCode: 401, ipAddress: req.ip });
             return res.status(401).json({ message: 'Invalid email credentials.' });
         }
 
@@ -136,10 +152,12 @@ app.post('/api/login', async (req, res) => {
         const isMatch = await verifyPassword(password, user.password);
 
         if (!isMatch) {
+            writeAuditLog({ userId: user.id, userEmail: user.email, action: 'LOGIN_FAILED', requestPath: '/api/login', statusCode: 401, ipAddress: req.ip });
             return res.status(401).json({ message: 'Invalid password credentials.' });
         }
 
         // 4. Success handling (Here, you would typically issue a session or JWT)
+        writeAuditLog({ userId: user.id, userEmail: user.email, action: 'LOGIN', requestPath: '/api/login', statusCode: 200, ipAddress: req.ip });
         return res.status(200).json({
             message: 'Login successful!',
             user: { id: user.id, email: user.email }
@@ -151,6 +169,7 @@ app.post('/api/login', async (req, res) => {
         console.error('--- CRITICAL ERROR DIAGNOSTIC ---');
         console.error(error.stack || error);
         console.error('---------------------------------');
+        writeAuditLog({ userEmail: normalizedEmail, action: 'LOGIN_FAILED', requestPath: '/api/login', statusCode: 500, ipAddress: req.ip });
         
         // This sends the exact problem straight back to your Postman screen
         return res.status(500).json({ 
@@ -166,15 +185,18 @@ app.set("view engine", "ejs");
 app.set("views", "./views");
 
 app.post('/login', async (req, res) => {
-    const { email, password, rememberMe } = req.body;
+  const { email, password } = req.body;
+    const normalizedEmail = String(email || '').trim().toLowerCase();
 
     if (!email || !password) {
+        writeAuditLog({ userEmail: normalizedEmail, action: 'LOGIN_FAILED', requestPath: '/login', statusCode: 400, ipAddress: req.ip });
         return res.render('index', { error: 'Email and password are required.', success: null });
     }
 
     try {
         const [rows] = await pool.execute('SELECT * FROM users WHERE email = ? AND is_active = 1', [email]);
         if (rows.length === 0) {
+            writeAuditLog({ userEmail: normalizedEmail, action: 'LOGIN_FAILED', requestPath: '/login', statusCode: 401, ipAddress: req.ip });
             return res.render('index', { error: 'Invalid credentials.', success: null });
         }
 
@@ -182,11 +204,12 @@ app.post('/login', async (req, res) => {
         const isMatch = await verifyPassword(password, user.password);
 
         if (!isMatch) {
+            writeAuditLog({ userId: user.id, userEmail: user.email, action: 'LOGIN_FAILED', requestPath: '/login', statusCode: 401, ipAddress: req.ip });
             return res.render('index', { error: 'Invalid credentials.', success: null });
         }
 
         const authToken = crypto.randomBytes(24).toString('hex');
-        const shouldRemember = rememberMe === 'on';
+        const shouldRemember = false;
         sessions.set(authToken, {
           userId: user.id,
           email: user.email,
@@ -195,10 +218,12 @@ app.post('/login', async (req, res) => {
           lastActivity: Date.now()
         });
         res.cookie('auth', authToken, buildSessionCookieOptions(shouldRemember));
+        writeAuditLog({ userId: user.id, userEmail: user.email, action: 'LOGIN', requestPath: '/login', statusCode: 302, ipAddress: req.ip });
 
         return res.redirect('/Crud');
     } catch (error) {
         console.error(error.stack || error);
+        writeAuditLog({ userEmail: normalizedEmail, action: 'LOGIN_FAILED', requestPath: '/login', statusCode: 500, ipAddress: req.ip });
         return res.render('index', { error: 'Internal server error.', success: null });
     }
 });

@@ -8,10 +8,10 @@
 
     <main class="content-wrapper mt-5" style="margin-top: 80px !important">
       <div class="container py-4" style="max-width: 1200px">
-        <h2 class="title mb-4">Auditoría de cambios</h2>
+        <h2 class="title mb-4">Auditoría de actividad</h2>
         <section class="card">
           <div class="card-body">
-            <p class="text-muted">Se muestran los últimos 200 cambios realizados por usuarios autenticados.</p>
+            <p class="text-muted">Se muestran los últimos 200 cambios, inicios e intentos de sesión y búsquedas.</p>
             <div class="table-responsive">
               <table class="table table-sm align-middle mb-0">
                 <thead>
@@ -19,7 +19,7 @@
                 </thead>
                 <tbody>
                   <% if (entries.length === 0) { %>
-                    <tr><td colspan="6" class="text-center text-muted py-4">Aún no hay cambios registrados.</td></tr>
+                    <tr><td colspan="6" class="text-center text-muted py-4">Aún no hay actividad registrada.</td></tr>
                   <% } %>
                   <% entries.forEach((entry) => { %>
                     <tr>
