@@ -83,35 +83,67 @@ Antes de ejecutar la aplicación asegúrate de tener instalado:
    npm run migrate:must-change-password
    ```
 
-## Configuración
+## Configuración por entorno
 
-Crea un archivo .env en la raíz del proyecto con las siguientes variables:
+Este proyecto usa variables de entorno para separar desarrollo y producción. Crea dos archivos en la raíz del proyecto:
+
+- `.env.development`
+- `.env.production`
+
+### Ejemplo para desarrollo
 
 ```env
 DB_HOST=localhost
 DB_USER=root
 DB_PASSWORD=tu_password
-DB_NAME=crudnodejs
+DB_NAME=crudnodejs_dev
 
 HOST=0.0.0.0
 PORT=3600
 HTTPS_PORT=3443
+NODE_ENV=development
 
 IMEI_API_KEY=tu_api_key
 IMEI_SERVICE_ID=0
 ```
 
-> Nunca guardes claves reales en el repositorio. Usa variables de entorno locales en un archivo .env no versionado, y deja placeholders en .env.example o documentación.
+### Ejemplo para producción
 
-## Ejecución
+```env
+DB_HOST=servidor-produccion
+DB_USER=usuario_app
+DB_PASSWORD=tu_password_segura
+DB_NAME=crudnodejs_prod
 
-Inicia el servidor en modo desarrollo:
+HOST=0.0.0.0
+PORT=80
+HTTPS_PORT=443
+NODE_ENV=production
+
+IMEI_API_KEY=tu_api_key
+IMEI_SERVICE_ID=0
+```
+
+> Nunca guardes secretos reales en el repositorio. Agrega `.env.development` y `.env.production` al `.gitignore` o usa un archivo local no versionado.
+
+### Scripts recomendados
+
+En `package.json` puedes dejar esto:
+
+```json
+"scripts": {
+  "dev": "cross-env NODE_ENV=development nodemon app.js",
+  "start": "cross-env NODE_ENV=production node app.js"
+}
+```
+
+Entonces ejecutas:
 
 ```bash
 npm run dev
 ```
 
-O en modo producción:
+O en producción:
 
 ```bash
 npm start
@@ -123,6 +155,10 @@ La aplicación quedará disponible en:
 - HTTPS: https://localhost:3443
 
 El puerto HTTP redirige automáticamente a HTTPS.
+
+### Nota sobre `cross-env`
+
+En Windows, `NODE_ENV=development` puede no funcionar como se espera en consola. Por eso se recomienda `cross-env` para que el valor se establezca correctamente en todos los sistemas operativos.
 
 ## Pruebas
 
