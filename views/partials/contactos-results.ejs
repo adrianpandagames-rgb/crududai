@@ -8,13 +8,16 @@
         <th style="width: 12%;">NUC</th>
         <th style="width: 11%;">Año</th>
         <th style="width: 12%;">Tipo</th>
+        <% if (typeof currentUser !== 'undefined' && currentUser.canEditRecords) { %>
+          <th>Acción</th>
+        <% } %>
       </tr>
     </thead>
     <tbody>
       <% const startPos = typeof startIndex === 'number' ? startIndex : 1; %>
       <% if (!objetivos || objetivos.length === 0) { %>
         <tr>
-          <td colspan="5" class="text-center">No hay coincidencias</td>
+          <td colspan="<%= typeof currentUser !== 'undefined' && currentUser.canEditRecords ? 7 : 6 %>" class="text-center">No hay coincidencias</td>
         </tr>
       <% } else { %>
         <% objetivos.forEach(function(objetivo, index) { %>
@@ -25,6 +28,9 @@
           <td><%= objetivo.nuc %></td>
           <td><%= objetivo.ano %></td>
           <td><%= objetivo.tipo %></td>
+          <% if (typeof currentUser !== 'undefined' && currentUser.canEditRecords) { %>
+            <td><a class="btn btn-sm btn-outline-primary" href="/lineas/editar/<%= objetivo.idObjetivo %>">Editar</a></td>
+          <% } %>
         </tr>
         <% }); %>
       <% } %>

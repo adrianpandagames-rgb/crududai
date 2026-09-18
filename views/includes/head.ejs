@@ -17,3 +17,84 @@
 <link rel="stylesheet" href="/public/css/bootstrap.min.css" />
 <link rel="stylesheet" href="/public/css/menu.css" />
 <link rel="stylesheet" href="/public/css/home.css" />
+<link rel="stylesheet" href="/public/css/pages.css" />
+
+<div id="globalToast"
+  role="alert"
+  aria-live="polite"
+  data-initial-message="<%= typeof toastMessage !== 'undefined' && toastMessage ? toastMessage : '' %>"
+  data-initial-file-id="<%= typeof toastFileId !== 'undefined' && toastFileId ? toastFileId : '' %>"
+  hidden
+  style="position: fixed; top: 20px; right: 20px; z-index: 2000; min-width: 300px; max-width: 420px; border-radius: 12px; background: linear-gradient(135deg, #0f5132, #198754); color: #ffffff; box-shadow: 0 12px 30px rgba(15, 81, 50, 0.25); padding: 0; overflow: hidden; border: 1px solid rgba(255,255,255,0.2); cursor: pointer;">
+  <div style="display: flex; align-items: center; gap: 12px; padding: 14px 16px;">
+    <div style="display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 50%; background: rgba(255,255,255,0.18); flex-shrink: 0;">
+      <i class="bi bi-check-circle-fill" style="font-size: 18px;"></i>
+    </div>
+    <div style="flex: 1; min-width: 0;">
+      <div style="font-size: 0.85rem; font-weight: 700; letter-spacing: 0.02em; opacity: 0.9; margin-bottom: 2px;">Archivo procesado</div>
+      <div id="globalToastMessage" style="font-size: 0.95rem; line-height: 1.3; word-break: break-word;">
+        <%= typeof toastMessage !== 'undefined' && toastMessage ? toastMessage : '' %>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  (() => {
+    const toast = document.getElementById('globalToast');
+    if (!toast) return;
+
+    const toastMessageEl = document.getElementById('globalToastMessage');
+    const navigateToRuta = () => {
+      const fileId = toast.dataset.fileId || toast.dataset.initialFileId || '';
+      if (!fileId) return;
+      window.location.href = `/ruta?highlight=${encodeURIComponent(fileId)}`;
+    };
+
+    const showToast = (message, fileId = '') => {
+      if (!message || !toastMessageEl) return;
+      toastMessageEl.textContent = message;
+      toast.dataset.fileId = fileId || '';
+      toast.hidden = false;
+      clearTimeout(window.globalToastTimer);
+      window.globalToastTimer = setTimeout(() => {
+        toast.hidden = true;
+      }, 5000);
+    };
+
+    const initialMessage = toast.dataset.initialMessage || '';
+    const initialFileId = toast.dataset.initialFileId || '';
+    if (initialMessage) {
+      showToast(initialMessage, initialFileId);
+    }
+
+    toast.addEventListener('click', navigateToRuta);
+
+    if (!window.__routeToastPollerStarted) {
+      window.__routeToastPollerStarted = true;
+
+      const pollRouteToast = async () => {
+        try {
+          const response = await fetch('/api/route-toast', {
+            headers: { Accept: 'application/json' },
+            cache: 'no-store',
+          });
+
+          if (!response.ok) {
+            return;
+          }
+
+          const data = await response.json();
+          if (data && data.message) {
+            showToast(data.message, data.fileId);
+          }
+        } catch (error) {
+          // Ignorar errores de polling sin romper la página
+        }
+      };
+
+      setInterval(pollRouteToast, 5000);
+      pollRouteToast();
+    }
+  })();
+</script>

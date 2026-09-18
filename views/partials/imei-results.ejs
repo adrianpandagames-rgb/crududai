@@ -31,12 +31,15 @@
           <td><%= item.brand_name || '—' %></td>
           <td><%= item.modelo || '—' %></td>
           <td>
-            <button type="button" class="btn btn-sm btn-outline-primary copy-imei-btn"
+            <button type="button" class="btn btn-sm btn-outline-primary imei-action-btn copy-imei-btn"
               data-imei="<%= item.imei %>"
               data-brand="<%= item.brand_name || '' %>"
               data-model="<%= item.modelo || '' %>">
               Copiar
             </button>
+            <% if (typeof currentUser !== 'undefined' && currentUser.canEditRecords) { %>
+              <a class="btn btn-sm btn-outline-secondary imei-action-btn" href="/imei/editar/<%= item.idImei %>">Editar</a>
+            <% } %>
           </td>
         </tr>
         <% }); %>

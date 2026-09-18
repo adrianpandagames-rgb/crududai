@@ -10,10 +10,14 @@
     "start": "node app.js",
     "migrate:passwords": "node scripts/hash-user-passwords.js",
     "migrate:user-roles": "node scripts/add-user-roles.js",
+    "migrate:user-role": "node scripts/add-user-role.js",
     "migrate:user-status": "node scripts/add-user-status.js",
     "migrate:initial-admin": "node scripts/add-initial-admin.js",
+    "migrate:must-change-password": "node scripts/add-must-change-password.js",
     "migrate:audit-logs": "node scripts/add-audit-logs.js",
     "migrate:ruta-files": "node scripts/add-ruta-files.js",
+    "migrate:ubicaciones": "node scripts/normalize-ubicaciones.js",
+    "migrate:localidades": "node scripts/import-localidades.js",
     "package:win": "pkg . --targets node18-win-x64 --output dist/correlatador.exe"
   },
   "keywords": [],
@@ -27,7 +31,11 @@
     "express": "^4.18.2",
     "multer": "^2.1.1",
     "mysql2": "^3.22.4",
+    "pdfkit": "^0.20.2",
     "selfsigned": "^2.1.1",
+    "sharp": "^0.35.4",
+    "swagger-jsdoc": "^6.3.0",
+    "swagger-ui-express": "^5.0.1",
     "xlsx": "file:xlsx-0.18.5.tgz"
   },
   "devDependencies": {

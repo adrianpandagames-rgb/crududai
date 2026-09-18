@@ -1,5 +1,6 @@
 import assert from 'assert';
 import { fetchImeiMetadata } from '../src/router.js';
+import pool from '../src/db.js';
 import https from 'https';
 
 // Minimal fake request/response helper for https.request mocking
@@ -42,9 +43,51 @@ class FakeRes {
 }
 
 describe('fetchImeiMetadata', () => {
+  it('reuses stored metadata when the IMEI already exists in the database', async () => {
+    const originalRequest = https.request;
+    const originalQuery = pool.query;
+    let apiCalled = false;
+
+    pool.query = async (sql, params) => {
+      if (sql.includes('SELECT brand_name, modelo')) {
+        return [[{ brand_name: 'Apple', modelo: 'iPhone' }]];
+      }
+
+      throw new Error(`Unexpected SQL query: ${sql}`);
+    };
+
+    https.request = () => {
+      apiCalled = true;
+      throw new Error('External IMEI API should not be called when stored metadata exists');
+    };
+
+    try {
+      const result = await fetchImeiMetadata('123456789012345');
+      assert.strictEqual(apiCalled, false, 'The external IMEI API should not be called when stored metadata exists');
+      assert.deepStrictEqual(result, {
+        brand_name: 'Apple',
+        modelo: 'iPhone',
+        raw: null,
+        available: true,
+      });
+    } finally {
+      pool.query = originalQuery;
+      https.request = originalRequest;
+    }
+  });
+
   it('checks the account endpoint first and retries once on timeout', async () => {
     const originalRequest = https.request;
+    const originalQuery = pool.query;
     let attempts = 0;
+
+    pool.query = async (sql) => {
+      if (sql.includes('SELECT brand_name, modelo')) {
+        return [[]];
+      }
+
+      throw new Error(`Unexpected SQL query: ${sql}`);
+    };
 
     https.request = (options, callback) => {
       attempts += 1;
@@ -64,10 +107,13 @@ describe('fetchImeiMetadata', () => {
       return req;
     };
 
-    const result = await fetchImeiMetadata('123456789012345');
-    assert.strictEqual(attempts, 3, 'Should preflight account endpoint and then retry metadata once');
-    assert.deepStrictEqual(result, { brand_name: null, modelo: null, raw: null });
-
-    https.request = originalRequest;
+    try {
+      const result = await fetchImeiMetadata('123456789012345');
+      assert.strictEqual(attempts, 3, 'Should preflight account endpoint and then retry metadata once');
+      assert.deepStrictEqual(result, { brand_name: null, modelo: null, raw: null });
+    } finally {
+      pool.query = originalQuery;
+      https.request = originalRequest;
+    }
   });
 });

@@ -77,6 +77,11 @@ form {
   white-space: nowrap;
 }
 
+.custom_table .imei-action-btn {
+  width: 64px;
+  white-space: nowrap;
+}
+
 .custom_table .ruta-actions {
   width: 175px;
   white-space: nowrap;

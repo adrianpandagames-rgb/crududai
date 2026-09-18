@@ -4,13 +4,16 @@ import https from 'https';
 const IMEI_HOST = 'dash.imei.info';
 const IMEI_SERVICE_ID = process.env.IMEI_SERVICE_ID || '0';
 const IMEI_API_KEY = process.env.IMEI_API_KEY;
+const MAX_METADATA_CHECKS = 2;
 
 export const shouldRetryImeiMetadata = (row) => {
   if (!row) {
     return false;
   }
 
-  return row.brand_name == null || row.modelo == null;
+  return (row.brand_name == null || row.modelo == null)
+    && !row.metadata_not_found
+    && Number(row.metadata_check_count || 0) < MAX_METADATA_CHECKS;
 };
 
 export const getNextNoonRunDelay = (now = new Date()) => {
@@ -34,6 +37,16 @@ const ensureImeiMetadataColumns = async () => {
     const [modelColumns] = await pool.query('SHOW COLUMNS FROM imei LIKE ?', ['modelo']);
     if (!modelColumns.length) {
       await pool.query('ALTER TABLE imei ADD COLUMN modelo VARCHAR(255) NULL');
+    }
+
+    const [checkColumns] = await pool.query('SHOW COLUMNS FROM imei LIKE ?', ['metadata_check_count']);
+    if (!checkColumns.length) {
+      await pool.query('ALTER TABLE imei ADD COLUMN metadata_check_count INT NOT NULL DEFAULT 0');
+    }
+
+    const [notFoundColumns] = await pool.query('SHOW COLUMNS FROM imei LIKE ?', ['metadata_not_found']);
+    if (!notFoundColumns.length) {
+      await pool.query('ALTER TABLE imei ADD COLUMN metadata_not_found TINYINT(1) NOT NULL DEFAULT 0');
     }
   } catch (error) {
     if (error && error.code !== 'ER_DUP_FIELDNAME') {
@@ -93,7 +106,7 @@ const fetchImeiMetadata = async (imei) => {
       return response;
     }
 
-    if (attemptsLeft > 0) {
+    if (response.raw === null && attemptsLeft > 0) {
       return makeAttempt(attemptsLeft - 1);
     }
 
@@ -107,7 +120,11 @@ export const refreshImeiMetadata = async () => {
   await ensureImeiMetadataColumns();
 
   const [rows] = await pool.query(
-    'SELECT i.idImei, i.imei, i.brand_name, i.modelo FROM imei i WHERE i.brand_name IS NULL OR i.modelo IS NULL'
+    `SELECT i.idImei, i.imei, i.brand_name, i.modelo, i.metadata_check_count, i.metadata_not_found
+     FROM imei i
+     WHERE (i.brand_name IS NULL OR i.modelo IS NULL)
+       AND COALESCE(i.metadata_not_found, 0) = 0
+       AND COALESCE(i.metadata_check_count, 0) < ${MAX_METADATA_CHECKS}`
   );
 
   if (!rows.length) {
@@ -119,12 +136,25 @@ export const refreshImeiMetadata = async () => {
   let updated = 0;
   for (const row of rows) {
     const metadata = await fetchImeiMetadata(row.imei);
-    if (metadata && (metadata.brand_name || metadata.modelo)) {
+    if (metadata && metadata.raw !== null) {
+      const hasMetadata = Boolean(metadata.brand_name || metadata.modelo);
+      const hasCompleteMetadata = Boolean(metadata.brand_name && metadata.modelo);
+      const checkCount = hasCompleteMetadata
+        ? Number(row.metadata_check_count || 0)
+        : Number(row.metadata_check_count || 0) + 1;
       await pool.query(
-        'UPDATE imei SET brand_name = ?, modelo = ? WHERE idImei = ?',
-        [metadata.brand_name ?? null, metadata.modelo ?? null, row.idImei]
+        'UPDATE imei SET brand_name = ?, modelo = ?, metadata_check_count = ?, metadata_not_found = ? WHERE idImei = ?',
+        [
+          metadata.brand_name ?? null,
+          metadata.modelo ?? null,
+          checkCount,
+          hasCompleteMetadata ? 0 : (checkCount >= MAX_METADATA_CHECKS ? 1 : 0),
+          row.idImei,
+        ]
       );
-      updated += 1;
+      if (hasMetadata) {
+        updated += 1;
+      }
     }
   }
 

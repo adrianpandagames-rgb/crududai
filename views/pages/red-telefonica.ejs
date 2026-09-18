@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <%- include('../includes/head') %>
+    <link rel="stylesheet" href="/public/css/red-telefonica.css" />
+  </head>
+  <body>
+    <%- include('../includes/header') %>
+    <main class="container py-4 network-page">
+      <div class="network-header">
+        <div>
+          <h2 class="title mb-1">Red de cruces telefónicos</h2>
+          <p>Números que aparecen asociados a más de un objetivo.</p>
+        </div>
+        <div class="network-legend" aria-label="Leyenda de la gráfica">
+          <span class="legend-item"><span class="legend-dot"></span>Línea telefónica</span>
+          <span class="legend-item"><span class="legend-dot objective"></span>Objetivo</span>
+        </div>
+      </div>
+
+      <section class="network-shell mb-4">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+          <div class="text-muted small">Se muestran los 100 números con más cruces.</div>
+          <div class="network-filter">
+            <label class="visually-hidden" for="phoneFilter">Seleccionar línea telefónica</label>
+            <select id="phoneFilter" class="form-select form-select-sm">
+              <option value="">Todas las líneas</option>
+              <% crossingDetails.forEach(({ contacto }) => { %>
+                <option value="<%= contacto %>"><%= contacto %></option>
+              <% }) %>
+            </select>
+          </div>
+        </div>
+        <div id="networkFocusBox" class="network-focus-box" aria-live="polite">
+          <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+            <div>
+              <div id="networkFocusTitle" class="network-focus-title"></div>
+              <div id="networkFocusMeta" class="network-focus-meta"></div>
+            </div>
+            <button id="resetNetworkButton" type="button" class="btn btn-sm btn-outline-secondary">Volver a red general</button>
+          </div>
+          <div class="network-focus-meta mt-3">Contactos y objetivos arrastrados por la cadena de comunicación:</div>
+          <div id="networkFocusList" class="network-focus-list"></div>
+        </div>
+        <div class="network-scroll">
+          <% if (graph.nodes.length === 0) { %>
+            <div class="network-empty">No hay líneas asociadas a más de un objetivo.</div>
+          <% } else { %>
+            <svg id="networkGraph" role="img" aria-label="Red de cruces telefónicos" width="1180" height="<%= Math.max(620, Math.max(graph.nodes.filter((node) => node.type === 'phone').length, graph.nodes.filter((node) => node.type === 'objective').length) * 28 + 100) %>"></svg>
+          <% } %>
+        </div>
+      </section>
+
+      <section class="network-panel p-3 p-md-4">
+        <h3 class="h5 mb-1">Detalle de cruces</h3>
+        <p class="text-muted small mb-3">Cada número se muestra con los objetivos donde fue encontrado.</p>
+        <div class="table-responsive">
+          <table class="table table-sm crossing-table mb-0">
+            <thead><tr><th>Línea</th><th>Objetivos relacionados</th></tr></thead>
+            <tbody>
+              <% if (crossingDetails.length === 0) { %>
+                <tr><td colspan="2" class="text-center text-muted py-4">No hay cruces para mostrar.</td></tr>
+              <% } else { %>
+                <% crossingDetails.forEach(({ contacto, objetivos }) => { %>
+                  <tr>
+                    <td class="fw-semibold text-nowrap"><%= contacto %></td>
+                    <td>
+                      <% objetivos.forEach((objetivo) => { %>
+                        <span class="objective-chip"><%= objetivo.objetivo %> · NUC <%= objetivo.nuc %> · <%= objetivo.tipo %> · <%= objetivo.ano %></span>
+                      <% }) %>
+                    </td>
+                  </tr>
+                <% }) %>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const graphData = <%- JSON.stringify(graph).replace(/</g, '\\u003c') %>;
+      const svg = document.getElementById('networkGraph');
+      const phoneFilter = document.getElementById('phoneFilter');
+      const networkFocusBox = document.getElementById('networkFocusBox');
+      const networkFocusTitle = document.getElementById('networkFocusTitle');
+      const networkFocusMeta = document.getElementById('networkFocusMeta');
+      const networkFocusList = document.getElementById('networkFocusList');
+      const resetNetworkButton = document.getElementById('resetNetworkButton');
+
+      if (svg && graphData.nodes.length) {
+        const svgNamespace = 'http://www.w3.org/2000/svg';
+        const renderNetwork = ({ selectedPhone = '', selectedObjective = '' } = {}) => {
+          const selectedId = selectedPhone ? `phone:${selectedPhone}` : selectedObjective;
+          let links = graphData.links;
+          let nodeIds = new Set(graphData.nodes.map((node) => node.id));
+
+          if (selectedId) {
+            nodeIds = new Set([selectedId]);
+            const directLinks = graphData.links.filter((link) => link.source === selectedId || link.target === selectedId);
+            directLinks.forEach((link) => { nodeIds.add(link.source); nodeIds.add(link.target); });
+            if (selectedObjective) {
+              const relatedPhones = new Set(directLinks.flatMap((link) => [link.source, link.target]).filter((id) => id.startsWith('phone:')));
+              graphData.links.forEach((link) => {
+                if (relatedPhones.has(link.source) || relatedPhones.has(link.target)) {
+                  nodeIds.add(link.source);
+                  nodeIds.add(link.target);
+                }
+              });
+            }
+            links = graphData.links.filter((link) => nodeIds.has(link.source) && nodeIds.has(link.target));
+          }
+
+          const nodes = selectedId ? graphData.nodes.filter((node) => nodeIds.has(node.id)) : graphData.nodes;
+          const objectiveNodes = nodes.filter((node) => node.type === 'objective');
+          const phoneNodes = nodes.filter((node) => node.type === 'phone');
+          const height = Math.max(620, Math.max(nodes.length, 1) * 28 + 100);
+          svg.setAttribute('height', height);
+          svg.replaceChildren();
+          const position = new Map();
+          const place = (items, x, phase) => items.forEach((node, index) => {
+            const spread = (height - 130) / Math.max(items.length - 1, 1);
+            position.set(node.id, { x: x + Math.sin(index * .9 + phase) * 58, y: 70 + index * spread });
+          });
+          place(objectiveNodes, 290, 0);
+          place(phoneNodes, 880, 1.6);
+
+          const defs = document.createElementNS(svgNamespace, 'defs');
+          const pattern = document.createElementNS(svgNamespace, 'pattern');
+          pattern.setAttribute('id', 'networkDots');
+          pattern.setAttribute('width', '24');
+          pattern.setAttribute('height', '24');
+          pattern.setAttribute('patternUnits', 'userSpaceOnUse');
+          const dot = document.createElementNS(svgNamespace, 'circle');
+          dot.setAttribute('cx', '2'); dot.setAttribute('cy', '2'); dot.setAttribute('r', '1'); dot.setAttribute('fill', '#c5d8dc');
+          pattern.appendChild(dot); defs.appendChild(pattern); svg.appendChild(defs);
+          const background = document.createElementNS(svgNamespace, 'rect');
+          background.setAttribute('width', '100%'); background.setAttribute('height', '100%'); background.setAttribute('fill', 'url(#networkDots)'); background.setAttribute('opacity', '.45'); svg.appendChild(background);
+
+          [['285', selectedObjective ? 'OBJETIVO SELECCIONADO' : 'OBJETIVOS'], ['885', selectedId ? 'CRUCES RELACIONADOS' : 'LÍNEAS CRUZADAS']].forEach(([x, label]) => {
+            const title = document.createElementNS(svgNamespace, 'text');
+            title.setAttribute('x', x); title.setAttribute('y', '27'); title.setAttribute('class', 'network-title'); title.textContent = label; svg.appendChild(title);
+          });
+
+          links.forEach((link) => {
+            const source = position.get(link.source); const target = position.get(link.target); if (!source || !target) return;
+            const path = document.createElementNS(svgNamespace, 'path');
+            const bend = (target.x - source.x) * .42;
+            path.setAttribute('d', `M ${source.x} ${source.y} C ${source.x + bend} ${source.y}, ${target.x - bend} ${target.y}, ${target.x} ${target.y}`);
+            path.setAttribute('class', 'network-edge'); path.dataset.source = link.source; path.dataset.target = link.target; svg.appendChild(path);
+          });
+
+          nodes.forEach((node) => {
+            const point = position.get(node.id); const group = document.createElementNS(svgNamespace, 'g');
+            const isSelected = node.id === selectedId;
+            group.setAttribute('class', `network-node ${node.type}${isSelected ? ' selected' : ''}`); group.setAttribute('transform', `translate(${point.x}, ${point.y})`); group.setAttribute('tabindex', '0'); group.setAttribute('aria-label', node.detail ? `${node.label}, ${node.detail}` : node.label); group.dataset.nodeId = node.id;
+            const circle = document.createElementNS(svgNamespace, 'circle'); circle.setAttribute('r', isSelected ? '16' : (node.type === 'phone' ? '8' : '10'));
+            const text = document.createElementNS(svgNamespace, 'text'); text.textContent = node.label; group.append(circle, text);
+            group.addEventListener('mouseenter', () => svg.querySelectorAll('.network-edge').forEach((edge) => edge.classList.toggle('active', edge.dataset.source === node.id || edge.dataset.target === node.id)));
+            group.addEventListener('mouseleave', () => svg.querySelectorAll('.network-edge').forEach((edge) => edge.classList.remove('active')));
+            group.addEventListener('click', () => {
+              if (node.type === 'objective') {
+                phoneFilter.value = '';
+                renderNetwork({ selectedObjective: node.id });
+              }
+            });
+            svg.appendChild(group);
+          });
+
+          if (selectedId) {
+            const relatedPhones = nodes.filter((node) => node.type === 'phone' && node.label !== selectedPhone);
+            const relatedObjectives = nodes.filter((node) => node.type === 'objective' && node.id !== selectedObjective);
+            networkFocusBox.classList.add('visible');
+            networkFocusTitle.textContent = selectedObjective
+              ? `Objetivo seleccionado: ${nodes.find((node) => node.id === selectedObjective)?.label || ''}`
+              : `Línea seleccionada: ${selectedPhone}`;
+            networkFocusMeta.textContent = `${relatedPhones.length} contacto(s) y ${relatedObjectives.length} otro(s) objetivo(s) conectado(s)`;
+            networkFocusList.replaceChildren();
+            [...relatedPhones, ...relatedObjectives].forEach((node) => {
+              const chip = document.createElement('span');
+              chip.className = 'network-focus-chip';
+              chip.textContent = node.type === 'phone' ? `Contacto: ${node.label}` : `Objetivo: ${node.label}`;
+              networkFocusList.appendChild(chip);
+            });
+          } else {
+            networkFocusBox.classList.remove('visible');
+            networkFocusList.replaceChildren();
+          }
+        };
+
+        renderNetwork();
+        phoneFilter?.addEventListener('change', () => renderNetwork({ selectedPhone: phoneFilter.value }));
+        resetNetworkButton?.addEventListener('click', () => {
+          phoneFilter.value = '';
+          renderNetwork();
+        });
+      }
+    </script>
+    <%- include('../includes/scripts') %>
+  </body>
+</html>

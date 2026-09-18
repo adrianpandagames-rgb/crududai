@@ -25,9 +25,13 @@ import {
   buscarObjetivoEnObjetivo,
   verificarObjetivoConContactos,
   listarUbicacionesParaRuta,
+  obtenerObjetivoPorId,
+  actualizarObjetivo,
+  obtenerImeiPorId,
+  actualizarImei,
 } from "./estudianteController.js";
 import { maskApiKeyInUrl } from "./loggingUtils.js";
-import { createRutaCsv, processRutaCsv, processRutaXlsx } from "./rutaService.js";
+import { createRutaCsv, createRutaXlsx, getRutaXlsxMetadata, processRutaCsv, processRutaXlsx } from "./rutaService.js";
 import pool from "./db.js";
 
 const RUTA_MAX_FILE_SIZE = 20 * 1024 * 1024;
@@ -37,28 +41,59 @@ const rutaUploadParser = multer({ storage: uploadStorage, limits: { fileSize: RU
 const router = express.Router();
 const MAX_REDIRECT_ITEMS = 20;
 const PHONE_VALIDATION_API_URL = 'http://apilayer.net/api/validate';
+const RUTA_PROCESSING_DELAY_MS = 10000;
 const rutaStorageReady = pool.query(`
   CREATE TABLE IF NOT EXISTS ruta_archivos (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     file_uuid CHAR(36) NOT NULL UNIQUE,
     line_number VARCHAR(50) NOT NULL,
     original_name VARCHAR(255) NOT NULL,
+    source_metadata JSON NULL,
     status VARCHAR(20) NOT NULL,
     result_csv LONGTEXT NULL,
+    source_file LONGBLOB NULL,
     row_count INT UNSIGNED NOT NULL DEFAULT 0,
     error_message VARCHAR(500) NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     expires_at DATETIME NOT NULL,
     INDEX ruta_archivos_expires_at_index (expires_at)
   )
-`).then(() => true);
+`).then(async () => {
+  try {
+    await pool.query('ALTER TABLE ruta_archivos ADD COLUMN source_metadata JSON NULL');
+  } catch (error) {
+    if (!/duplicate column/i.test(error.message || '')) throw error;
+  }
+  try {
+    await pool.query('ALTER TABLE ruta_archivos ADD COLUMN source_file LONGBLOB NULL');
+  } catch (error) {
+    if (!/duplicate column/i.test(error.message || '')) throw error;
+  }
+  return true;
+});
+
+const requireRecordEditor = async (req, res, next) => {
+  if (!req.session || !req.session.userId) {
+    return res.redirect('/');
+  }
+  try {
+    const [rows] = await pool.execute('SELECT is_admin, role FROM users WHERE id = ?', [req.session.userId]);
+    const canEditRecords = rows.length === 1 && (Number(rows[0].is_admin) === 1 || rows[0].role === 'admin' || rows[0].role === 'semiadmin');
+    if (!canEditRecords) {
+      return res.status(403).redirect('/Crud');
+    }
+    return next();
+  } catch (error) {
+    return next(error);
+  }
+};
 
 const cleanExpiredRutaFiles = async () => {
   await rutaStorageReady;
   await pool.query('DELETE FROM ruta_archivos WHERE expires_at <= NOW()');
 };
 
-const processRutaFile = async (job, buffer, extension) => {
+const processRutaFile = async (job, buffer, extension, sourceMetadata, notification = null) => {
   try {
     const locations = await listarUbicacionesParaRuta();
     const rows = extension === '.xlsx'
@@ -67,10 +102,17 @@ const processRutaFile = async (job, buffer, extension) => {
     const resultCsv = '\uFEFF' + createRutaCsv(rows);
     await pool.execute(
       `UPDATE ruta_archivos
-       SET status = 'listo', result_csv = ?, row_count = ?, error_message = NULL
+      SET status = 'listo', result_csv = ?, source_metadata = ?, row_count = ?, error_message = NULL
        WHERE file_uuid = ? AND expires_at > NOW()`,
-      [resultCsv, Math.max(rows.length - 1, 0), job.id],
+          [resultCsv, sourceMetadata ? JSON.stringify(sourceMetadata) : null, Math.max(rows.length - 1, 0), job.id],
     );
+
+    if (notification?.userId && notification?.pendingToasts) {
+      notification.pendingToasts.set(notification.userId, {
+        message: 'El archivo se procesó correctamente.',
+        fileId: job.id,
+      });
+    }
   } catch (error) {
     await pool.execute(
       `UPDATE ruta_archivos
@@ -80,6 +122,36 @@ const processRutaFile = async (job, buffer, extension) => {
     ).catch((updateError) => console.error('Unable to update Ruta file:', updateError.message));
   }
 };
+
+const resumePendingRutaFiles = async () => {
+  await rutaStorageReady;
+  await pool.query(
+    `UPDATE ruta_archivos
+     SET status = 'error', error_message = 'El archivo no puede reanudarse porque fue cargado antes de habilitar el almacenamiento persistente.'
+     WHERE status = 'pendiente' AND source_file IS NULL`,
+  );
+
+  const [jobs] = await pool.query(
+    `SELECT file_uuid, original_name, source_file, source_metadata
+     FROM ruta_archivos
+     WHERE status = 'pendiente' AND source_file IS NOT NULL AND expires_at > NOW()
+     ORDER BY created_at ASC`,
+  );
+
+  for (const job of jobs) {
+    const extension = path.extname(job.original_name).toLowerCase();
+    await processRutaFile(
+      { id: job.file_uuid },
+      job.source_file,
+      extension,
+      job.source_metadata,
+    );
+  }
+};
+
+resumePendingRutaFiles().catch((error) => {
+  console.error('Unable to resume pending Ruta files:', error.message);
+});
 
 const rutaUpload = (req, res, next) => {
   rutaUploadParser.single('archivo')(req, res, (error) => {
@@ -236,14 +308,52 @@ const checkImeiAccountApi = (apiKey) => {
   });
 };
 
-const fetchImeiMetadata = (imei) => {
+const getStoredImeiMetadata = async (imei) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT brand_name, modelo
+       FROM imei
+       WHERE imei = ?
+       ORDER BY idImei DESC
+       LIMIT 1`,
+      [imei],
+    );
+
+    const record = rows && rows[0];
+    if (!record) {
+      return null;
+    }
+
+    if (record.brand_name || record.modelo) {
+      return {
+        brand_name: record.brand_name || null,
+        modelo: record.modelo || null,
+        raw: null,
+        available: true,
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.log('Error reading stored IMEI metadata:', error && error.message ? error.message : error);
+    return null;
+  }
+};
+
+const fetchImeiMetadata = async (imei) => {
+  const storedMetadata = await getStoredImeiMetadata(imei);
+  if (storedMetadata) {
+    console.log('Reusing stored IMEI metadata for', imei, 'instead of querying the API.');
+    return storedMetadata;
+  }
+
   const apiKey = process.env.IMEI_API_KEY;
   const serviceId = process.env.IMEI_SERVICE_ID || "0";
   const host = "dash.imei.info";
 
   if (!apiKey) {
     console.log('Skipping IMEI metadata lookup because IMEI_API_KEY is not configured.');
-    return Promise.resolve({ brand_name: null, modelo: null, raw: null, available: false });
+    return { brand_name: null, modelo: null, raw: null, available: false };
   }
 
   const path = `/api/check/${serviceId}/?API_KEY=${encodeURIComponent(apiKey)}&imei=${encodeURIComponent(imei)}`;
@@ -349,6 +459,166 @@ const parseCsvRow = (line) => {
   return values;
 };
 
+/**
+ * @openapi
+ * /health:
+ *   get:
+ *     summary: Health check básico
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: La aplicación está funcionando
+ */
+router.get('/health', (_req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    uptime: Number(process.uptime().toFixed(2)),
+    timestamp: new Date().toISOString(),
+  });
+});
+
+/**
+ * @openapi
+ * /health/ready:
+ *   get:
+ *     summary: Verificación de disponibilidad de la base de datos
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: La aplicación y la base de datos están listas
+ *       503:
+ *         description: La aplicación no está lista
+ */
+router.get('/health/ready', async (_req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT 1 AS ok');
+    const ready = Array.isArray(rows) && rows.length > 0;
+
+    if (!ready) {
+      return res.status(503).json({
+        status: 'not-ready',
+        timestamp: new Date().toISOString(),
+        database: 'unavailable',
+      });
+    }
+
+    return res.status(200).json({
+      status: 'ready',
+      timestamp: new Date().toISOString(),
+      database: 'ok',
+    });
+  } catch (error) {
+    return res.status(503).json({
+      status: 'not-ready',
+      timestamp: new Date().toISOString(),
+      database: 'error',
+      error: error.message || 'Database check failed',
+    });
+  }
+});
+
+router.get('/api/localidades', async (req, res, next) => {
+  const state = String(req.query.estado || '').trim();
+  try {
+    if (!state) {
+      const [rows] = await pool.query('SELECT DISTINCT estado FROM localidades_mexico ORDER BY estado');
+      return res.json({ estados: rows.map((row) => row.estado) });
+    }
+
+    const [rows] = await pool.query(
+      'SELECT localidad FROM localidades_mexico WHERE estado = ? ORDER BY localidad',
+      [state],
+    );
+    return res.json({ estado: state, localidades: rows.map((row) => row.localidad) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/api/ubicaciones/heatmap', async (req, res, next) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT latitude, longitude, COUNT(*) AS weight
+      FROM ubicaciones
+      WHERE latitude IS NOT NULL AND longitude IS NOT NULL
+      GROUP BY latitude, longitude
+      ORDER BY weight DESC, latitude, longitude
+    `);
+
+    return res.json({
+      points: rows.map((row) => ({
+        lat: Number(row.latitude),
+        lng: Number(row.longitude),
+        weight: Number(row.weight) || 1,
+      })),
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/lineas/editar/:id', requireRecordEditor, async (req, res) => {
+  const idObjetivo = Number.parseInt(req.params.id, 10);
+  if (!Number.isSafeInteger(idObjetivo) || idObjetivo < 1) return res.status(400).send('Línea inválida.');
+  const objetivo = await obtenerObjetivoPorId(idObjetivo);
+  if (!objetivo) return res.status(404).send('Línea no encontrada.');
+  return res.render('pages/editar-linea', { objetivo, error: null });
+});
+
+router.post('/lineas/editar/:id', requireRecordEditor, async (req, res) => {
+  const idObjetivo = Number.parseInt(req.params.id, 10);
+  const objetivo = {
+    idObjetivo,
+    numObjetivo: String(req.body.numObjetivo || '').trim(),
+    nuc: String(req.body.nuc || '').trim(),
+    tipo: String(req.body.tipo || '').trim(),
+    ano: String(req.body.ano || '').trim(),
+  };
+  if (!Number.isSafeInteger(idObjetivo) || idObjetivo < 1 || !objetivo.numObjetivo || !objetivo.nuc || !objetivo.tipo || !/^\d{4}$/.test(objetivo.ano)) {
+    return res.status(400).render('pages/editar-linea', { objetivo, error: 'Completa todos los campos con valores válidos.' });
+  }
+  try {
+    const updated = await actualizarObjetivo(idObjetivo, objetivo);
+    if (!updated) return res.status(404).send('Línea no encontrada.');
+    return res.redirect('/Crud?message=' + encodeURIComponent('Línea actualizada correctamente.') + '&type=success');
+  } catch (error) {
+    return res.status(500).render('pages/editar-linea', { objetivo, error: 'No fue posible actualizar la línea.' });
+  }
+});
+
+router.get('/imei/editar/:id', requireRecordEditor, async (req, res) => {
+  const idImei = Number.parseInt(req.params.id, 10);
+  if (!Number.isSafeInteger(idImei) || idImei < 1) return res.status(400).send('IMEI inválido.');
+  const imei = await obtenerImeiPorId(idImei);
+  if (!imei) return res.status(404).send('IMEI no encontrado.');
+  return res.render('pages/editar-imei', { imei, error: null });
+});
+
+router.post('/imei/editar/:id', requireRecordEditor, async (req, res) => {
+  const idImei = Number.parseInt(req.params.id, 10);
+  const imei = {
+    idImei,
+    imei: String(req.body.imei || '').replace(/\D/g, ''),
+    numObjetivo: String(req.body.numObjetivo || '').trim(),
+    nuc: String(req.body.nuc || '').trim(),
+    tipo: String(req.body.tipo || '').trim(),
+    ano: String(req.body.ano || '').trim(),
+    brandName: String(req.body.brandName || '').trim(),
+    modelo: String(req.body.modelo || '').trim(),
+  };
+  const validImei = /^\d{15}$/.test(imei.imei) && imei.imei[14] === String(calculateLuhnCheckDigit(imei.imei.slice(0, 14)));
+  if (!Number.isSafeInteger(idImei) || idImei < 1 || !validImei || !imei.numObjetivo || !imei.nuc || !imei.tipo || !/^\d{4}$/.test(imei.ano)) {
+    return res.status(400).render('pages/editar-imei', { imei, error: 'Completa todos los campos con valores válidos. El IMEI debe tener 15 dígitos válidos.' });
+  }
+  try {
+    const updated = await actualizarImei(idImei, imei);
+    if (!updated) return res.status(404).send('IMEI no encontrado.');
+    return res.redirect('/imei?message=' + encodeURIComponent('IMEI actualizado correctamente.') + '&type=success');
+  } catch (error) {
+    return res.status(500).render('pages/editar-imei', { imei, error: 'No fue posible actualizar el IMEI.' });
+  }
+});
+
 router.get("/Crud", async (req, res) => {
   try {
     const searchTerm = req.query.numObjetivo || req.query.search || "";
@@ -399,6 +669,32 @@ router.get('/telefono', (req, res) => {
   res.render('pages/telefono');
 });
 
+/**
+ * @openapi
+ * /api/telefono/validar:
+ *   post:
+ *     summary: Validar un número telefónico
+ *     tags: [Telefono]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - number
+ *             properties:
+ *               number:
+ *                 type: string
+ *                 example: '+521234567890'
+ *     responses:
+ *       200:
+ *         description: Resultado de validación
+ *       400:
+ *         description: Número inválido
+ *       500:
+ *         description: Error del servidor
+ */
 router.post('/api/telefono/validar', async (req, res) => {
   try {
     const result = await validatePhoneNumber(req.body?.number);
@@ -489,17 +785,18 @@ router.get("/ubicaciones", async (req, res) => {
 
 router.post('/ubicaciones/register', async (req, res) => {
   try {
-    const { coordinates, ubicacion, lugar } = req.body;
+    const { coordinates, ubicacion, estado, lugar } = req.body;
     const rawCoordinates = String(coordinates || '').trim();
     const parsedCoordinates = parseCoordinatesInput(rawCoordinates);
 
-    if (!parsedCoordinates || !ubicacion || !lugar) {
-      return res.redirect('/ubicaciones?message=' + encodeURIComponent('Coordenadas, ubicación y lugar son requeridos. Usa latitud y longitud numéricas o DMS.') + '&type=error');
+    if (!parsedCoordinates || !ubicacion || !estado || !lugar) {
+      return res.redirect('/ubicaciones?message=' + encodeURIComponent('Coordenadas, ubicación, estado y ciudad son requeridos. Usa latitud y longitud numéricas o DMS.') + '&type=error');
     }
 
     const { latitude, longitude } = parsedCoordinates;
+    const cityAndState = `${lugar.trim()}, ${estado.trim()}`;
 
-    await agregarUbicacion({ latitude, longitude, ubicacion: ubicacion.trim(), lugar: lugar.trim() });
+    await agregarUbicacion({ latitude, longitude, ubicacion: ubicacion.trim(), lugar: cityAndState });
     return res.redirect('/ubicaciones?message=' + encodeURIComponent('Ubicación registrada con éxito.') + '&type=success');
   } catch (error) {
     console.error(error);
@@ -524,6 +821,7 @@ router.get('/ruta', (req, res) => {
         files,
         message: req.query.message || null,
         messageType: req.query.type || null,
+        highlightId: req.query.highlight || null,
       });
     })
     .catch((error) => res.status(500).json({ error: error.message }));
@@ -541,14 +839,20 @@ router.post('/ruta/importar', rutaUpload, async (req, res) => {
   }
 
   const id = crypto.randomUUID();
+  const sourceMetadata = extension === '.xlsx' ? getRutaXlsxMetadata(req.file.buffer) : null;
   await cleanExpiredRutaFiles();
   await pool.execute(
-    `INSERT INTO ruta_archivos (file_uuid, line_number, original_name, status, expires_at)
-     VALUES (?, ?, ?, 'pendiente', DATE_ADD(NOW(), INTERVAL 2 DAY))`,
-    [id, lineNumber, req.file.originalname],
+    `INSERT INTO ruta_archivos
+       (file_uuid, line_number, original_name, source_metadata, source_file, status, expires_at)
+     VALUES (?, ?, ?, ?, ?, 'pendiente', DATE_ADD(NOW(), INTERVAL 2 DAY))`,
+    [id, lineNumber, req.file.originalname, sourceMetadata ? JSON.stringify(sourceMetadata) : null, req.file.buffer],
   );
   const job = { id };
-  setImmediate(() => processRutaFile(job, req.file.buffer, extension));
+  const notification = {
+    userId: req.session?.userId,
+    pendingToasts: req.app.locals.pendingRouteToasts,
+  };
+  setTimeout(() => processRutaFile(job, req.file.buffer, extension, sourceMetadata, notification), RUTA_PROCESSING_DELAY_MS);
 
   return res.redirect('/ruta?message=' + encodeURIComponent('Archivo recibido y enviado a procesamiento.') + '&type=success');
 });
@@ -574,7 +878,7 @@ router.get('/ruta/exportar/:id', async (req, res) => {
   try {
     await cleanExpiredRutaFiles();
     const [files] = await pool.execute(
-      `SELECT line_number, status, result_csv
+      `SELECT line_number, status, result_csv, source_metadata
        FROM ruta_archivos
        WHERE file_uuid = ? AND expires_at > NOW()
        LIMIT 1`,
@@ -588,6 +892,31 @@ router.get('/ruta/exportar/:id', async (req, res) => {
     return res.send(file.result_csv);
   } catch (error) {
     return res.status(500).send('No fue posible exportar el archivo.');
+  }
+});
+
+router.get('/ruta/exportar-xlsx/:id', async (req, res) => {
+  try {
+    await cleanExpiredRutaFiles();
+    const [files] = await pool.execute(
+      `SELECT line_number, status, result_csv, source_metadata
+       FROM ruta_archivos
+       WHERE file_uuid = ? AND expires_at > NOW()
+       LIMIT 1`,
+      [req.params.id],
+    );
+    const file = files[0];
+    if (!file || file.status !== 'listo' || !file.result_csv) return res.status(404).send('El archivo todavía no está listo.');
+    const lineNumber = String(file.line_number).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const sourceMetadata = typeof file.source_metadata === 'string'
+      ? JSON.parse(file.source_metadata)
+      : (file.source_metadata || {});
+    const xlsx = createRutaXlsx(file.result_csv, sourceMetadata);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="Geoposicionamiento-${lineNumber}.xlsx"`);
+    return res.send(xlsx);
+  } catch (error) {
+    return res.status(500).send('No fue posible exportar el archivo Excel.');
   }
 });
 

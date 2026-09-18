@@ -75,6 +75,14 @@ Antes de ejecutar la aplicación asegúrate de tener instalado:
    source BD/imei.sql;
    ```
 
+4. Ejecuta las migraciones de usuarios, incluida la que permite forzar el cambio de una contraseña temporal:
+
+   ```bash
+   npm run migrate:user-status
+   npm run migrate:initial-admin
+   npm run migrate:must-change-password
+   ```
+
 ## Configuración
 
 Crea un archivo .env en la raíz del proyecto con las siguientes variables:
@@ -128,6 +136,7 @@ npm test
 
 - La app genera certificados HTTPS locales automáticamente si no existen en la carpeta certs.
 - Algunas rutas están protegidas por autenticación basada en cookies.
+- Las contraseñas generadas al crear o restablecer un usuario son temporales; el usuario debe reemplazarlas en el modal mostrado al iniciar sesión.
 - El proyecto incluye lógica para revisar metadatos de IMEI de forma programada.
 
 ## Flujo típico de uso

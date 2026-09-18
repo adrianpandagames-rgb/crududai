@@ -18,6 +18,8 @@ try {
       original_name VARCHAR(255) NOT NULL,
       status VARCHAR(20) NOT NULL,
       result_csv LONGTEXT NULL,
+      source_file LONGBLOB NULL,
+      heatmap_png LONGBLOB NULL,
       row_count INT UNSIGNED NOT NULL DEFAULT 0,
       error_message VARCHAR(500) NULL,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

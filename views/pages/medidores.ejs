@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <%- include('../includes/head') %>
+    <style>
+      .metrics-page {
+        --ink: #18324b;
+        --muted: #66788a;
+        --line: #dce7ed;
+        --teal: #087f8c;
+        --orange: #ed7d3a;
+        --blue: #3273a8;
+        --green: #3f9435;
+        padding-bottom: 3rem;
+      }
+
+      .metrics-header {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+      }
+
+      .metrics-header p {
+        max-width: 560px;
+        color: var(--muted);
+        margin: 0;
+      }
+
+      .metric-card,
+      .chart-panel {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        box-shadow: 0 12px 28px rgba(24, 50, 75, .07);
+      }
+
+      .metric-card {
+        height: 100%;
+        padding: 1.15rem;
+        border-top: 4px solid var(--teal);
+      }
+
+      .metric-card:nth-child(2) { border-top-color: var(--orange); }
+      .metric-card:nth-child(3) { border-top-color: var(--blue); }
+      .metric-card:nth-child(4) { border-top-color: var(--green); }
+      .metric-card:nth-child(5) { border-top-color: #b35c92; }
+      .metric-card:nth-child(6) { border-top-color: #8d7a3b; }
+
+      .metric-label {
+        color: var(--muted);
+        font-size: .82rem;
+        font-weight: 700;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+      }
+
+      .metric-value {
+        color: var(--ink);
+        font-size: 2.15rem;
+        font-weight: 800;
+        line-height: 1;
+        margin-top: .55rem;
+      }
+
+      .chart-panel {
+        height: 100%;
+        padding: 1.35rem;
+      }
+
+      .chart-panel h3 {
+        color: var(--ink);
+        font-size: 1.05rem;
+        margin: 0 0 .25rem;
+      }
+
+      .chart-caption {
+        color: var(--muted);
+        font-size: .86rem;
+        margin-bottom: 1.35rem;
+      }
+
+      .bar-chart {
+        display: grid;
+        gap: .85rem;
+      }
+
+      .bar-row {
+        display: grid;
+        grid-template-columns: 120px 1fr 48px;
+        align-items: center;
+        gap: .7rem;
+      }
+
+      .bar-label,
+      .bar-number {
+        color: var(--ink);
+        font-size: .86rem;
+        font-weight: 700;
+      }
+
+      .bar-number { text-align: right; }
+
+      .bar-track {
+        height: 14px;
+        overflow: hidden;
+        background: #edf3f5;
+        border-radius: 3px;
+      }
+
+      .bar-fill {
+        height: 100%;
+        min-width: 3px;
+        background: linear-gradient(90deg, var(--teal), #35b6ac);
+        border-radius: inherit;
+        transition: width .7s ease;
+      }
+
+      .status-chart {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 2rem;
+        min-height: 190px;
+      }
+
+      .donut {
+        display: grid;
+        width: 150px;
+        height: 150px;
+        place-items: center;
+        border-radius: 50%;
+        background: conic-gradient(var(--green) <%= metrics.imeisConMetadata + metrics.imeisPendientes ? (metrics.imeisConMetadata / (metrics.imeisConMetadata + metrics.imeisPendientes) * 100) : 0 %>%, #f0a35b 0);
+      }
+
+      .donut::after {
+        width: 92px;
+        height: 92px;
+        content: '';
+        background: #fff;
+        border-radius: 50%;
+      }
+
+      .legend { display: grid; gap: .8rem; }
+      .legend-item { display: flex; align-items: center; gap: .55rem; color: var(--ink); font-size: .9rem; }
+      .legend-dot { width: 11px; height: 11px; border-radius: 50%; background: var(--green); }
+      .legend-dot.pending { background: #f0a35b; }
+      .legend strong { margin-left: auto; padding-left: 1.25rem; }
+
+      .refresh-status {
+        display: inline-flex;
+        align-items: center;
+        gap: .45rem;
+        font-size: .78rem;
+        font-weight: 700;
+      }
+
+      .refresh-icon {
+        display: inline-block;
+        transition: transform .2s ease;
+      }
+
+      .refresh-icon.spinning {
+        animation: refresh-spin 1s linear infinite;
+      }
+
+      @keyframes refresh-spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+
+      .city-chart {
+        display: grid;
+        gap: .85rem;
+        max-height: 335px;
+        overflow-y: auto;
+        padding-right: .35rem;
+      }
+
+      .city-chart-empty {
+        color: var(--muted);
+        font-size: .9rem;
+        padding: 1.5rem 0;
+        text-align: center;
+      }
+
+      .heatmap-panel {
+        margin-top: 1.5rem;
+      }
+
+      .heatmap-map {
+        width: 100%;
+        height: 1100px;
+        border-radius: 12px;
+        border: 1px solid var(--line);
+        background: #edf3f5;
+        overflow: hidden;
+      }
+
+      .heatmap-map .leaflet-container {
+        width: 100%;
+        height: 100%;
+        border-radius: 12px;
+      }
+
+      .heatmap-empty {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: var(--muted);
+        text-align: center;
+        font-size: .95rem;
+        padding: 1rem;
+      }
+
+      @media (max-width: 700px) {
+        .metrics-header { display: block; }
+        .metrics-header p { margin-top: .5rem; }
+        .bar-row { grid-template-columns: 90px 1fr 40px; gap: .45rem; }
+        .status-chart { flex-direction: column; gap: 1.25rem; }
+        .legend { width: min(100%, 230px); }
+      }
+    </style>
+  </head>
+  <body>
+    <%- include('../includes/header') %>
+
+    <main class="content-wrapper mt-5 metrics-page page-offset">
+      <div class="container py-4 metrics-container">
+        <div class="metrics-header">
+          <div>
+            <h2 class="title mb-1">Medidores del sistema</h2>
+            <p>Resumen actualizado de los registros administrados en la plataforma.</p>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            <span id="refreshStatus" class="refresh-status badge text-bg-light border" hidden aria-live="polite">
+              <span class="refresh-icon" aria-hidden="true">⟳</span>
+              Actualizando
+            </span>
+            <span class="badge text-bg-light border">Solo administradores</span>
+          </div>
+        </div>
+
+        <section class="row g-3 mb-4" aria-label="Resumen de registros">
+          <% const cards = [
+            ['Objetivos', metrics.objetivos],
+            ['Objetivos IMEI', metrics.objetivosImei],
+            ['IMEI registrados', metrics.imeis],
+            ['Contactos', metrics.contactos],
+            ['Ubicaciones', metrics.ubicaciones],
+            ['Usuarios', metrics.usuarios],
+          ]; %>
+          <% cards.forEach(([label, value]) => { %>
+            <div class="col-6 col-lg-2">
+              <article class="metric-card">
+                <div class="metric-label"><%= label %></div>
+                <div class="metric-value"><%= value.toLocaleString('es-CO') %></div>
+              </article>
+            </div>
+          <% }) %>
+        </section>
+
+        <section class="row g-4">
+          <div class="col-lg-7">
+            <article class="chart-panel">
+              <h3>Registros por módulo</h3>
+              <div class="chart-caption">Comparación del volumen de información principal.</div>
+              <% const modules = [
+                ['Objetivos', metrics.objetivos],
+                ['Objetivos IMEI', metrics.objetivosImei],
+                ['IMEI', metrics.imeis],
+                ['Contactos', metrics.contactos],
+                ['Ubicaciones', metrics.ubicaciones],
+                ['Usuarios', metrics.usuarios],
+              ]; %>
+              <% const maxModuleValue = Math.max(...modules.map(([, value]) => value), 1); %>
+              <div class="bar-chart">
+                <% modules.forEach(([label, value]) => { %>
+                  <div class="bar-row">
+                    <span class="bar-label"><%= label %></span>
+                    <div class="bar-track" role="progressbar" aria-label="<%= label %>" aria-valuenow="<%= value %>" aria-valuemin="0" aria-valuemax="<%= maxModuleValue %>">
+                      <div class="bar-fill" data-width="<%= (value / maxModuleValue) * 100 %>"></div>
+                    </div>
+                    <span class="bar-number"><%= value.toLocaleString('es-CO') %></span>
+                  </div>
+                <% }) %>
+              </div>
+            </article>
+          </div>
+
+          <div class="col-lg-5">
+            <article class="chart-panel">
+              <h3>Estado de metadatos IMEI</h3>
+              <div class="chart-caption">IMEI con marca y modelo frente a pendientes.</div>
+              <div class="status-chart">
+                <div class="donut" data-completion="<%= metrics.imeisConMetadata + metrics.imeisPendientes ? (metrics.imeisConMetadata / (metrics.imeisConMetadata + metrics.imeisPendientes) * 100) : 0 %>" role="img" aria-label="<%= metrics.imeisConMetadata %> IMEI con metadatos completos y <%= metrics.imeisPendientes %> pendientes"></div>
+                <div class="legend">
+                  <div class="legend-item"><span class="legend-dot"></span>Completos <strong><%= metrics.imeisConMetadata.toLocaleString('es-CO') %></strong></div>
+                  <div class="legend-item"><span class="legend-dot pending"></span>Pendientes <strong><%= metrics.imeisPendientes.toLocaleString('es-CO') %></strong></div>
+                </div>
+              </div>
+            </article>
+          </div>
+
+          <div class="col-12">
+            <article class="chart-panel heatmap-panel">
+              <h3>Densidad de antenas</h3>
+              <div class="chart-caption">Mapa de calor con ubicaciones registradas y concentración por zona.</div>
+              <div id="medidoresHeatmapMap" class="heatmap-map" aria-label="Mapa de calor de antenas"></div>
+            </article>
+          </div>
+
+          <div class="col-12">
+            <article class="chart-panel">
+              <h3>Antenas por ciudad</h3>
+              <div class="chart-caption">Cantidad de ubicaciones registradas para cada ciudad.</div>
+              <% const maxCityValue = Math.max(...antennasByCity.map(({ total }) => total), 1); %>
+              <% if (antennasByCity.length === 0) { %>
+                <div class="city-chart-empty">Aún no hay antenas registradas.</div>
+              <% } else { %>
+                <div class="city-chart">
+                  <% antennasByCity.forEach(({ ciudad, total }) => { %>
+                    <div class="bar-row">
+                      <span class="bar-label"><%= ciudad %></span>
+                      <div class="bar-track" role="progressbar" aria-label="Antenas en <%= ciudad %>" aria-valuenow="<%= total %>" aria-valuemin="0" aria-valuemax="<%= maxCityValue %>">
+                        <div class="bar-fill city-bar-fill" data-width="<%= (total / maxCityValue) * 100 %>"></div>
+                      </div>
+                      <span class="bar-number"><%= total.toLocaleString('es-CO') %></span>
+                    </div>
+                  <% }) %>
+                </div>
+              <% } %>
+            </article>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <script>
+      document.querySelectorAll('.bar-fill[data-width]').forEach((bar) => {
+        bar.style.width = `${bar.dataset.width}%`;
+      });
+      document.querySelectorAll('.donut[data-completion]').forEach((donut) => {
+        donut.style.setProperty('--completion', `${donut.dataset.completion}%`);
+      });
+
+      const medidoresHeatmapMap = document.getElementById('medidoresHeatmapMap');
+      const showMedidoresHeatmapUnavailable = (message = 'No fue posible cargar la densidad de antenas.') => {
+        if (!medidoresHeatmapMap) return;
+        medidoresHeatmapMap.innerHTML = `<div class="heatmap-empty">${message}</div>`;
+      };
+
+      window.initMedidoresHeatmap = async function () {
+        if (!medidoresHeatmapMap) return;
+        if (window.medidoresHeatmapInitDone) return;
+        window.medidoresHeatmapInitDone = true;
+
+        if (typeof L === 'undefined' || typeof L.heatLayer !== 'function') {
+          showMedidoresHeatmapUnavailable('No fue posible cargar la librería del mapa de calor.');
+          return;
+        }
+
+        try {
+          const response = await fetch('/api/ubicaciones/heatmap');
+          if (!response.ok) throw new Error('No se pudieron cargar las ubicaciones.');
+
+          const { points } = await response.json();
+          if (!Array.isArray(points) || points.length === 0) {
+            medidoresHeatmapMap.innerHTML = '<div class="heatmap-empty">Aún no hay ubicaciones registradas para mostrar el mapa de calor.</div>';
+            return;
+          }
+
+          const cartoTileUrl = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=cb1_3pxb_1_cd7ebf01ffa3b92fb39cb734';
+
+          const map = L.map(medidoresHeatmapMap, {
+            zoomControl: true,
+            attributionControl: true,
+          }).setView([23.6345, -102.5528], 5);
+
+          L.tileLayer(cartoTileUrl, {
+            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+            maxZoom: 19,
+          }).addTo(map);
+
+          const heatData = points.map(({ lat, lng, weight }) => [lat, lng, Math.min(Math.max(Number(weight) || 1, 1), 12)]);
+          const heatLayer = L.heatLayer(heatData, {
+            radius: 22,
+            blur: 16,
+            maxZoom: 12,
+            gradient: { 0.1: '#5ac8fa', 0.35: '#2ec4b6', 0.7: '#f4d35e', 1.0: '#ff4d6d' },
+          }).addTo(map);
+
+          const bounds = L.latLngBounds(points.map(({ lat, lng }) => [lat, lng]));
+          if (bounds.isValid()) {
+            map.fitBounds(bounds.pad(0.25));
+          }
+
+          window.addEventListener('resize', () => map.invalidateSize(), { passive: true });
+        } catch (error) {
+          console.warn('Heatmap unavailable:', error);
+          showMedidoresHeatmapUnavailable('No fue posible cargar la densidad de antenas.');
+        }
+      };
+
+      const refreshStatus = document.getElementById('refreshStatus');
+      if (refreshStatus) {
+        refreshStatus.hidden = true;
+      }
+    </script>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        initMedidoresHeatmap();
+      });
+    </script>
+
+    <%- include('../includes/scripts') %>
+  </body>
+</html>

@@ -6,7 +6,7 @@
   <body>
     <%- include('../includes/header') %>
 
-    <main class="container" style="margin-top: 80px !important">
+    <main class="container page-offset">
       <div class="row justify-content-md-center mb-5">
         <div class="col-md-12 mt-5">
           <h2 class="text-center title">RUTA <hr /></h2>
@@ -54,7 +54,7 @@
                   <tr><td colspan="4" class="text-center">No hay archivos importados</td></tr>
                 <% } else { %>
                   <% files.forEach((file) => { %>
-                    <tr>
+                    <tr id="ruta-file-<%= file.id %>">
                       <td><%= file.name %></td>
                       <td><%= file.lineNumber %></td>
                       <td>
@@ -69,9 +69,9 @@
                       <td class="ruta-actions">
                         <div class="d-flex align-items-center gap-2 flex-nowrap">
                         <% if (file.status === 'listo') { %>
-                          <a class="btn btn-sm btn-outline-primary" href="/ruta/exportar/<%= file.id %>">Exportar CSV</a>
+                          <a class="btn btn-sm btn-outline-primary" href="/ruta/exportar-xlsx/<%= file.id %>">Exportar XLSX</a>
                         <% } else { %>
-                          <button type="button" class="btn btn-sm btn-secondary" disabled>Exportar CSV</button>
+                          <button type="button" class="btn btn-sm btn-secondary" disabled>Exportar XLSX</button>
                         <% } %>
                         <form action="/ruta/eliminar/<%= file.id %>" method="POST" class="m-0 flex-shrink-0" onsubmit="return confirm('¿Eliminar este archivo de Ruta?');">
                           <button type="submit" class="btn btn-sm btn-outline-danger" aria-label="Eliminar archivo" title="Eliminar archivo">
@@ -98,6 +98,28 @@
     <% if (files.some((file) => file.status === 'pendiente')) { %>
       <script>
         setTimeout(() => window.location.reload(), 5000);
+      </script>
+    <% } %>
+
+    <% if (highlightId) { %>
+      <script>
+        (() => {
+          const highlightedRow = document.getElementById('ruta-file-<%= highlightId %>');
+          if (highlightedRow) {
+            highlightedRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            highlightedRow.style.transition = 'border-color 0.3s ease, box-shadow 0.3s ease';
+            highlightedRow.style.border = '2px solid rgba(25, 135, 84, 0.75)';
+            highlightedRow.style.boxShadow = '0 0 0 3px rgba(25, 135, 84, 0.15), 0 0 14px rgba(25, 135, 84, 0.18)';
+            highlightedRow.style.borderRadius = '8px';
+
+            setTimeout(() => {
+              highlightedRow.style.border = '';
+              highlightedRow.style.boxShadow = '';
+              highlightedRow.style.borderRadius = '';
+              highlightedRow.style.transition = '';
+            }, 2500);
+          }
+        })();
       </script>
     <% } %>
   </body>
