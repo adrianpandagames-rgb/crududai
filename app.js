@@ -12,6 +12,8 @@ import swaggerJsdoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
 import router from "./src/router.js"; // Importa el enrutador
 import pool from "./src/db.js";
+import { buildAuditFilters, auditActionLabels } from './src/auditFilters.js';
+import { auditOperationSql, auditResourceSql, auditResources, describeAuditAction, auditRequestPath } from './src/auditActions.js';
 import { buildSessionCookieOptions, isSessionExpired, SESSION_TIMEOUT_MS } from './src/sessionUtils.js';
 import { startImeiMetadataDailyJob } from './src/imeiMetadataService.js';
 import { hashPassword, verifyPassword } from './src/passwordUtils.js';
@@ -95,7 +97,7 @@ app.use((req, res, next) => {
       userId: req.session.userId,
       userEmail: req.session.email,
       action: req.method,
-      requestPath,
+      requestPath: auditRequestPath(requestPath, req.query),
       statusCode: res.statusCode,
       ipAddress: req.ip,
     });
@@ -172,7 +174,7 @@ const requireAdmin = async (req, res, next) => {
   });
 };
 
-app.use(['/Crud', '/imei', '/lineas', '/ubicaciones', '/ruta', '/inicio', '/telefono', '/api/telefono', '/api/localidades', '/cambiar-contrasena'], requireAuth);
+app.use(['/metricas', '/Crud', '/imei', '/lineas', '/ubicaciones', '/georeferenciacion', '/ruta', '/inicio', '/telefono', '/api/telefono', '/api/localidades', '/cambiar-contrasena'], requireAuth);
 
 
 
@@ -434,14 +436,31 @@ app.get('/usuarios', requireAdmin, async (req, res, next) => {
 
 app.get('/auditoria', requireAdmin, async (req, res, next) => {
   try {
-    const [entries] = await pool.execute(
+    let selection;
+    let filterError = null;
+    try {
+      selection = buildAuditFilters(req.query);
+    } catch (error) {
+      filterError = error.message;
+      selection = buildAuditFilters();
+      for (const key of Object.keys(selection.filters)) {
+        if (typeof req.query[key] === 'string') selection.filters[key] = req.query[key].slice(0, 255);
+      }
+    }
+    const [users] = await pool.execute("SELECT DISTINCT user_email FROM audit_logs WHERE user_email <> '' ORDER BY user_email");
+    const [entries] = filterError ? [[]] : await pool.execute(
       `SELECT user_email, method, request_path, status_code, ip_address,
+              ${auditOperationSql} AS operation, ${auditResourceSql} AS resource,
               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
        FROM audit_logs
+       ${selection.where}
        ORDER BY id DESC
        LIMIT 200`,
+      selection.values,
     );
-    return res.render('pages/auditoria', { entries });
+    return res.status(filterError ? 400 : 200).render('pages/auditoria', {
+      entries, users, filters: selection.filters, filterError, auditActionLabels, auditResources, describeAuditAction,
+    });
   } catch (error) {
     next(error);
   }

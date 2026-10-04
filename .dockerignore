@@ -1,0 +1,14 @@
+# Only application files enter the build context (no secrets or database dumps).
+**
+!package.json
+!package-lock.json
+!xlsx-0.18.5.tgz
+!app.js
+!src/
+!src/**
+!views/
+!views/**
+!public/
+!public/**
+!scripts/
+!scripts/**

@@ -1,0 +1,44 @@
+<form id="inspeccionForm" action="/metricas/inspecciones" method="POST" hidden>
+  <hr class="mt-0 mb-3" />
+  <p class="small text-muted">Solo NUC es obligatorio. Los demás campos son opcionales.</p>
+  <% const seccionesInspeccion = [
+    ['Carpeta y recepción', camposInspeccion.slice(0, 9)],
+    ['Indicios y nota', camposInspeccion.slice(9, 14)],
+    ['Responsables y entrega', camposInspeccion.slice(14)]
+  ]; %>
+  <% seccionesInspeccion.forEach(([titulo, campos], index) => { %>
+    <details class="border rounded p-3 mb-3" <%= index === 0 ? 'open' : '' %>>
+      <summary class="fw-bold"><%= titulo %></summary>
+      <div class="row g-2 mt-1">
+        <% campos.forEach(([nombre, etiqueta, tipo]) => { %>
+          <div class="<%= ['datetime-local', 'textarea'].includes(tipo) ? 'col-12' : 'col-12 col-sm-6' %>">
+            <label for="insp_<%= nombre %>" class="form-label small mb-1"><%= etiqueta %></label>
+            <% if (nombre === 'agencia') { %>
+              <%- include('agencia-select', { agenciaId: 'insp_agencia' }) %>
+            <% } else if (tipo === 'select') { %>
+              <select id="insp_<%= nombre %>" name="<%= nombre %>" class="form-select form-select-sm" <%= nombre === 'ciudad' ? 'disabled' : '' %>>
+                <option value="">Seleccionar una opción</option>
+                <% if (nombre === 'medio') { %>
+                  <option value="correo">Correo</option>
+                  <option value="fisico">Físico</option>
+                <% } %>
+              </select>
+            <% } else if (tipo === 'textarea') { %>
+              <textarea id="insp_<%= nombre %>" name="<%= nombre %>" rows="2" maxlength="5000" class="form-control form-control-sm"></textarea>
+            <% } else { %>
+              <input id="insp_<%= nombre %>" name="<%= nombre %>" type="<%= tipo %>" class="form-control form-control-sm" <%= nombre === 'nuc' ? 'required' : '' %> <%- tipo === 'text' ? 'maxlength="255"' : tipo === 'number' ? 'min="0" max="4294967295" step="1"' : '' %> />
+            <% } %>
+          </div>
+        <% }); %>
+        <% if (index === 0) { %>
+          <div class="col-12">
+            <div id="insp_ciudadStatus" class="form-text" role="status">Solo cabeceras municipales de Sonora.</div>
+            <button id="insp_retry" type="button" class="btn btn-outline-secondary btn-sm mt-2" hidden>Reintentar cargar ciudades</button>
+          </div>
+        <% } %>
+      </div>
+    </details>
+  <% }); %>
+  <button type="submit" id="insp_registrar" class="btn btn-primary w-100">Registrar inspección</button>
+  <div id="insp_resultado" class="alert mt-3 mb-0" role="status" hidden></div>
+</form>

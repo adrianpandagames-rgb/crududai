@@ -1,0 +1,149 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import * as XLSX from 'xlsx';
+import ejs from 'ejs';
+import express from 'express';
+import { createGeoreferenciacionRouter } from '../src/georeferenciacionRouter.js';
+import { saveGeocodingLocation } from '../src/georeferenciacionUbicaciones.js';
+import { readGeocodingFile, processGeocodingFile, reverseGeocode } from '../src/georeferenciacionService.js';
+import { createRutaCsv, createRutaXlsx, processRutaXlsx } from '../src/rutaService.js';
+
+test('geocoding preserves rows, deduplicates coordinates and skips missing or invalid coordinates', async () => {
+  const input = readGeocodingFile(Buffer.from('fecha,latitud,longitud,extra\n01/01/2026,29,-110,A\n02/01/2026,29,-110,B\n03/01/2026,,-110,C\n04/01/2026,91,-110,D\n05/01/2026,0,0,E'), '.csv');
+  const calls = [];
+  const rows = await processGeocodingFile(input, { geocode: async (lat, lng) => {
+    calls.push([lat, lng]);
+    return lat === 0 ? { address: '', place: '', status: 'SIN_RESULTADOS' } : { address: 'Calle 1, Sonora', place: 'Hermosillo', status: 'OK' };
+  } });
+  assert.deepEqual(calls, [[29, -110], [0, 0]]);
+  assert.equal(rows[1][3], 'A');
+  assert.equal(rows[2][4], rows[1][4]);
+  assert.equal(rows[1][5], 'Calle 1, Sonora');
+  assert.equal(rows[3].at(-1), 'COORDENADAS_INVALIDAS');
+  assert.equal(rows[4].at(-1), 'COORDENADAS_INVALIDAS');
+  assert.equal(rows[5].at(-1), 'SIN_RESULTADOS');
+  const book = XLSX.read(createRutaXlsx(createRutaCsv(rows)), { type: 'buffer' });
+  assert.equal(book.Sheets.Ruta.F2.v, 'Calle 1, Sonora');
+});
+
+test('semicolon decimal commas, DMS and XLSX input are supported', async () => {
+  const input = readGeocodingFile(Buffer.from('latitud;longitud\n29,5;-110,5\n29°30\'0N;110°30\'0W'), '.csv');
+  let calls = 0;
+  const rows = await processGeocodingFile(input, { geocode: async (lat, lng) => {
+    calls++;
+    assert.equal(lat, 29.5);
+    assert.equal(lng, -110.5);
+    return { address: 'Dirección', place: 'Ciudad', status: 'OK' };
+  } });
+  assert.equal(calls, 1);
+  assert.equal(rows.delimiter, ';');
+  const buffer = createRutaXlsx('fecha,latitud,longitud\n01/01/2026,29,-110\n');
+  assert.equal(readGeocodingFile(buffer, '.xlsx').rows[1][0], '01/01/2026');
+  assert.equal(processRutaXlsx(buffer, [{ latitude: 29, longitude: -110, ubicacion: 'Original', lugar: 'Ciudad' }])[1][4], 'Original');
+  assert.throws(() => readGeocodingFile(Buffer.from('antena\n1'), '.csv'), /latitud y longitud/);
+});
+
+test('Google request uses latlng and Spanish; address components are selected by type', async () => {
+  const result = await reverseGeocode(29, -110, { apiKey: 'test-key', fetchImpl: async (url) => {
+    assert.equal(url.hostname, 'maps.googleapis.com');
+    assert.equal(url.searchParams.get('latlng'), '29,-110');
+    assert.equal(url.searchParams.get('language'), 'es');
+    return { ok: true, json: async () => ({ status: 'OK', results: [{ formatted_address: 'Dirección', address_components: [{ long_name: 'Sonora', types: ['administrative_area_level_1'] }, { long_name: 'Hermosillo', types: ['locality'] }] }] }) };
+  } });
+  assert.deepEqual(result, { address: 'Dirección', place: 'Hermosillo', status: 'OK' });
+});
+
+test('Google zero results, denied requests, quota, timeout and missing key are handled without leaking secrets', async () => {
+  const response = (status) => async () => ({ ok: true, json: async () => ({ status, error_message: 'secret-test-key' }) });
+  assert.equal((await reverseGeocode(0, 0, { apiKey: 'test', fetchImpl: response('ZERO_RESULTS') })).status, 'SIN_RESULTADOS');
+  for (const status of ['REQUEST_DENIED', 'OVER_QUERY_LIMIT', 'OVER_DAILY_LIMIT', 'UNKNOWN_ERROR']) {
+    await assert.rejects(reverseGeocode(0, 0, { apiKey: 'test', fetchImpl: response(status) }), (error) => !error.message.includes('secret'));
+  }
+  await assert.rejects(reverseGeocode(0, 0, { apiKey: '' }), /GOOGLE_GEOCODING_API_KEY/);
+  await assert.rejects(reverseGeocode(0, 0, { apiKey: 'test', fetchImpl: async () => { throw new Error('secret'); } }), /comunicarse/);
+});
+
+test('cancellation and provider failures stop further billable requests', async () => {
+  const input = readGeocodingFile(Buffer.from('lat,lon\n29,-110\n30,-111'), '.csv');
+  let calls = 0;
+  await assert.rejects(processGeocodingFile(input, { geocode: async () => { calls++; throw new Error('Cuota'); } }), /Cuota/);
+  assert.equal(calls, 1);
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(processGeocodingFile(input, { signal: controller.signal, geocode: async () => { calls++; } }), /cancelado/);
+  assert.equal(calls, 1);
+});
+
+test('page renders configuration, progress, errors and download actions safely', async () => {
+  const html = await ejs.renderFile('views/pages/georeferenciacion.ejs', {
+    configured: false, message: '', messageType: '', currentUser: { isAdmin: false },
+    locations: [], search: '', total: 0, page: 1, pages: 1,
+    files: [
+      { id: 'a', name: '<script>', lineNumber: '123', status: 'pendiente', processed: 25, total: 50 },
+      { id: 'b', name: 'ready.csv', lineNumber: '123', status: 'listo', processed: 50, total: 50 },
+      { id: 'c', name: 'error.csv', lineNumber: '123', status: 'error', processed: 0, total: 50, error: 'Cuota agotada' },
+    ],
+  });
+  assert.ok(html.includes('GEOREFERENCIACIÓN'));
+  assert.ok(html.includes('&lt;script&gt;'));
+  assert.ok(html.includes('25 / 50 filas'));
+  assert.ok(html.includes('/georeferenciacion/exportar-xlsx/b'));
+  assert.ok(html.includes('Cuota agotada'));
+  assert.ok(html.includes('disabled>Importar y geocodificar'));
+});
+
+test('routes require a session and scope exports and deletes to the owner', async () => {
+  const queries = [];
+  const pool = {
+    query: async () => [[]],
+    execute: async (sql, parameters) => {
+      queries.push({ sql, parameters });
+      return sql.startsWith('DELETE') ? [{ affectedRows: 0 }] : [[]];
+    },
+  };
+  const app = express();
+  app.use((req, res, next) => { if (req.headers['x-test-session']) req.session = { userId: 7, isAdmin: req.headers['x-test-session'] === 'admin' }; next(); });
+  app.use('/georeferenciacion', createGeoreferenciacionRouter(pool));
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise((resolve) => server.once('listening', resolve));
+  const base = `http://127.0.0.1:${server.address().port}/georeferenciacion`;
+  try {
+    const unauthenticated = await fetch(base, { redirect: 'manual' });
+    assert.equal(unauthenticated.status, 302);
+    assert.equal(unauthenticated.headers.get('location'), '/');
+    for (const [path, method] of [['', 'GET'], ['/importar', 'POST'], ['/exportar/foreign', 'GET'], ['/exportar-xlsx/foreign', 'GET'], ['/eliminar/foreign', 'POST']]) {
+      assert.equal((await fetch(base + path, { method, headers: { 'x-test-session': 'user' } })).status, 403);
+    }
+    assert.equal(queries.length, 0);
+    const headers = { 'x-test-session': 'admin' };
+    assert.equal((await fetch(`${base}/exportar-xlsx/foreign`, { headers })).status, 404);
+    await fetch(`${base}/eliminar/foreign`, { method: 'POST', headers, redirect: 'manual' });
+    assert.equal(queries.length, 2);
+    for (const { sql, parameters } of queries) {
+      assert.ok(sql.includes('user_id = ?'));
+      assert.deepEqual(parameters, ['foreign', 7]);
+    }
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('only successful unique coordinates are persisted with the four requested fields', async () => {
+  const input = readGeocodingFile(Buffer.from('lat,lon\n29,-110\n29,-110\n0,0\n,-110'), '.csv');
+  const saved = [];
+  const pool = { execute: async (sql, values) => { saved.push({ sql, values }); } };
+  await processGeocodingFile(input, {
+    geocode: async (lat) => lat === 0 ? { status: 'SIN_RESULTADOS', address: '', place: '' } : { status: 'OK', address: 'Dirección', place: 'Hermosillo' },
+    onLocation: (location) => saveGeocodingLocation(pool, location),
+  });
+  assert.equal(saved.length, 1);
+  assert.deepEqual(saved[0].values, ['Dirección', 'Hermosillo', 29, -110]);
+  assert.ok(saved[0].sql.includes('ON DUPLICATE KEY UPDATE'));
+});
+
+test('only admins see the georeferencing menu entry', async () => {
+  for (const isAdmin of [false, true]) {
+    const html = await ejs.renderFile('views/includes/header.ejs', { currentUser: { isAdmin } });
+    assert.equal(html.includes('href="/georeferenciacion"'), isAdmin);
+  }
+});

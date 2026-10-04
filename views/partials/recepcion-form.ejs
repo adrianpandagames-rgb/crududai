@@ -1,0 +1,42 @@
+<form id="recepcionForm" action="/metricas/recepciones" method="POST" hidden>
+  <hr class="mt-0 mb-3" />
+  <p class="small text-muted">Solo NUC es obligatorio. Los demás campos son opcionales.</p>
+  <% const seccionesRecepcion = [
+    ['Carpeta y recepción', camposRecepcion.slice(0, 7)],
+    ['Líneas y destrucción', camposRecepcion.slice(7, 12)],
+    ['Responsables y entrega', camposRecepcion.slice(12)]
+  ]; %>
+  <% seccionesRecepcion.forEach(([titulo, campos], index) => { %>
+    <details class="border rounded p-3 mb-3" <%= index === 0 ? 'open' : '' %>>
+      <summary class="fw-bold"><%= titulo %></summary>
+      <div class="row g-2 mt-1">
+        <% campos.forEach(([nombre, etiqueta, tipo]) => { %>
+          <div class="<%= tipo === 'datetime-local' ? 'col-12' : 'col-12 col-sm-6' %>" <%- nombre === 'acta_destruccion' ? 'id="recepcionActaGroup" hidden' : '' %>>
+            <label for="rec_<%= nombre %>" class="form-label small mb-1"><%= etiqueta %></label>
+            <% if (nombre === 'agencia') { %>
+              <%- include('agencia-select', { agenciaId: 'rec_agencia' }) %>
+            <% } else if (tipo === 'select') { %>
+              <select id="rec_<%= nombre %>" name="<%= nombre %>" class="form-select form-select-sm">
+                <option value="">Seleccionar una opción</option>
+                <% if (nombre === 'destruccion') { %>
+                  <option value="si">Sí</option>
+                  <option value="no">No</option>
+                <% } %>
+              </select>
+            <% } else { %>
+              <input id="rec_<%= nombre %>" name="<%= nombre %>" type="<%= tipo %>" class="form-control form-control-sm" <%= nombre === 'nuc' ? 'required' : '' %> <%- tipo === 'text' ? 'maxlength="255"' : '' %> />
+            <% } %>
+          </div>
+        <% }); %>
+        <% if (index === 0) { %>
+          <div class="col-12">
+            <div id="rec_ciudadStatus" class="form-text" role="status">Solo cabeceras municipales de Sonora.</div>
+            <button id="rec_retry" type="button" class="btn btn-outline-secondary btn-sm mt-2" hidden>Reintentar cargar ciudades</button>
+          </div>
+        <% } %>
+      </div>
+    </details>
+  <% }); %>
+  <button type="submit" id="rec_registrar" class="btn btn-primary w-100">Registrar recepción</button>
+  <div id="rec_resultado" class="alert mt-3 mb-0" role="status" hidden></div>
+</form>

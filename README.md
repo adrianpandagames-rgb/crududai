@@ -1,5 +1,10 @@
 # CRUD UDAI
 
+## Docker
+
+Para ejecutar la aplicación y MySQL en contenedores con una copia de tus datos
+actuales, sigue [la guía de Docker](DOCKER.md).
+
 ![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?logo=node.js&logoColor=white)
 ![Express](https://img.shields.io/badge/Express-4.x-000000?logo=express&logoColor=white)
 ![MySQL](https://img.shields.io/badge/MySQL-8.x-4479A1?logo=mysql&logoColor=white)

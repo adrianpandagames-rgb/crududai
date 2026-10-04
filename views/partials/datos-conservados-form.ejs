@@ -1,0 +1,51 @@
+<form id="datosConservadosForm" action="/metricas/datos-conservados" method="POST" hidden>
+  <hr class="mt-0 mb-3" />
+  <p class="small text-muted">Solo NUC es obligatorio. Los demás campos son opcionales.</p>
+  <% const secciones = [
+    ['Carpeta y recepción', camposDatosConservados.slice(0, 10)],
+    ['Líneas e IMEI', camposDatosConservados.slice(10, 12)],
+    ['Utilidad y oficio MP', camposDatosConservados.slice(12, 16)],
+    ['Responsables y entrega', camposDatosConservados.slice(16)]
+  ]; %>
+  <% secciones.forEach(([titulo, campos], index) => { %>
+    <details class="border rounded p-3 mb-3" <%= index === 0 ? 'open' : '' %>>
+      <summary class="fw-bold"><%= titulo %></summary>
+      <div class="row g-2 mt-1">
+        <% if (index === 1) { %>
+          <div class="col-12">
+            <label for="dc_lineas" class="form-label small">Líneas</label>
+            <input id="dc_lineas" name="lineas" type="number" min="0" max="1000" step="1" class="form-control form-control-sm" />
+          </div>
+          <fieldset class="col-12">
+            <legend class="fs-6 mb-1">Líneas descritas</legend>
+            <div id="dc_lineasDescritas" class="row g-2 overflow-auto" style="max-height: 240px;"></div>
+          </fieldset>
+        <% } %>
+        <% campos.forEach(([nombre, etiqueta, tipo, opcional]) => { %>
+          <div class="<%= tipo === 'textarea' || tipo === 'datetime-local' ? 'col-12' : 'col-12 col-sm-6' %>">
+            <label for="dc_<%= nombre %>" class="form-label small mb-1"><%= etiqueta %><%= opcional ? ' (opcional)' : '' %></label>
+            <% if (nombre === 'agencia') { %>
+              <%- include('agencia-select', { agenciaId: 'dc_agencia' }) %>
+            <% } else if (tipo === 'select') { %>
+              <select id="dc_<%= nombre %>" name="<%= nombre %>" class="form-select form-select-sm" disabled>
+                <option value="">Seleccionar ciudad</option>
+              </select>
+            <% } else if (tipo === 'textarea') { %>
+              <textarea id="dc_<%= nombre %>" name="<%= nombre %>" rows="2" maxlength="5000" class="form-control form-control-sm"></textarea>
+            <% } else { %>
+              <input id="dc_<%= nombre %>" name="<%= nombre %>" type="<%= tipo %>" class="form-control form-control-sm" <%= opcional ? '' : 'required' %> <%- tipo === 'text' ? 'maxlength="255"' : '' %> />
+            <% } %>
+          </div>
+        <% }); %>
+        <% if (index === 0) { %>
+          <div class="col-12">
+            <div id="dc_ciudadStatus" class="form-text" role="status">Solo cabeceras municipales de Sonora.</div>
+            <button id="dc_retry" type="button" class="btn btn-outline-secondary btn-sm mt-2" hidden>Reintentar cargar ciudades</button>
+          </div>
+        <% } %>
+      </div>
+    </details>
+  <% }); %>
+  <button type="submit" id="dc_registrar" class="btn btn-primary w-100">Registrar datos conservados</button>
+  <div id="dc_resultado" class="alert mt-3 mb-0" role="status" hidden></div>
+</form>

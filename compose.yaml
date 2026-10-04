@@ -1,0 +1,51 @@
+services:
+  db:
+    image: mysql:8.0.46
+    restart: unless-stopped
+    env_file:
+      - docker/mysql.env
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - type: bind
+        source: ./docker/init/001-backup.sql
+        target: /docker-entrypoint-initdb.d/001-backup.sql
+        read_only: true
+        bind:
+          create_host_path: false
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysql --protocol=TCP -h 127.0.0.1 -u \"$$MYSQL_USER\" \"$$MYSQL_DATABASE\" -e 'SELECT 1' >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 30
+
+  app:
+    build: .
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env.docker
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      HTTPS_PORT: 3443
+      DB_HOST: db
+      DB_PORT: 3306
+      TZ: America/Hermosillo
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${DOCKER_HTTPS_PORT:-3444}:3443"
+    volumes:
+      - certificates:/app/certs
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('https').get('https://127.0.0.1:3443/', {rejectUnauthorized:false}, r => {r.resume(); process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+volumes:
+  certificates:
+  mysql_data:

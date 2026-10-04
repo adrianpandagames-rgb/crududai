@@ -1,0 +1,6 @@
+<select id="<%= agenciaId %>" name="agencia" class="form-select form-select-sm">
+  <option value="">Seleccionar agencia</option>
+  <% agencias.forEach((agencia) => { %>
+    <option value="<%= agencia %>"><%= agencia %></option>
+  <% }); %>
+</select>

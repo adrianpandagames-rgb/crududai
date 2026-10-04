@@ -1,4 +1,27 @@
 .page-offset { margin-top: 80px !important; }
+.metricas-workspace { width: 70%; max-width: none; padding-right: clamp(16px, 4vw, 120px); padding-left: clamp(16px, 4vw, 120px); }
+.editar-carpeta-modal { width: min(760px, 95vw); max-height: 90vh; overflow-y: auto; border: 0; border-radius: 14px; padding: 1.25rem; }
+.editar-carpeta-modal::backdrop { background: rgba(0, 0, 0, .5); }
+.registros-carpetas-tabla { min-width: 460px; font-size: .8rem; }
+.registros-carpetas-tabla td { overflow-wrap: anywhere; max-width: 180px; }
+.metricas-graficas { --teal: #398392; }
+.metricas-graficas .chart-panel { padding: 1.5rem; border-radius: 16px; box-shadow: none; }
+.metricas-graficas .chart-panel h3 { font-size: 1.2rem; font-weight: 500; }
+.metricas-graficas .bar-chart { gap: 1.15rem; }
+.metricas-graficas .bar-row { grid-template-columns: minmax(100px, 150px) minmax(0, 1fr) minmax(44px, max-content); }
+.metricas-graficas .bar-track { height: 18px; }
+.metricas-graficas .bar-fill { min-width: 0; background: linear-gradient(90deg, #398392, #60b3ad); }
+.metricas-distribucion { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 1.5rem; padding: 1rem 0; }
+.metricas-distribucion .donut { width: 180px; height: 180px; flex-shrink: 0; }
+.metricas-distribucion .donut::after { width: 112px; height: 112px; }
+.metricas-distribucion .legend { flex: 1 1 220px; width: auto; min-width: 0; }
+.metricas-distribucion .legend-dot { flex-shrink: 0; }
+.metricas-distribucion .legend strong { white-space: nowrap; padding-left: .25rem; }
+@media (max-width: 480px) { .metricas-graficas .chart-panel { padding: 1rem; } .metricas-graficas .bar-row { grid-template-columns: 95px minmax(0, 1fr) minmax(35px, max-content); gap: .4rem; } }
+.csv-drop-zone { padding: 1rem; border: 2px dashed #adb5bd; border-radius: .5rem; background: #f8f9fa; transition: border-color .15s, background-color .15s; }
+.csv-drop-zone.is-dragging { border-color: #0d6efd; background: #e7f1ff; }
+.csv-drop-zone.is-disabled { opacity: .55; }
+.csv-drop-zone [role="status"] { overflow-wrap: anywhere; }
 .page-offset-wide { margin-top: 100px !important; max-width: 900px; }
 .page-container-wide { max-width: 1200px; }
 .page-container-medium { max-width: 1000px; }

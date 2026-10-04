@@ -1,0 +1,45 @@
+export const agencias = [
+  'Abigeatos',
+  'Agencia del Ministerio Público',
+  'Asaltos Norte Oriente',
+  'Asaltos Norte Poniente',
+  'Asaltos Sur Oriente',
+  'Asaltos Sur Poniente',
+  'Centro de Atención Temprana',
+  'Citaciones y Querellas',
+  'Comunicación Interna',
+  'Corrupción de Menores y Narcomenudeo',
+  'Cuarta Unidad',
+  'Delitos Sexuales',
+  'Dirección General de Investigación',
+  'Homicidios',
+  'Ordenes de Aprehensión',
+  'Ordenes de Investigación Norte Oriente',
+  'Ordenes de Investigación Norte Poniente',
+  'Ordenes de Investigación Sur Oriente',
+  'Ordenes de Investigación Sur Poniente',
+  'Personas desaparecidas',
+  'Primera Unidad',
+  'Quinta Unidad',
+  'Sector I',
+  'Sector III',
+  'Sector VI',
+  'Sector VII',
+  'Segunda Unidad',
+  'Servicios Especiales',
+  'Taller Mecánico',
+  'Tercera Unidad',
+  'Traslados',
+  'Unidad de Investigación',
+  'Unidad de Tramitación Masiva de Casos',
+  'Unidad Especializada en Combate al Secuestro',
+  'Vehículos Robados',
+  'Vicefiscalia de Feminicidios',
+  'Violencia Intrafamiliar, Incumplimiento de Obligaciones Familiares y Amenazas',
+];
+
+export function validarAgencia(agencia) {
+  if (agencia != null && agencia !== '' && !agencias.includes(agencia)) {
+    throw new Error('Selecciona una agencia del catálogo.');
+  }
+}

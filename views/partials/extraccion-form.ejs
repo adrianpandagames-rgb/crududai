@@ -1,0 +1,41 @@
+<form id="extraccionForm" action="/metricas/extracciones" method="POST" hidden>
+  <hr class="mt-0 mb-3" />
+  <p class="small text-muted">Solo NUC es obligatorio. Los demás campos son opcionales.</p>
+  <% const seccionesExtraccion = [
+    ['Carpeta y documentos', camposExtraccion.slice(0, 9)],
+    ['Agencia y resolución', camposExtraccion.slice(9, 13)],
+    ['Indicios y análisis', camposExtraccion.slice(13, 17)],
+    ['Responsables y entrega', camposExtraccion.slice(17)]
+  ]; %>
+  <% seccionesExtraccion.forEach(([titulo, campos], index) => { %>
+    <details class="border rounded p-3 mb-3" <%= index === 0 ? 'open' : '' %>>
+      <summary class="fw-bold"><%= titulo %></summary>
+      <div class="row g-2 mt-1">
+        <% campos.forEach(([nombre, etiqueta, tipo]) => { %>
+          <div class="<%= ['datetime-local', 'textarea'].includes(tipo) ? 'col-12' : 'col-12 col-sm-6' %>">
+            <label for="ext_<%= nombre %>" class="form-label small mb-1"><%= etiqueta %></label>
+            <% if (nombre === 'agencia') { %>
+              <%- include('agencia-select', { agenciaId: 'ext_agencia' }) %>
+            <% } else if (tipo === 'select') { %>
+              <select id="ext_<%= nombre %>" name="<%= nombre %>" class="form-select form-select-sm" disabled>
+                <option value="">Seleccionar ciudad</option>
+              </select>
+            <% } else if (tipo === 'textarea') { %>
+              <textarea id="ext_<%= nombre %>" name="<%= nombre %>" rows="2" maxlength="5000" class="form-control form-control-sm"></textarea>
+            <% } else { %>
+              <input id="ext_<%= nombre %>" name="<%= nombre %>" type="<%= tipo %>" class="form-control form-control-sm" <%= nombre === 'nuc' ? 'required' : '' %> <%- tipo === 'text' ? 'maxlength="255"' : tipo === 'number' ? 'min="0" max="4294967295" step="1"' : '' %> />
+            <% } %>
+          </div>
+        <% }); %>
+        <% if (index === 1) { %>
+          <div class="col-12">
+            <div id="ext_ciudadStatus" class="form-text" role="status">Solo cabeceras municipales de Sonora.</div>
+            <button id="ext_retry" type="button" class="btn btn-outline-secondary btn-sm mt-2" hidden>Reintentar cargar ciudades</button>
+          </div>
+        <% } %>
+      </div>
+    </details>
+  <% }); %>
+  <button type="submit" id="ext_registrar" class="btn btn-primary w-100">Registrar extracción</button>
+  <div id="ext_resultado" class="alert mt-3 mb-0" role="status" hidden></div>
+</form>

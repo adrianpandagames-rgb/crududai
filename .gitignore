@@ -157,3 +157,11 @@ add-ruta-admin.js
 
 
 # End of https://www.toptal.com/developers/gitignore/api/node
+
+# Required for reproducible Docker builds.
+!package-lock.json
+!xlsx-0.18.5.tgz
+.env.docker
+docker/mysql.env
+docker/init/*.sql
+docker/init/*.partial

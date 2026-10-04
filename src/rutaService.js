@@ -18,7 +18,7 @@ const parseDmsCoordinate = (value) => {
   return /[SW]/i.test(dmsMatch[4] || '') ? -coordinate : coordinate;
 };
 
-const parseCoordinateNumber = (value, delimiter = ',') => {
+export const parseCoordinateNumber = (value, delimiter = ',') => {
   const normalizedValue = String(value ?? '')
     .trim()
     .replace(/\s+/g, '')
@@ -237,7 +237,7 @@ export const processRutaCsv = (text, locations) => {
   return processRutaRows(parseCsv(normalizedText, delimiter), locations, delimiter);
 };
 
-export const processRutaXlsx = (buffer, locations) => {
+export const readRutaXlsxRows = (buffer) => {
   const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: false });
   const firstSheetName = workbook.SheetNames[0];
   if (!firstSheetName) throw new Error('El archivo Excel no contiene hojas.');
@@ -274,8 +274,10 @@ export const processRutaXlsx = (buffer, locations) => {
     }
   }
 
-  return processRutaRows(rows.map((row) => row.map(normalizeRutaTime)), locations);
+  return rows.map((row) => row.map(normalizeRutaTime));
 };
+
+export const processRutaXlsx = (buffer, locations) => processRutaRows(readRutaXlsxRows(buffer), locations);
 
 export const getRutaXlsxMetadata = (buffer) => {
   const workbook = XLSX.read(buffer, { type: 'buffer', bookProps: true, bookFiles: false });

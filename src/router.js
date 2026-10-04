@@ -1,9 +1,22 @@
 import express from "express";
+import { createGeoreferenciacionRouter } from './georeferenciacionRouter.js';
 import multer from "multer";
 import https from "https";
 import http from "http";
 import path from "path";
 import crypto from "crypto";
+import { obtenerCarpeta, actualizarCarpeta } from './editarCarpetasService.js';
+import { validarConsultaRegistros, listarRegistrosCarpetas } from './registrosCarpetasService.js';
+import { agencias } from './agencias.js';
+import { camposViaAlcance, validarViaAlcance, guardarViaAlcance } from './viaAlcanceService.js';
+import { camposOficiosVarios, validarOficiosVarios, guardarOficiosVarios } from './oficiosVariosService.js';
+import { camposInspeccion, validarInspeccion, guardarInspeccion } from './inspeccionesService.js';
+import { camposExtraccion, validarExtraccion, guardarExtraccion } from './extraccionesService.js';
+import { camposRecepcion, validarRecepcion, guardarRecepcion } from './recepcionesService.js';
+import { camposDatosConservados, validarDatosConservados, guardarDatosConservados } from './datosConservadosService.js';
+import { validarPeriodo, validarFiltrosMetricas, obtenerMetricas, fuentesMetricas } from './metricasService.js';
+import { validarIdentificacion, guardarIdentificacion } from './identificacionesService.js';
+import { readFileSync } from 'node:fs';
 
 import {
   agregarEstudiante,
@@ -14,6 +27,7 @@ import {
   obtenerOCrearObjetivo,
   obtenerOCrearObjetivoImei,
   agregarContacto,
+  registrarLineaSinUtilidad,
   agregarImei,
   agregarUbicacion,
   contactoExisteExacto,
@@ -39,6 +53,8 @@ const uploadStorage = multer.memoryStorage();
 const upload = multer({ storage: uploadStorage });
 const rutaUploadParser = multer({ storage: uploadStorage, limits: { fileSize: RUTA_MAX_FILE_SIZE } });
 const router = express.Router();
+const normalizarLocalidad = (value) => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+const cabecerasSonora = new Set(JSON.parse(readFileSync(new URL('./cabecerasSonora.json', import.meta.url), 'utf8')).cabeceras.map(normalizarLocalidad));
 const MAX_REDIRECT_ITEMS = 20;
 const PHONE_VALIDATION_API_URL = 'http://apilayer.net/api/validate';
 const RUTA_PROCESSING_DELAY_MS = 10000;
@@ -529,7 +545,11 @@ router.get('/api/localidades', async (req, res, next) => {
       'SELECT localidad FROM localidades_mexico WHERE estado = ? ORDER BY localidad',
       [state],
     );
-    return res.json({ estado: state, localidades: rows.map((row) => row.localidad) });
+    const soloCabeceras = req.query.cabeceras === '1';
+    const localidades = rows.map((row) => row.localidad).filter((localidad) =>
+      !soloCabeceras || (normalizarLocalidad(state) === 'sonora' && cabecerasSonora.has(normalizarLocalidad(localidad)))
+    );
+    return res.json({ estado: state, localidades });
   } catch (error) {
     return next(error);
   }
@@ -619,6 +639,199 @@ router.post('/imei/editar/:id', requireRecordEditor, async (req, res) => {
   }
 });
 
+router.get('/metricas', (_req, res) => {
+  res.render('pages/metricas', { agencias, fuentesMetricas, camposDatosConservados, camposRecepcion, camposExtraccion, camposInspeccion, camposOficiosVarios, camposViaAlcance });
+});
+
+router.post('/metricas/via-alcance', async (req, res) => {
+  let datos;
+  try {
+    datos = validarViaAlcance(req.body);
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  try {
+    if (datos.ciudad) {
+      const [rows] = await pool.execute('SELECT localidad FROM localidades_mexico WHERE estado = ? AND localidad = ? LIMIT 1', ['Sonora', datos.ciudad]);
+      if (!rows.length) return res.status(400).json({ error: 'Selecciona una ciudad del catálogo de Sonora.' });
+    }
+    const id = await guardarViaAlcance(pool, datos, req.session.userId);
+    return res.status(201).json({ id, message: 'Vía alcance registrada correctamente.' });
+  } catch (error) {
+    console.error('Error al guardar vía alcance:', error.code || 'Error de base de datos');
+    return res.status(500).json({ error: 'No fue posible guardar vía alcance. Intenta nuevamente.' });
+  }
+});
+
+router.post('/metricas/oficios-varios', async (req, res) => {
+  let datos;
+  try {
+    datos = validarOficiosVarios(req.body);
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  try {
+    if (datos.ciudad) {
+      const [rows] = await pool.execute('SELECT localidad FROM localidades_mexico WHERE estado = ? AND localidad = ? LIMIT 1', ['Sonora', datos.ciudad]);
+      if (!rows.length) return res.status(400).json({ error: 'Selecciona una ciudad del catálogo de Sonora.' });
+    }
+    const id = await guardarOficiosVarios(pool, datos, req.session.userId);
+    return res.status(201).json({ id, message: 'Oficio registrado correctamente.' });
+  } catch (error) {
+    console.error('Error al guardar oficio:', error.code || 'Error de base de datos');
+    return res.status(500).json({ error: 'No fue posible guardar el oficio. Intenta nuevamente.' });
+  }
+});
+
+router.post('/metricas/inspecciones', async (req, res) => {
+  let datos;
+  try {
+    datos = validarInspeccion(req.body);
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  try {
+    if (datos.ciudad) {
+      const [rows] = await pool.execute('SELECT localidad FROM localidades_mexico WHERE estado = ? AND localidad = ? LIMIT 1', ['Sonora', datos.ciudad]);
+      if (!rows.length) return res.status(400).json({ error: 'Selecciona una ciudad del catálogo de Sonora.' });
+    }
+    const id = await guardarInspeccion(pool, datos, req.session.userId);
+    return res.status(201).json({ id, message: 'Inspección registrada correctamente.' });
+  } catch (error) {
+    console.error('Error al guardar inspección:', error.code || 'Error de base de datos');
+    return res.status(500).json({ error: 'No fue posible guardar la inspección. Intenta nuevamente.' });
+  }
+});
+
+router.post('/metricas/extracciones', async (req, res) => {
+  let datos;
+  try {
+    datos = validarExtraccion(req.body);
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  try {
+    if (datos.ciudad) {
+      const [rows] = await pool.execute('SELECT localidad FROM localidades_mexico WHERE estado = ? AND localidad = ? LIMIT 1', ['Sonora', datos.ciudad]);
+      if (!rows.length) return res.status(400).json({ error: 'Selecciona una ciudad del catálogo de Sonora.' });
+    }
+    const id = await guardarExtraccion(pool, datos, req.session.userId);
+    return res.status(201).json({ id, message: 'Extracción registrada correctamente.' });
+  } catch (error) {
+    console.error('Error al guardar extracción:', error.code || 'Error de base de datos');
+    return res.status(500).json({ error: 'No fue posible guardar la extracción. Intenta nuevamente.' });
+  }
+});
+
+router.post('/metricas/recepciones', async (req, res) => {
+  let datos;
+  try {
+    datos = validarRecepcion(req.body);
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  try {
+    if (datos.ciudad) {
+      const [rows] = await pool.execute('SELECT localidad FROM localidades_mexico WHERE estado = ? AND localidad = ? LIMIT 1', ['Sonora', datos.ciudad]);
+      if (!rows.length) return res.status(400).json({ error: 'Selecciona una ciudad del catálogo de Sonora.' });
+    }
+    const id = await guardarRecepcion(pool, datos, req.session.userId);
+    return res.status(201).json({ id, message: 'Recepción registrada correctamente.' });
+  } catch (error) {
+    console.error('Error al guardar recepción:', error.code || 'Error de base de datos');
+    return res.status(500).json({ error: 'No fue posible guardar la recepción. Intenta nuevamente.' });
+  }
+});
+
+router.post('/metricas/datos-conservados', async (req, res) => {
+  let datos;
+  try {
+    datos = validarDatosConservados(req.body);
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  try {
+    if (datos.ciudad) {
+      const [rows] = await pool.execute('SELECT localidad FROM localidades_mexico WHERE estado = ? AND localidad = ? LIMIT 1', ['Sonora', datos.ciudad]);
+      if (!rows.length) return res.status(400).json({ error: 'Selecciona una ciudad del catálogo de Sonora.' });
+    }
+    const id = await guardarDatosConservados(pool, datos, req.session.userId);
+    return res.status(201).json({ id, message: 'Datos conservados registrados correctamente.' });
+  } catch (error) {
+    console.error('Error al guardar datos conservados:', error.code || 'Error de base de datos');
+    return res.status(500).json({ error: 'No fue posible guardar. Conservamos los campos para que puedas reintentar.' });
+  }
+});
+
+router.get('/metricas/resumen', async (req, res) => {
+  try {
+    validarPeriodo(req.query.inicio, req.query.fin);
+    validarFiltrosMetricas(req.query);
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  try {
+    const resumen = await obtenerMetricas(pool, req.query.inicio, req.query.fin, req.query);
+    res.set('Cache-Control', 'no-store');
+    return res.json(resumen);
+  } catch {
+    return res.status(500).json({ error: 'No fue posible consultar las métricas. Intenta nuevamente.' });
+  }
+});
+
+router.get('/metricas/registros', async (req, res) => {
+  try {
+    validarConsultaRegistros(req.query.tipo, req.query.pagina);
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  try {
+    const result = await listarRegistrosCarpetas(pool, req.query.tipo, req.query.pagina);
+    res.set('Cache-Control', 'no-store');
+    return res.json(result);
+  } catch {
+    return res.status(500).json({ error: 'No fue posible cargar los registros. Intenta nuevamente.' });
+  }
+});
+
+router.get('/metricas/registros/:id', requireRecordEditor, async (req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    return res.json(await obtenerCarpeta(pool, req.query.tipo, req.params.id));
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.status ? error.message : 'No fue posible cargar el registro.' });
+  }
+});
+router.post('/metricas/registros/:id', requireRecordEditor, async (req, res) => {
+  try {
+    await actualizarCarpeta(pool, req.query.tipo, req.params.id, req.body);
+    return res.json({ message: 'Registro actualizado correctamente.' });
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.status ? error.message : 'No fue posible guardar los cambios.' });
+  }
+});
+
+router.post('/metricas/identificaciones', async (req, res) => {
+  let datos;
+  try {
+    datos = validarIdentificacion(req.body);
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  try {
+    const [ciudades] = await pool.execute(
+      'SELECT localidad FROM localidades_mexico WHERE estado = ? AND localidad = ? LIMIT 1',
+      ['Sonora', datos.ciudad],
+    );
+    if (!ciudades.length) return res.status(400).json({ error: 'La ciudad no está en el catálogo de Sonora.' });
+    const id = await guardarIdentificacion(pool, datos, req.session.userId);
+    return res.status(201).json({ id, message: 'Identificación registrada correctamente.' });
+  } catch (error) {
+    console.error('No fue posible guardar la identificación:', error.code || 'Error de base de datos');
+    return res.status(500).json({ error: 'No fue posible guardar la identificación. Intenta nuevamente.' });
+  }
+});
+
 router.get("/Crud", async (req, res) => {
   try {
     const searchTerm = req.query.numObjetivo || req.query.search || "";
@@ -664,6 +877,8 @@ router.get("/Crud", async (req, res) => {
     res.status(status || 500).json({ error: message });
   }
 });
+
+router.use('/georeferenciacion', createGeoreferenciacionRouter(pool));
 
 router.get('/telefono', (req, res) => {
   res.render('pages/telefono');
@@ -1034,6 +1249,24 @@ router.post('/imei/register', async (req, res) => {
 
 router.post('/Crud/import-csv', upload.single('csvFile'), async (req, res) => {
   try {
+    if (req.body.sinUtilidad === 'true') {
+      const { numObjetivo, nucObjetivo, curso_dc, ano } = req.body;
+      if (!numObjetivo?.trim() || !nucObjetivo?.trim() || !curso_dc || !ano) {
+        return res.json({ status: 'error', message: 'Línea, NUC, año y curso son requeridos.' });
+      }
+      if (req.query.validateOnly === 'true' || req.body.validateOnly === 'true') {
+        return res.json({ status: 'ready' });
+      }
+      await registrarLineaSinUtilidad(numObjetivo.trim(), nucObjetivo.trim(), curso_dc, ano);
+      const message = 'Línea registrada con contacto sin utilidad.';
+      return res.json({
+        status: 'success',
+        message,
+        redirect: '/Crud?message=' + encodeURIComponent(message) + '&type=success',
+        partialMatches: [],
+      });
+    }
+
     if (!req.file) {
       return res.redirect('/Crud?message=' + encodeURIComponent('No file uploaded.') + '&type=error');
     }
@@ -1193,7 +1426,7 @@ router.post('/Crud/import-csv', upload.single('csvFile'), async (req, res) => {
     console.error(error);
     return res.json({
       status: 'error',
-      message: 'CSV import failed.',
+      message: req.body.sinUtilidad === 'true' ? 'No se pudo registrar la línea sin utilidad.' : 'CSV import failed.',
       error: error.message
     });
   }

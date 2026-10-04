@@ -139,6 +139,27 @@ export const obtenerOCrearObjetivoImei = async (numObjetivo, nuc, tipo, ano) => 
 };
 
 // Agregar contacto
+export const registrarLineaSinUtilidad = async (numObjetivo, nuc, tipo, ano) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [result] = await connection.query(
+      'INSERT INTO objetivo (numObjetivo, nuc, tipo, ano) VALUES (?, ?, ?, ?)',
+      [numObjetivo, nuc, tipo, ano]
+    );
+    await connection.query(
+      'INSERT INTO contactos (contacto, idObjetivo) VALUES (?, ?)',
+      ['sin utilidad', result.insertId]
+    );
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
 export const agregarContacto = async (contacto, idObjetivo) => {
   try {
     await pool.query(

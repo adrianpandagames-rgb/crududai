@@ -62,11 +62,19 @@
                   <option value="Seguimiento">Seguimiento</option>
                 </select>
               </div>
+              <div class="form-check mb-3">
+                <input type="checkbox" id="sinUtilidad" name="sinUtilidad" value="true" class="form-check-input" />
+                <label for="sinUtilidad" class="form-check-label">Sin utilidad</label>
+              </div>
              <h5 class="mb-3">Importar CSV</h5>
             <p class="small text-muted mb-3">CSV header debe incluir la columna: <strong>contactos</strong>.</p>
               <div class="mb-3">
                 <label for="csvFile" class="form-label">Archivo CSV</label>
-                <input type="file" id="csvFile" name="csvFile" accept=".csv" class="form-control" />
+                <div id="csvDropZone" class="csv-drop-zone">
+                  <p id="csvDropHint" class="small text-muted mb-2">Arrastra y suelta tu archivo CSV aquí o selecciónalo.</p>
+                  <input type="file" id="csvFile" name="csvFile" accept=".csv" class="form-control" aria-describedby="csvDropHint csvDropStatus" />
+                  <p id="csvDropStatus" class="small mb-0 mt-2" role="status" aria-live="polite"></p>
+                </div>
               </div>
               <div class="d-flex mt-4 mb-4">
                 <button class="btn btn-secondary flex-fill" type="button" id="importCsvButton" data-target="/Crud/import-csv" data-method="POST" data-require="all">Importar contactos</button>
@@ -79,6 +87,45 @@
               const anoSelect = document.getElementById('ano_dc');
               const cursoSelect = document.getElementById('curso_dc');
               const csvInput = document.getElementById('csvFile');
+              const sinUtilidadInput = document.getElementById('sinUtilidad');
+              const csvDropZone = document.getElementById('csvDropZone');
+              const csvDropStatus = document.getElementById('csvDropStatus');
+              let csvDragDepth = 0;
+
+              csvInput.addEventListener('change', function() {
+                csvDropStatus.textContent = this.files[0] ? 'Archivo seleccionado: ' + this.files[0].name : '';
+              });
+              ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(function(type) {
+                csvDropZone.addEventListener(type, function(event) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  if (csvInput.disabled) {
+                    event.dataTransfer.dropEffect = 'none';
+                    return;
+                  }
+                  if (type === 'dragenter') csvDragDepth++;
+                  if (type === 'dragover') event.dataTransfer.dropEffect = 'copy';
+                  if (type === 'dragleave') csvDragDepth = Math.max(0, csvDragDepth - 1);
+                  if (type === 'drop') {
+                    csvDragDepth = 0;
+                    const files = event.dataTransfer.files;
+                    if (files.length !== 1 || !/\.csv$/i.test(files[0].name)) {
+                      csvDropStatus.textContent = 'Suelta un solo archivo con extensión .csv.';
+                    } else {
+                      csvInput.files = files;
+                      csvInput.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                  }
+                  csvDropZone.classList.toggle('is-dragging', csvDragDepth > 0);
+                });
+              });
+              sinUtilidadInput.addEventListener('change', function() {
+                csvInput.disabled = this.checked;
+                csvInput.required = false;
+                csvDragDepth = 0;
+                csvDropZone.classList.remove('is-dragging');
+                csvDropZone.classList.toggle('is-disabled', this.checked);
+              });
 
 document.getElementById('importCsvButton').addEventListener('click', function(event) {
                 validateAndImportCSV(form);
@@ -111,19 +158,28 @@ document.getElementById('importCsvButton').addEventListener('click', function(ev
                   nucInput.required = true;
                   anoSelect.required = true;
                   cursoSelect.required = true;
-                  csvInput.required = true;
+                  csvInput.required = !sinUtilidadInput.checked;
                 }
               });
 
-              function validateAndImportCSV(form, submitter) {
+              async function validateAndImportCSV(form, submitter) {
                 const numObjetivo = objetivoInput.value.trim();
                 const nucObjetivo = nucInput.value.trim();
                 const ano = anoSelect.value;
                 const curso_dc = cursoSelect.value;
                 const csvFile = csvInput.files[0];
 
-                if (!numObjetivo || !nucObjetivo || !ano || !curso_dc || !csvFile) {
+                if (!numObjetivo || !nucObjetivo || !ano || !curso_dc || (!sinUtilidadInput.checked && !csvFile)) {
                   alert('Todos los campos son requeridos');
+                  return;
+                }
+
+                if (sinUtilidadInput.checked) {
+                  try {
+                    await submitRealImport(form);
+                  } catch (error) {
+                    alert('Error al registrar la línea: ' + error.message);
+                  }
                   return;
                 }
 

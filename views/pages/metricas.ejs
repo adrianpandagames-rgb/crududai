@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <%- include('../includes/head') %>
+  </head>
+  <body>
+    <%- include('../includes/header') %>
+
+    <main class="container-fluid metricas-workspace page-offset">
+      <div class="row justify-content-md-center mb-5">
+        <div class="col-md-12 mt-5">
+          <h2 class="text-center title">
+            Métricas
+            <hr />
+          </h2>
+        </div>
+      </div>
+      <div class="row mb-5">
+        <div id="registroColumn" class="col-lg-4 mb-5">
+          <section class="card p-4" aria-labelledby="registro-carpetas-title">
+            <h3 id="registro-carpetas-title" class="text-center mb-4">
+              Registro de carpetas
+              <hr />
+            </h3>
+            <form id="identificacionForm" action="/metricas/identificaciones" method="POST">
+            <div class="mb-3">
+              <label for="tipoRegistro" class="form-label">Tipo de registro</label>
+              <select id="tipoRegistro" name="tipoRegistro" class="form-select">
+                <option value="" disabled selected>Seleccionar una opción</option>
+                <option value="Identificación de línea">Identificación de línea</option>
+                <option value="Datos Conservados">Datos Conservados</option>
+                <option value="Recepción">Recepción</option>
+                <option value="Extracción">Extracción</option>
+                <option value="Inspección">Inspección</option>
+                <option value="Oficios varios">Oficios varios</option>
+                <option value="Vía alcance">Vía alcance</option>
+              </select>
+            </div>
+            <div id="identificacionLineaFields" hidden>
+              <hr class="mt-0 mb-3" />
+              <details class="border rounded p-3 mb-3" open>
+                <summary class="fw-bold">Carpeta y recepci&#243;n</summary>
+                <div class="row g-2 mt-1">
+              <% const camposIniciales = [
+                ['nuc', 'NUC', 'text'],
+                ['oficioUdai', 'Oficio UDAI', 'text'],
+                ['fechaEnvio', 'Fecha de envío', 'date'],
+                ['oficioMp', 'Oficio MP', 'text'],
+                ['recibido', 'Recibido', 'date']
+              ]; %>
+              <% camposIniciales.forEach(([nombre, etiqueta, tipo]) => { %>
+                <div class="col-12 col-sm-6">
+                  <label for="<%= nombre %>" class="form-label small mb-1"><%= etiqueta %></label>
+                  <input type="<%= tipo %>" id="<%= nombre %>" name="<%= nombre %>" class="form-control form-control-sm" />
+                </div>
+              <% }); %>
+              <div class="col-12 col-sm-6">
+                <label for="medio" class="form-label small mb-1">Medio</label>
+                <select id="medio" name="medio" class="form-select form-select-sm">
+                  <option value="" disabled selected>Seleccionar una opción</option>
+                  <option value="correo">Correo</option>
+                  <option value="fisico">Físico</option>
+                </select>
+              </div>
+              <div class="col-12 col-sm-6">
+                <label for="agencia" class="form-label small mb-1">Agencia</label>
+                <%- include('../partials/agencia-select', { agenciaId: 'agencia' }) %>
+              </div>
+              <div class="col-12 col-sm-6">
+                <label for="ciudad" class="form-label small mb-1">Ciudad</label>
+                <select id="ciudad" name="ciudad" class="form-select form-select-sm" aria-describedby="ciudadStatus" disabled>
+                  <option value="">Seleccionar una ciudad</option>
+                </select>
+                <div id="ciudadStatus" class="form-text" role="status">Solo cabeceras municipales de Sonora.</div>
+                <button id="reintentarCiudades" type="button" class="btn btn-outline-secondary btn-sm mt-2" hidden>Reintentar cargar ciudades</button>
+              </div>
+              <div class="col-12 col-sm-6">
+                <label for="delito" class="form-label small mb-1">Delito</label>
+                <input type="text" id="delito" name="delito" class="form-control form-control-sm" />
+              </div>
+              </div>
+              </details>
+              <details class="border rounded p-3 mb-3">
+                <summary class="fw-bold">L&#237;neas</summary>
+                <div class="row g-2 mt-1">
+              <div class="col-12 col-sm-6">
+                <label for="lineasCount" class="form-label small mb-1">Líneas</label>
+                <input type="number" id="lineasCount" name="lineasCount" class="form-control form-control-sm" min="1" max="1000" step="1" value="1" aria-describedby="lineasHelp" />
+                <div id="lineasHelp" class="form-text">Indica cuántas líneas deseas describir (de 1 a 1000).</div>
+              </div>
+              <fieldset class="col-12">
+                <legend class="fs-6">Líneas descritas</legend>
+                <div id="lineasDescritasContainer" class="row g-2 overflow-auto" style="max-height: 240px;"></div>
+              </fieldset>
+                </div>
+              </details>
+              <details class="border rounded p-3 mb-3">
+                <summary class="fw-bold">Responsables y entrega</summary>
+                <div class="row g-2 mt-1">
+              <% [['elaboradoPor', 'Elaborado por'], ['firma', 'Firma'], ['enviadoA', 'Enviado a']].forEach(([nombre, etiqueta]) => { %>
+                <div class="col-12 col-sm-6">
+                  <label for="<%= nombre %>" class="form-label small mb-1"><%= etiqueta %></label>
+                  <input type="text" id="<%= nombre %>" name="<%= nombre %>" class="form-control form-control-sm" />
+                </div>
+              <% }); %>
+                </div>
+              </details>
+              <button id="registrarIdentificacion" type="submit" class="btn btn-primary w-100">Registrar identificación</button>
+            </div>
+            <div id="identificacionResultado" class="alert mt-3 mb-0" role="status" hidden></div>
+            </form>
+            <%- include('../partials/datos-conservados-form') %>
+            <%- include('../partials/recepcion-form') %>
+            <%- include('../partials/extraccion-form') %>
+            <%- include('../partials/inspeccion-form') %>
+            <%- include('../partials/oficios-varios-form') %>
+            <%- include('../partials/via-alcance-form') %>
+          </section>
+          <section class="card p-3 mt-3" aria-labelledby="registrosCarpetasTitulo">
+            <h3 id="registrosCarpetasTitulo" class="h5 text-center mb-3">Registros de carpetas</h3>
+            <p id="registrosCarpetasEstado" class="small text-muted mb-2" role="status">Selecciona un tipo de registro para consultar sus registros.</p>
+            <div id="registrosCarpetasContenido" hidden>
+              <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle registros-carpetas-tabla">
+                  <thead><tr><th scope="col">Folio</th><th scope="col">NUC</th><th scope="col">Envío</th><th scope="col">Agencia</th><th scope="col">Ciudad</th><% if (currentUser.canEditRecords) { %><th scope="col">Acciones</th><% } %></tr></thead>
+                  <tbody id="registrosCarpetasFilas" data-can-edit="<%= currentUser.canEditRecords ? 'true' : 'false' %>"></tbody>
+                </table>
+              </div>
+              <div class="d-flex align-items-center justify-content-between gap-2 mt-2">
+                <button id="registrosAnterior" type="button" class="btn btn-outline-secondary btn-sm">Anterior</button>
+                <span id="registrosPagina" class="small text-center"></span>
+                <button id="registrosSiguiente" type="button" class="btn btn-outline-secondary btn-sm">Siguiente</button>
+              </div>
+            </div>
+            <button id="registrosReintentar" type="button" class="btn btn-outline-secondary btn-sm" hidden>Reintentar</button>
+          </section>
+        </div>
+        <div id="resumenColumn" class="col-lg-8 mb-5">
+          <section class="card p-4 mx-auto" aria-labelledby="metricas-tipo-title">
+            <h3 id="metricas-tipo-title" class="text-center mb-4">Métricas por tipo<hr /></h3>
+            <form id="metricasFiltro" class="row g-3 align-items-end">
+              <div class="col-12">
+                <details class="border rounded p-3 mb-3" open>
+                  <summary class="fw-bold">Filtrar registros</summary>
+                  <div class="row g-2 mt-1">
+                    <div class="col-sm-6">
+                      <label for="metricasInicio" class="form-label small">Fecha de inicio</label>
+                      <input id="metricasInicio" name="inicio" type="date" class="form-control form-control-sm" required />
+                    </div>
+                    <div class="col-sm-6">
+                      <label for="metricasFin" class="form-label small">Fecha final</label>
+                      <input id="metricasFin" name="fin" type="date" class="form-control form-control-sm" required />
+                    </div>
+                    <div class="col-12">
+                      <p class="form-text mb-1">Se filtra por fecha de envío.</p>
+                    </div>
+                    <div class="col-sm-6">
+                      <label for="filtroTipo" class="form-label small">Tipo de registro</label>
+                      <select id="filtroTipo" name="tipo" class="form-select form-select-sm">
+                        <option value="">Todos los tipos</option>
+                        <% fuentesMetricas.forEach(({ tipo }) => { %>
+                          <option value="<%= tipo %>"><%= tipo %></option>
+                        <% }); %>
+                      </select>
+                    </div>
+                    <div class="col-sm-6">
+                      <label for="filtroCiudad" class="form-label small">Ciudad</label>
+                      <select id="filtroCiudad" name="ciudad" class="form-select form-select-sm" disabled>
+                        <option value="">Todas las ciudades</option>
+                      </select>
+                      <span id="filtroCiudadEstado" class="form-text" role="status"></span>
+                      <button id="filtroCiudadReintentar" type="button" class="btn btn-outline-secondary btn-sm" hidden>Reintentar</button>
+                    </div>
+                    <div class="col-12">
+                      <label for="filtroAgencia" class="form-label small">Agencia</label>
+                      <select id="filtroAgencia" name="agencia" class="form-select form-select-sm">
+                        <option value="">Todas las agencias</option>
+                        <% agencias.forEach(agencia => { %><option value="<%= agencia %>"><%= agencia %></option><% }); %>
+                      </select>
+                    </div>
+                    <% [['delito', 'Delito'], ['estatus', 'Estatus'], ['nuc', 'NUC'], ['enviado_a', 'Enviado a']].forEach(([nombre, etiqueta]) => { %>
+                      <div class="col-sm-6">
+                        <label for="filtro_<%= nombre %>" class="form-label small"><%= etiqueta %></label>
+                        <input id="filtro_<%= nombre %>" name="<%= nombre %>" class="form-control form-control-sm" maxlength="255" placeholder="Contiene…" />
+                      </div>
+                    <% }); %>
+                    <div class="col-sm-6">
+                      <label for="filtroMedio" class="form-label small">Medio</label>
+                      <select id="filtroMedio" name="medio" class="form-select form-select-sm">
+                        <option value="">Todos los medios</option>
+                        <option value="correo">Correo</option>
+                        <option value="fisico">Físico</option>
+                      </select>
+                    </div>
+                    <div class="col-12">
+                      <p class="form-text mb-2">Los filtros se combinan. Delito, estatus, NUC y destinatario buscan coincidencias parciales. Si un tipo no tiene el campo filtrado, no aporta registros al resultado.</p>
+                      <button id="limpiarFiltrosMetricas" type="button" class="btn btn-outline-secondary btn-sm">Limpiar filtros</button>
+                    </div>
+                  </div>
+                </details>
+                <button id="consultarMetricas" class="btn btn-primary w-100" type="submit">Consultar métricas</button>
+              </div>
+            </form>
+            <p id="metricasEstado" class="mt-4 mb-0" role="status"></p>
+            <div id="metricasResumen" class="mt-3" hidden>
+              <p class="text-center fw-bold">Total de registros: <span id="metricasTotal">0</span></p>
+              <div class="metrics-page metricas-graficas pb-0">
+                <section class="chart-panel h-auto mb-4" aria-labelledby="metricasBarrasTitulo">
+                  <h3 id="metricasBarrasTitulo">Registros por tipo</h3>
+                  <p class="chart-caption">Comparación de registros con los filtros seleccionados.</p>
+                  <div id="metricasTipos" class="bar-chart"></div>
+                </section>
+                <section class="chart-panel h-auto" aria-labelledby="metricasDonaTitulo">
+                  <h3 id="metricasDonaTitulo">Distribución por tipo</h3>
+                  <p class="chart-caption">Proporción de cada tipo en el total de registros.</p>
+                  <div class="metricas-distribucion">
+                    <div id="metricasDona" class="donut" role="img" aria-label="Sin registros"></div>
+                    <div id="metricasLeyenda" class="legend"></div>
+                  </div>
+                  <p id="metricasGraficaVacia" class="chart-caption mt-3 mb-0" hidden>No hay registros para graficar con estos filtros.</p>
+                </section>
+              </div>
+              <p class="form-text mt-3 mb-0">Los registros sin fecha de envío no se incluyen en el periodo seleccionado.</p>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+
+    <dialog id="editarCarpetaModal" class="editar-carpeta-modal" aria-labelledby="editarCarpetaTitulo">
+      <form id="editarCarpetaForm">
+        <h3 id="editarCarpetaTitulo" class="h5">Editar registro</h3>
+        <div id="editarCarpetaCampos" class="row g-3 my-2"></div>
+        <p id="editarCarpetaEstado" class="small" role="status"></p>
+        <div class="d-flex justify-content-end gap-2">
+          <button id="editarCarpetaCerrar" type="button" class="btn btn-secondary">Cancelar</button>
+          <button id="editarCarpetaGuardar" type="submit" class="btn btn-primary">Guardar cambios</button>
+        </div>
+      </form>
+    </dialog>
+    <%- include('../includes/scripts') %>
+    <script src="/public/js/editar-carpeta.js"></script>
+    <script src="/public/js/metricas.js"></script>
+    <script src="/public/js/datos-conservados.js"></script>
+    <script src="/public/js/recepcion.js"></script>
+    <script src="/public/js/extraccion.js"></script>
+    <script src="/public/js/inspeccion.js"></script>
+    <script src="/public/js/oficios-varios.js"></script>
+    <script src="/public/js/via-alcance.js"></script>
+    <script src="/public/js/metricas-resumen.js"></script>
+    <script src="/public/js/registros-carpetas.js"></script>
+  </body>
+</html>

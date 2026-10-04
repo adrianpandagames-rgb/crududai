@@ -11,21 +11,69 @@
         <h2 class="title mb-4">Auditoría de actividad</h2>
         <section class="card">
           <div class="card-body">
-            <p class="text-muted">Se muestran los últimos 200 cambios, inicios e intentos de sesión y búsquedas.</p>
+            <form method="GET" action="/auditoria" class="row g-3 mb-4">
+              <div class="col-sm-6 col-lg-2">
+                <label for="audit-desde" class="form-label">Desde</label>
+                <input type="date" id="audit-desde" name="desde" class="form-control" value="<%= filters.desde %>" min="1000-01-01" max="9999-12-30">
+              </div>
+              <div class="col-sm-6 col-lg-2">
+                <label for="audit-hasta" class="form-label">Hasta</label>
+                <input type="date" id="audit-hasta" name="hasta" class="form-control" value="<%= filters.hasta %>" min="1000-01-01" max="9999-12-30">
+              </div>
+              <div class="col-sm-6 col-lg-2">
+                <label for="audit-tipo" class="form-label">Tipo</label>
+                <select id="audit-tipo" name="tipo" class="form-select">
+                  <option value="">Todos los tipos</option>
+                  <% Object.entries(auditResources).forEach(([value, label]) => { %>
+                    <option value="<%= value %>" <%= filters.tipo === value ? 'selected' : '' %>><%= label %></option>
+                  <% }) %>
+                </select>
+              </div>
+              <div class="col-sm-6 col-lg-2">
+                <label for="audit-accion" class="form-label">Acción</label>
+                <select id="audit-accion" name="accion" class="form-select">
+                  <option value="">Todas las acciones</option>
+                  <% Object.entries(auditActionLabels).forEach(([value, label]) => { %>
+                    <option value="<%= value %>" <%= filters.accion === value ? 'selected' : '' %>><%= label %></option>
+                  <% }) %>
+                </select>
+              </div>
+              <div class="col-sm-6 col-lg-2">
+                <label for="audit-usuario" class="form-label">Usuario</label>
+                <select id="audit-usuario" name="usuario" class="form-select">
+                  <option value="">Todos los usuarios</option>
+                  <% if (filters.usuario && !users.some(user => user.user_email === filters.usuario)) { %>
+                    <option value="<%= filters.usuario %>" selected><%= filters.usuario %></option>
+                  <% } %>
+                  <% users.forEach((user) => { %>
+                    <option value="<%= user.user_email %>" <%= filters.usuario === user.user_email ? 'selected' : '' %>><%= user.user_email %></option>
+                  <% }) %>
+                </select>
+              </div>
+              <div class="col-lg-2 d-flex align-items-end gap-2">
+                <button type="submit" class="btn btn-primary">Filtrar</button>
+                <a href="/auditoria" class="btn btn-outline-secondary">Limpiar</a>
+              </div>
+            </form>
+            <% if (filterError) { %>
+              <div class="alert alert-danger" role="alert"><%= filterError %></div>
+            <% } %>
+            <p class="text-muted">Se muestran hasta 200 registros más recientes que coinciden con los filtros. Las fechas incluyen el día completo y usan la hora de la base de datos.</p>
             <div class="table-responsive">
               <table class="table table-sm align-middle mb-0">
                 <thead>
-                  <tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Ruta</th><th>Estado</th><th>IP</th></tr>
+                  <tr><th>Fecha</th><th>Usuario</th><th>Tipo</th><th>Acción</th><th>Ruta</th><th>Estado</th><th>IP</th></tr>
                 </thead>
                 <tbody>
                   <% if (entries.length === 0) { %>
-                    <tr><td colspan="6" class="text-center text-muted py-4">Aún no hay actividad registrada.</td></tr>
+                    <tr><td colspan="7" class="text-center text-muted py-4"><%= filterError ? 'Corrige los filtros para consultar la actividad.' : 'No hay actividad que coincida con los filtros.' %></td></tr>
                   <% } %>
                   <% entries.forEach((entry) => { %>
                     <tr>
                       <td class="text-nowrap"><%= entry.createdAt %></td>
                       <td><%= entry.user_email %></td>
-                      <td><span class="badge bg-secondary"><%= entry.method %></span></td>
+                      <td><%= auditResources[entry.resource] || 'Otro' %></td>
+                      <td><span class="badge bg-secondary"><%= describeAuditAction(entry) %></span></td>
                       <td><code><%= entry.request_path %></code></td>
                       <td><%= entry.status_code %></td>
                       <td><%= entry.ip_address || '-' %></td>
