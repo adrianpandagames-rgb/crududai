@@ -172,3 +172,8 @@ add-ruta-admin.js
 docker/mysql.env
 docker/init/*.sql
 docker/init/*.partial
+
+# Python Telegram bot
+.venv-telegram/
+__pycache__/
+*.py[cod]

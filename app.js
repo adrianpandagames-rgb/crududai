@@ -20,6 +20,7 @@ import { startImeiMetadataDailyJob } from './src/imeiMetadataService.js';
 import { hashPassword, verifyPassword } from './src/passwordUtils.js';
 import { buildAuditDetails, sanitizeAuditData } from './src/auditDetails.js';
 import { requireSameOrigin } from './src/requestSecurity.js';
+import { createTelegramApiRouter } from './src/telegramApiRouter.js';
 
 
 const app = express();
@@ -184,6 +185,7 @@ const requireAdmin = async (req, res, next) => {
 };
 
 app.use(['/metricas', '/Crud', '/imei', '/lineas', '/ubicaciones', '/api/ubicaciones', '/estudiantes', '/georeferenciacion', '/ruta', '/inicio', '/telefono', '/api/telefono', '/api/localidades', '/cambiar-contrasena'], requireAuth);
+app.use('/api/bot', createTelegramApiRouter(pool));
 
 
 
