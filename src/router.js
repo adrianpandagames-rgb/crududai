@@ -1,8 +1,8 @@
 import express from "express";
+import { removeParentheticalText, capitalizeLocationWords } from './locationText.js';
 import { createGeoreferenciacionRouter } from './georeferenciacionRouter.js';
 import multer from "multer";
 import https from "https";
-import http from "http";
 import path from "path";
 import crypto from "crypto";
 import { obtenerCarpeta, actualizarCarpeta } from './editarCarpetasService.js';
@@ -30,6 +30,7 @@ import {
   registrarLineaSinUtilidad,
   agregarImei,
   agregarUbicacion,
+  actualizarUbicacion,
   contactoExisteExacto,
   imeiExisteExacto,
   contactoCoincidenciasParciales,
@@ -49,14 +50,16 @@ import { createRutaCsv, createRutaXlsx, getRutaXlsxMetadata, processRutaCsv, pro
 import pool from "./db.js";
 
 const RUTA_MAX_FILE_SIZE = 20 * 1024 * 1024;
+const CONTACTS_MAX_FILE_SIZE = 5 * 1024 * 1024;
+const CONTACTS_MAX_ROWS = 10000;
 const uploadStorage = multer.memoryStorage();
-const upload = multer({ storage: uploadStorage });
+const upload = multer({ storage: uploadStorage, limits: { fileSize: CONTACTS_MAX_FILE_SIZE, files: 1, fields: 10, parts: 11, fieldSize: 4096 } });
 const rutaUploadParser = multer({ storage: uploadStorage, limits: { fileSize: RUTA_MAX_FILE_SIZE } });
 const router = express.Router();
 const normalizarLocalidad = (value) => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
 const cabecerasSonora = new Set(JSON.parse(readFileSync(new URL('./cabecerasSonora.json', import.meta.url), 'utf8')).cabeceras.map(normalizarLocalidad));
 const MAX_REDIRECT_ITEMS = 20;
-const PHONE_VALIDATION_API_URL = 'http://apilayer.net/api/validate';
+const PHONE_VALIDATION_API_URL = 'https://apilayer.net/api/validate';
 const RUTA_PROCESSING_DELAY_MS = 10000;
 const rutaStorageReady = pool.query(`
   CREATE TABLE IF NOT EXISTS ruta_archivos (
@@ -199,7 +202,7 @@ const writeSearchAuditLog = (req, res, path, searchTerm) => {
 const normalizePhoneNumber = (value) => String(value || '').replace(/\D/g, '');
 
 const requestPhoneValidation = (url) => new Promise((resolve, reject) => {
-  const request = http.get(url, { headers: { Accept: 'application/json' }, timeout: 10000 }, (response) => {
+  const request = https.get(url, { headers: { Accept: 'application/json' }, timeout: 10000 }, (response) => {
     let body = '';
     response.setEncoding('utf8');
     response.on('data', (chunk) => { body += chunk; });
@@ -998,18 +1001,50 @@ router.get("/ubicaciones", async (req, res) => {
   }
 });
 
+router.post('/ubicaciones/:id/modificar', async (req, res) => {
+  if (req.session?.isAdmin !== true) {
+    return res.status(403).json({ error: 'Solo los administradores pueden modificar ubicaciones.' });
+  }
+  const id = Number(req.params.id);
+  const coordinates = parseCoordinatesInput(req.body.coordinates);
+  const ubicacion = typeof req.body.ubicacion === 'string' ? req.body.ubicacion.trim() : '';
+  const lugar = typeof req.body.lugar === 'string' ? req.body.lugar.trim() : '';
+  if (!Number.isSafeInteger(id) || id < 1 || !coordinates ||
+      !Number.isFinite(coordinates.latitude) || !Number.isFinite(coordinates.longitude) ||
+      Math.abs(coordinates.latitude) > 90 || Math.abs(coordinates.longitude) > 180 || !ubicacion || !lugar) {
+    return res.status(400).json({ error: 'Ingresa coordenadas válidas, ubicación y lugar.' });
+  }
+  try {
+    await actualizarUbicacion(id, { ...coordinates, ubicacion, lugar });
+    return res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    return res.status(error.status || 500).json({ error: error.status ? error.message : 'No se pudo guardar la ubicación.' });
+  }
+});
+
 router.post('/ubicaciones/register', async (req, res) => {
   try {
     const { coordinates, ubicacion, estado, lugar } = req.body;
+    const city = removeParentheticalText(lugar);
     const rawCoordinates = String(coordinates || '').trim();
     const parsedCoordinates = parseCoordinatesInput(rawCoordinates);
 
-    if (!parsedCoordinates || !ubicacion || !estado || !lugar) {
+    if (!parsedCoordinates || !ubicacion || !estado || !city) {
       return res.redirect('/ubicaciones?message=' + encodeURIComponent('Coordenadas, ubicación, estado y ciudad son requeridos. Usa latitud y longitud numéricas o DMS.') + '&type=error');
     }
 
     const { latitude, longitude } = parsedCoordinates;
-    const cityAndState = `${lugar.trim()}, ${estado.trim()}`;
+    const [localidades] = await pool.execute(
+      'SELECT localidad, estado FROM localidades_mexico WHERE estado = ? AND localidad = ? LIMIT 1',
+      [String(estado).trim(), String(lugar).trim()],
+    );
+    if (localidades.length === 0) {
+      return res.redirect('/ubicaciones?message=' + encodeURIComponent('Selecciona una ciudad o localidad válida del estado elegido.') + '&type=error');
+    }
+    const selectedCity = capitalizeLocationWords(removeParentheticalText(localidades[0].localidad));
+    const cityAndState = `${selectedCity}, ${localidades[0].estado}`;
+    req.body.lugar = selectedCity;
 
     await agregarUbicacion({ latitude, longitude, ubicacion: ubicacion.trim(), lugar: cityAndState });
     return res.redirect('/ubicaciones?message=' + encodeURIComponent('Ubicación registrada con éxito.') + '&type=success');
@@ -1247,7 +1282,17 @@ router.post('/imei/register', async (req, res) => {
   }
 });
 
-router.post('/Crud/import-csv', upload.single('csvFile'), async (req, res) => {
+const contactsUpload = (req, res, next) => {
+  upload.single('csvFile')(req, res, (error) => {
+    if (!error) return next();
+    return res.status(error.code === 'LIMIT_FILE_SIZE' ? 413 : 400).json({
+      status: 'error',
+      message: error.code === 'LIMIT_FILE_SIZE' ? 'El CSV supera el límite de 5 MB.' : 'La carga CSV supera los límites permitidos o tiene campos inválidos.',
+    });
+  });
+};
+
+router.post('/Crud/import-csv', contactsUpload, async (req, res) => {
   try {
     if (req.body.sinUtilidad === 'true') {
       const { numObjetivo, nucObjetivo, curso_dc, ano } = req.body;
@@ -1277,7 +1322,16 @@ router.post('/Crud/import-csv', upload.single('csvFile'), async (req, res) => {
     }
 
     const csv = req.file.buffer.toString('utf8');
+    let rowCount = 1;
+    for (const character of csv) {
+      if (character === '\n' && ++rowCount > CONTACTS_MAX_ROWS + 2) {
+        return res.status(413).json({ status: 'error', message: 'El CSV supera el límite de 10000 filas.' });
+      }
+    }
     const lines = csv.split(/\r?\n/).map((line) => line.trim()).filter((line) => line !== '');
+    if (lines.length > CONTACTS_MAX_ROWS + 1) {
+      return res.status(413).json({ status: 'error', message: 'El CSV supera el límite de 10000 filas.' });
+    }
     if (lines.length === 0) {
       return res.redirect('/Crud?message=' + encodeURIComponent('CSV no contiene datos válidos.') + '&type=error');
     }
@@ -1382,7 +1436,7 @@ router.post('/Crud/import-csv', upload.single('csvFile'), async (req, res) => {
             await agregarContacto(contactoValue, idObjetivo);
             insertCount += 1;
             const partials = await contactoCoincidenciasParciales(contactoValue, numObjetivo, nucObjetivo, objetivoTipo, ano);
-            partials.forEach((match) => {
+            partials.slice(0, MAX_REDIRECT_ITEMS - partialMatches.length).forEach((match) => {
               partialMatches.push({
                 contacto: contactoValue,
                 numObjetivo: match.numObjetivo,

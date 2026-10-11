@@ -62,11 +62,11 @@
             <div class="table-responsive">
               <table class="table table-sm align-middle mb-0">
                 <thead>
-                  <tr><th>Fecha</th><th>Usuario</th><th>Tipo</th><th>Acción</th><th>Ruta</th><th>Estado</th><th>IP</th></tr>
+                  <tr><th>Fecha</th><th>Usuario</th><th>Tipo</th><th>Acción</th><th>Ruta</th><th>Estado</th><th>IP</th><th>Información registrada</th></tr>
                 </thead>
                 <tbody>
                   <% if (entries.length === 0) { %>
-                    <tr><td colspan="7" class="text-center text-muted py-4"><%= filterError ? 'Corrige los filtros para consultar la actividad.' : 'No hay actividad que coincida con los filtros.' %></td></tr>
+                    <tr><td colspan="8" class="text-center text-muted py-4"><%= filterError ? 'Corrige los filtros para consultar la actividad.' : 'No hay actividad que coincida con los filtros.' %></td></tr>
                   <% } %>
                   <% entries.forEach((entry) => { %>
                     <tr>
@@ -77,6 +77,16 @@
                       <td><code><%= entry.request_path %></code></td>
                       <td><%= entry.status_code %></td>
                       <td><%= entry.ip_address || '-' %></td>
+                      <td>
+                        <% if (entry.details) { %>
+                          <details>
+                            <summary>Ver información</summary>
+                            <pre class="mt-2 mb-0 text-wrap"><%= JSON.stringify(typeof entry.details === 'string' ? JSON.parse(entry.details) : entry.details, null, 2) %></pre>
+                          </details>
+                        <% } else { %>
+                          <span class="text-muted">Sin información adicional</span>
+                        <% } %>
+                      </td>
                     </tr>
                   <% }) %>
                 </tbody>

@@ -1,4 +1,6 @@
 .page-offset { margin-top: 80px !important; }
+.ubicaciones-actions .btn { flex: 0 0 auto; min-width: 82px; white-space: nowrap; }
+.ubicaciones-container { width: min(96%, 1500px) !important; max-width: 1500px; }
 .metricas-workspace { width: 70%; max-width: none; padding-right: clamp(16px, 4vw, 120px); padding-left: clamp(16px, 4vw, 120px); }
 .editar-carpeta-modal { width: min(760px, 95vw); max-height: 90vh; overflow-y: auto; border: 0; border-radius: 14px; padding: 1.25rem; }
 .editar-carpeta-modal::backdrop { background: rgba(0, 0, 0, .5); }
@@ -65,3 +67,6 @@
 
 @media (max-width: 767.98px) { .user-management-table, .user-management-table tbody, .user-management-table tr, .user-management-table td { display: block; width: 100%; } .user-management-table thead { display: none; } .user-management-table tr { margin-bottom: 1rem; padding: .75rem; border: 1px solid #dee2e6; border-radius: .375rem; } .user-management-table td { padding: .35rem 0; text-align: left !important; white-space: normal !important; } .user-management-table td::before { content: attr(data-label); display: block; margin-bottom: .25rem; font-weight: 600; } .user-management-table .user-actions { display: flex !important; align-items: stretch !important; flex-direction: column !important; justify-content: flex-start !important; min-width: 0; } .user-management-table .user-actions form { display: flex; align-items: center; gap: .35rem; width: 100%; } .user-management-table .user-actions form:first-child { display: flex; grid-column: auto; flex-wrap: wrap; } .user-management-table .user-actions .user-action-button, .user-management-table .user-actions select.user-action-button { width: 100%; min-height: 44px; } .user-management-table .user-actions select.user-action-button { flex: 1 1 150px; } .user-management-table .user-actions .user-role-button, .user-management-table .user-actions .user-password-button, .user-management-table .user-actions .user-status-button { width: 100%; } }
 @media (max-width: 700px) { .metrics-header { display: block; } .metrics-header p { margin-top: .5rem; } .bar-row { grid-template-columns: 90px 1fr 40px; gap: .45rem; } .status-chart { flex-direction: column; gap: 1.25rem; } .legend { width: min(100%, 230px); } }
+.ruta-delete-modal { width: min(440px, calc(100% - 2rem)); padding: 1.5rem; border: 0; border-radius: 12px; box-shadow: 0 12px 40px rgba(0, 0, 0, .25); }
+.ruta-delete-modal::backdrop { background: rgba(0, 0, 0, .55); }
+.ruta-delete-modal p { overflow-wrap: anywhere; }

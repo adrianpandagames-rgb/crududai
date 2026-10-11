@@ -157,6 +157,13 @@ add-ruta-admin.js
 
 
 # End of https://www.toptal.com/developers/gitignore/api/node
+/data/osm/
+
+# TLS credentials and local backups must never enter version control.
+/certs/
+/backups/
+*.key
+*.pem
 
 # Required for reproducible Docker builds.
 !package-lock.json

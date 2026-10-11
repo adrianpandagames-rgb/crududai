@@ -13,9 +13,11 @@ En **Georeferenciación**, ingresa una línea e importa un CSV o XLSX de hasta 2
 Se mantienen las filas y las demás columnas. Se actualizan o agregan:
 
 - `antena`: número consecutivo por coordenada válida diferente.
-- `ubicacion`: primera dirección formateada devuelta por Google en español.
+- `ubicacion`: calle principal, entrecalles cuando se identifican ambas, colonia y código postal, en ese orden. Se incluyen únicamente los componentes disponibles; si faltan colonia, código postal o entrecalles, se conservan los demás.
 - `lugar`: localidad; si no existe, municipio o estado.
 - `estado_geocodificacion`: `OK`, `SIN_RESULTADOS` o `COORDENADAS_INVALIDAS`.
+
+Para determinar las entrecalles con la red vial, se toman las primeras intersecciones aproximadamente perpendiculares a cada lado del punto sobre la calle principal; los cruces oblicuos no delimitan el tramo. La regla funciona igual si la calle principal corre de norte a sur o de este a oeste.
 
 Cada coordenada distinta genera una consulta por archivo, con posibles cargos en Google. La dirección se consulta en Google. Además del catálogo de ubicaciones guardadas, la base de datos almacena el seguimiento y los resultados del trabajo en la tabla independiente `georeferenciacion_archivos`, creada automáticamente. Los resultados se pueden descargar en CSV o XLSX durante 48 horas; cada administrador solo accede a sus archivos, mientras que el catálogo de ubicaciones es compartido entre administradores. Los archivos vencidos se eliminan al acceder al módulo.
 

@@ -8,6 +8,8 @@ test('buildSessionCookieOptions creates a session cookie when credentials are no
   assert.equal(options.maxAge, undefined);
   assert.equal(options.path, '/');
   assert.equal(options.sameSite, 'lax');
+  assert.equal(options.httpOnly, true);
+  assert.equal(options.secure, true);
 });
 
 test('isSessionExpired marks sessions older than 10 minutes as expired', () => {

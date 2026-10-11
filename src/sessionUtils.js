@@ -3,6 +3,7 @@ const REMEMBERED_SESSION_TIMEOUT_MS = 30 * 24 * 60 * 60 * 1000;
 
 const buildSessionCookieOptions = (rememberMe = false) => ({
   httpOnly: true,
+  secure: true,
   sameSite: 'lax',
   path: '/',
   ...(rememberMe ? { maxAge: REMEMBERED_SESSION_TIMEOUT_MS } : {}),

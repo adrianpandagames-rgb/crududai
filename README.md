@@ -1,5 +1,67 @@
 # CRUD UDAI
 
+## Entrecalles en Georreferenciación
+
+Al importar un CSV o XLSX con latitud y longitud, se obtiene la dirección con
+Google Geocoding y se calculan las entrecalles con la red vial de OpenStreetMap.
+Configura `GOOGLE_GEOCODING_API_KEY`. Las entrecalles se calculan desde MySQL:
+el módulo ya no consulta Overpass ni necesita `OVERPASS_API_URL`.
+
+Para instalar o actualizar la red vial:
+
+1. Descarga [mexico-latest.osm.pbf de Geofabrik](https://download.geofabrik.de/north-america/mexico.html)
+   y guárdalo en `data/osm/mexico-latest.osm.pbf`.
+2. Ejecuta `npm run import:red-vial` (o añade la ruta de otro archivo PBF).
+3. Ejecuta `node scripts/check-red-vial.js` para comprobar la red importada.
+
+Se importan las vías transitables del rectángulo 26–33° N, 115–108° O,
+que cubre Sonora y una zona limítrofe; no es un recorte administrativo exacto.
+El lector trabaja en flujo y conserva nodos de esa región en memoria (hasta
+4 GB de heap). Una actualización solo se activa cuando finaliza correctamente;
+las versiones anteriores se conservan para no interrumpir archivos en proceso.
+Actualiza el extracto periódicamente. Los archivos grandes están excluidos de Git.
+
+Antes de consultar servicios externos se busca la coordenada en MySQL, usando
+la precisión almacenada de nueve decimales. Si existe, se reutilizan la dirección,
+el lugar y las entrecalles encontradas. Si las entrecalles están pendientes o el
+servicio falló anteriormente, se calculan con la red local, sin consultar Google
+ni Overpass. Para direcciones guardadas sin nombre de calle se identifica la vía
+más próxima; si hay dos candidatas a distancias similares se solicita revisión.
+Las coordenadas nuevas se consultan en Google y guardan; las repetidas
+dentro de un archivo reutilizan el resultado en memoria.
+
+El campo `ubicacion` se guarda como `Calle principal, entre Calle X y Calle Y,
+Colonia, C.P. 83000` y `lugar` como `Ciudad, Estado`. El número exterior no se
+incluye. Los componentes ausentes se omiten; las entrecalles se incluyen solo
+cuando están disponibles ambas. Los componentes de Google se conservan en JSON
+para reconstruir el formato sin nuevas consultas. Ejecuta
+`node scripts/format-georeferenciacion.js` para convertir registros anteriores
+con componentes suficientes; los casos ambiguos conservan su dirección original.
+
+Las exportaciones incluyen `entre_calle_1`, `entre_calle_2`, `estado_entrecalles`
+y `fuente_entrecalles`. Los nombres y el estado también se guardan en la tabla
+de ubicaciones. Las columnas de MySQL se agregan al abrir el módulo; la cuenta
+de base de datos necesita permiso ALTER sobre `georeferenciacion_ubicaciones`.
+Los archivos ya procesados no se recalculan: vuelve a importarlos para obtener
+las entrecalles.
+
+`ENCONTRADAS` indica dos cruces sugeridos, `REQUIERE_REVISION` indica datos
+insuficientes o ambiguos, `RED_LOCAL_NO_CARGADA` indica que falta importar el mapa,
+`SERVICIO_NO_DISPONIBLE` puede aparecer en resultados anteriores del proveedor
+y `NO_APLICA` indica que no se obtuvo una dirección válida. Se exige coincidencia
+del nombre de calle, cercanía de hasta 60 metros y conexiones viales reales;
+se recorre hasta 800 metros en cada dirección. Esquinas, ramificaciones y cruces
+sin nombre requieren revisión. La ausencia de entrecalles no elimina la dirección.
+Cuando un extremo conecta con varias calles, se conservan sus nombres separados
+por `/` y el estado queda en `REQUIERE_REVISION`. Si solo se conoce un extremo,
+se conserva ese nombre en su columna; no se asigna una segunda calle.
+
+Las consultas viales reutilizan zonas cercanas por archivo y conservan los
+identificadores originales de nodos para distinguir puentes de cruces conectados.
+Fuera de la cobertura o sin datos suficientes se solicita revisión.
+Verifica los resultados antes de utilizarlos.
+Datos viales: [© OpenStreetMap contributors](https://www.openstreetmap.org/copyright).
+
 ## Docker
 
 Para ejecutar la aplicación y MySQL en contenedores con una copia de tus datos

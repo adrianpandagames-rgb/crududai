@@ -19,6 +19,7 @@ try {
       request_path VARCHAR(255) NOT NULL,
       status_code SMALLINT UNSIGNED NOT NULL,
       ip_address VARCHAR(45) NULL,
+      details LONGTEXT NULL,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       INDEX audit_logs_created_at_index (created_at),
       INDEX audit_logs_user_id_index (user_id)
@@ -27,6 +28,10 @@ try {
 
   await connection.query('ALTER TABLE audit_logs MODIFY user_id INT NULL');
   await connection.query('ALTER TABLE audit_logs MODIFY method VARCHAR(20) NOT NULL');
+  const [columns] = await connection.query("SHOW COLUMNS FROM audit_logs LIKE 'details'");
+  if (columns.length === 0) {
+    await connection.query('ALTER TABLE audit_logs ADD COLUMN details LONGTEXT NULL');
+  }
   console.log('Audit log table is ready.');
 } finally {
   await connection.end();
