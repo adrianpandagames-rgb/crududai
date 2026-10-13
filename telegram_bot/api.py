@@ -22,7 +22,7 @@ def create_client():
         path = Path(certificate)
         context.load_verify_locations(cafile=str(path if path.is_absolute() else ROOT / path))
     return httpx.AsyncClient(base_url=base + '/', headers={'Authorization': f'Bearer {token}'},
-                             verify=context, timeout=15, follow_redirects=False, trust_env=False)
+                             verify=context, timeout=httpx.Timeout(60, connect=10, pool=10), follow_redirects=False, trust_env=False)
 
 
 async def search_api(client, command, term, page, user_id):

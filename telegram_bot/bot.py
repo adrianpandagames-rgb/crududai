@@ -5,10 +5,13 @@ from pathlib import Path
 
 from .api import create_client, search_api
 from .line_results import send_line_results
+from .errors import api_error_details
+from .command_aliases import line_alias_handler
 from .core import PAGE_SIZE, allowed_user_ids, can_query, format_row, query_for
 
 HELP = ('Consultas disponibles:\n'
         '/linea 6621234567 — todas las coincidencias de la línea o contacto\n'
+        '/línea 6621234567 — también acepta el comando con tilde\n'
         '/imei 123456789012345 — IMEI registrado\n'
         '/antena Hermosillo — dirección o lugar en ubicaciones\n'
         '/antena 29.072,-110.956 — coordenadas exactas\n'
@@ -79,8 +82,9 @@ def main():
                 data = await search_api(api_client, command, term, page, user_id)
                 rows = data['rows']
             except Exception as error:
-                logger.error('Consulta fallida: comando=%s usuario=%s tipo=%s', command, user_id, type(error).__name__)
-                await update.effective_message.reply_text('No se pudo consultar la base de datos. Intenta más tarde.')
+                code, message = api_error_details(error)
+                logger.error('Consulta fallida: comando=%s usuario=%s codigo=%s', command, user_id, code)
+                await update.effective_message.reply_text(message)
                 return
             if command == 'linea':
                 await send_line_results(update.effective_message, rows)
@@ -96,25 +100,33 @@ def main():
 
     async def post_init(application):
         await application.bot.set_my_commands([
-            BotCommand('linea', 'Consultar una línea registrada'),
-            BotCommand('imei', 'Consultar un IMEI registrado'),
-            BotCommand('antena', 'Consultar ubicaciones de antenas'),
+            BotCommand('linea', 'Consultar una línea'),
+            BotCommand('imei', 'Consultar un IMEI'),
+            BotCommand('antena', 'Consultar ubicacion de antena'),
             BotCommand('ayuda', 'Ver comandos y ejemplos'),
             BotCommand('miid', 'Ver tu ID de Telegram'),
         ])
 
     async def on_error(update, context):
         # No registrar objetos Update ni errores HTTP: pueden contener datos o el token.
+        from telegram.error import TimedOut
+        if isinstance(context.error, TimedOut):
+            logger.error('Telegram no respondió dentro del tiempo de espera; no se pudo confirmar la operación.')
+            return
         logger.error('Error del bot: %s', type(context.error).__name__)
 
     async def post_shutdown(application):
         await api_client.aclose()
 
-    application = Application.builder().token(token).post_init(post_init).post_shutdown(post_shutdown).build()
+    application = (Application.builder().token(token)
+                   .connect_timeout(10).read_timeout(60).write_timeout(60).pool_timeout(10)
+                   .get_updates_connect_timeout(10).get_updates_read_timeout(60)
+                   .post_init(post_init).post_shutdown(post_shutdown).build())
     application.add_handler(CommandHandler(['start', 'ayuda', 'help'], help_command))
     application.add_handler(CommandHandler('miid', my_id))
     for command in ('linea', 'imei', 'antena'):
         application.add_handler(CommandHandler(command, search_handler(command)))
+    application.add_handler(line_alias_handler(search_handler('linea')))
     application.add_error_handler(on_error)
     application.run_polling(allowed_updates=['message'], drop_pending_updates=True)
 

@@ -20,6 +20,7 @@ Configura el `.env` existente:
 | Comando | Endpoint GET | Consulta |
 | --- | --- | --- |
 | `/linea 6621234567` | `/api/bot/linea` | Línea objetivo o contacto exacto, NUC, tipo y año |
+| `/línea 6621234567` | `/api/bot/linea` | Alias con tilde de `/linea`, con los mismos permisos y resultados |
  
 Cada resultado de `/linea` indica el número consultado, su rol en ese registro (Objetivo, Contacto o ambos) y la línea objetivo asociada. Un mismo número puede tener diferentes roles en distintos registros.
 | `/imei 123456789012345` | `/api/bot/imei` | IMEI registrado y datos asociados |
