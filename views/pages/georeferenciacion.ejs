@@ -33,16 +33,16 @@
               <div class="mb-3">
                 <label for="archivo" class="form-label">Archivo CSV o Excel (.xlsx)</label>
                 <input type="file" id="archivo" name="archivo" class="form-control" accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required />
-                <div class="form-text">Incluye columnas latitud y longitud (decimales o grados, minutos y segundos). Máximo 20 MB y 100000 filas. Se conservan las demás columnas y se actualizan antena, ubicacion, lugar y estado_geocodificacion. Las coordenadas se envían a Google; las repetidas se consultan una vez por archivo. Las consultas pueden generar cargos en tu cuenta de Google.</div>
+                <div class="form-text">Incluye columnas latitud y longitud (decimales o grados, minutos y segundos). Máximo 20 MB y 100000 filas. </div>
               </div>
               <button type="submit" class="btn btn-primary w-100" <%= configured ? '' : 'disabled' %>>Importar y geocodificar</button>
+
             </form>
           </div>
         </div>
 
         <div class="col-md-7 py-3 custom_table">
-          <h3 class="text-center">Archivos de Georeferenciación</h3>
-          <hr />
+          <h3 class="text-center">Archivos de Georeferenciación</h3>s
           <div class="table-responsive">
             <table class="table w-100 ruta-files-table">
               <thead>
@@ -111,15 +111,16 @@
         </form>
         <div class="table-responsive">
           <table class="table">
-            <thead><tr><th>Ubicación</th><th>Lugar</th><th>Latitud</th><th>Longitud</th></tr></thead>
+            <thead><tr><th>Ubicación</th><th>Lugar</th><th>Entre calle</th><th>Y calle</th><th>Entrecalles</th><th>Latitud</th><th>Longitud</th></tr></thead>
             <tbody>
               <% locations.forEach((location) => { %>
-                <tr><td><%= location.ubicacion %></td><td><%= location.lugar %></td><td><%= location.latitude %></td><td><%= location.longitude %></td></tr>
+                <tr><td><%= location.ubicacion %></td><td><%= location.lugar %></td><td><%= location.entre_calle_1 || '' %></td><td><%= location.entre_calle_2 || '' %></td><td><%= location.estado_entrecalles === 'ENCONTRADAS' ? 'Encontradas (sugeridas)' : location.estado_entrecalles === 'SERVICIO_NO_DISPONIBLE' ? 'Servicio no disponible' : 'Requiere revisión' %></td><td><%= location.latitude %></td><td><%= location.longitude %></td></tr>
               <% }); %>
-              <% if (!locations.length) { %><tr><td colspan="4" class="text-center">No hay ubicaciones para mostrar.</td></tr><% } %>
+              <% if (!locations.length) { %><tr><td colspan="7" class="text-center">No hay ubicaciones para mostrar.</td></tr><% } %>
             </tbody>
           </table>
         </div>
+        <p class="text-muted small">Entrecalles sugeridas automáticamente; verifica antes de utilizarlas. Datos viales: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a>. Si faltan datos o hay cruces ambiguos, se solicita revisión.</p>
         <nav class="d-flex align-items-center gap-3" aria-label="Páginas de ubicaciones">
           <% if (page > 1) { %><a href="/georeferenciacion?<%= new URLSearchParams({ search, page: page - 1 }).toString() %>">Anterior</a><% } %>
           <span><%= total %> registros · Página <%= page %> de <%= pages %></span>

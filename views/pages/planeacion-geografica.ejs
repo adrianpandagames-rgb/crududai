@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <%- include('../includes/head') %>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <link rel="stylesheet" href="/public/css/planeacion-geografica.css" />
+</head>
+<body>
+  <%- include('../includes/header') %>
+  <main class="container-fluid page-offset planning-page">
+    <h2 class="text-center title mt-5 mb-4">Planeación geográfica<hr /></h2>
+    <form id="planningUpload" class="card p-4 mb-4" enctype="multipart/form-data">
+      <div class="row">
+        <div class="col-md-3 mb-3">
+          <label for="linea" class="form-label">Número de línea</label>
+          <input id="linea" name="linea" class="form-control" maxlength="50" required autocomplete="off" />
+        </div>
+        <div class="col-md-6 mb-3">
+          <label for="archivo" class="form-label">Archivo CSV o Excel (.xlsx)</label>
+          <div id="rutaDropZone" class="csv-drop-zone">
+            <p id="rutaDropHint" class="small text-muted mb-2">Arrastra tu archivo aquí o selecciónalo.</p>
+            <input type="file" id="archivo" name="archivo" class="form-control" accept=".csv,text/csv,.xlsx" required aria-describedby="rutaDropHint rutaDropStatus" />
+            <p id="rutaDropStatus" class="small mb-0 mt-2" role="status"></p>
+          </div>
+        </div>
+        <div class="col-md-3 mb-3 d-flex align-items-end">
+          <button id="planningSubmit" class="btn btn-primary w-100" type="submit">Importar y mostrar mapa</button>
+        </div>
+      </div>
+      <p class="form-text mb-0">Se conservan las columnas originales y se completan antena, ubicación, lugar, latitud y longitud, igual que en Ruta. La columna azimut o azimuth define la orientación de cada sector.</p>
+    </form>
+    <div id="planningStatus" class="alert alert-info" role="status" aria-live="polite">Importa un archivo para mostrar las antenas y sus sectores de cobertura.</div>
+    <div id="planningWorkspace" class="planning-workspace has-records">
+    <section class="card p-3 planning-map-panel" aria-label="Mapa de cobertura">
+      <div class="row align-items-end mb-3">
+        <div class="col-sm-4 mb-2">
+          <label for="planningCoverageMode" class="form-label">Mostrar cobertura</label>
+          <select id="planningCoverageMode" class="form-control">
+            <option value="sector">Rango con azimut (sector)</option>
+            <option value="range">Solo rango (círculo sin dirección)</option>
+          </select>
+        </div>
+        <div class="col-sm-3 mb-2">
+          <label for="planningRadius" class="form-label">Alcance (metros)</label>
+          <input id="planningRadius" type="number" class="form-control" min="1" max="100000" step="1" value="500" required />
+        </div>
+        <div class="col-sm-5 mb-2 d-flex gap-2 flex-wrap">
+          <button id="planningFit" class="btn btn-outline-primary" type="button" disabled>Ver todas las antenas</button>
+          <button id="planningExport" class="btn btn-outline-secondary" type="button" disabled>Exportar CSV</button>
+        </div>
+      </div>
+      <p class="small text-muted">Con azimut, la sombra abarca 45° a cada lado de su orientación. “Solo rango” muestra un círculo de alcance. Los registros sin azimut válido muestran únicamente la antena en ambos modos. Cobertura ilustrativa. Los datos importados permanecen en esta pestaña hasta recargarla.</p>
+      <div id="planningMap" aria-label="Mapa con sectores de cobertura de las antenas"></div>
+    </section>
+    <section id="planningData" class="card p-3 planning-data-panel">
+      <h3 class="h5">Información del archivo</h3>
+      <p class="small text-muted">Marca las casillas o haz clic en los registros para mostrar únicamente las antenas seleccionadas. Vuelve a pulsar para quitar una selección. Usa “Ver todas las antenas” para recuperar la vista completa.</p>
+      <p id="planningFile" class="small">No hay archivo importado.</p>
+      <p class="small text-muted">Haz clic en un punto del mapa para ver todos los registros de esas coordenadas.</p>
+      <div class="mb-2"><button id="planningClearFilter" type="button" class="btn btn-sm btn-outline-secondary" hidden>Mostrar todos los registros</button></div>
+      <div class="table-responsive planning-table"><table class="table table-striped"><thead id="planningHeaders"></thead><tbody id="planningRows"><tr><td class="text-center text-muted py-5">Importa un archivo para ver sus registros aquí.</td></tr></tbody></table></div>
+    </section>
+    </div>
+  </main>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="/public/js/ruta-upload.js"></script>
+  <script type="module" src="/public/js/planeacion-geografica.js?v=3"></script>
+</body>
+</html>

@@ -1,4 +1,6 @@
 import { parseCsv, detectCsvDelimiter, normalizeRutaValue, parseCoordinateNumber, readRutaXlsxRows } from './rutaService.js';
+import { createCrossStreetLookup } from './entrecallesService.js';
+import { formatGeocodingLocation } from './georeferenciacionFormato.js';
 
 export const getGeocodingKey = () => process.env.GOOGLE_GEOCODING_API_KEY || '';
 
@@ -42,14 +44,24 @@ export async function reverseGeocode(latitude, longitude, { apiKey = getGeocodin
   if (!result?.formatted_address) throw new Error('Google devolvió una respuesta sin dirección.');
   const components = result.address_components || [];
   const component = (type) => components.find((item) => item.types?.includes(type))?.long_name;
+  const addressDetails = {
+    street: component('route') || '',
+    neighborhood: component('neighborhood') || component('sublocality_level_1') || component('sublocality') || '',
+    postalCode: component('postal_code') || '',
+    city: component('locality') || component('postal_town') || '',
+    state: component('administrative_area_level_1') || '',
+    originalAddress: result.formatted_address,
+  };
   return {
     address: result.formatted_address,
+    street: component('route') || '',
+    addressDetails,
     place: component('locality') || component('postal_town') || component('administrative_area_level_2') || component('administrative_area_level_1') || '',
     status: 'OK',
   };
 }
 
-export async function processGeocodingFile(input, { geocode = reverseGeocode, signal, onProgress = async () => {}, onLocation = async () => {} } = {}) {
+export async function processGeocodingFile(input, { geocode = reverseGeocode, crossStreets = createCrossStreetLookup(), findLocation = async () => null, refreshStoredCrossStreets = false, signal, onProgress = async () => {}, onLocation = async () => {} } = {}) {
   const { rows, delimiter, latitude, longitude } = input;
   const headers = rows[0].slice();
   const column = (name) => {
@@ -61,6 +73,10 @@ export async function processGeocodingFile(input, { geocode = reverseGeocode, si
   const antenna = column('antena');
   const address = column('ubicacion');
   const place = column('lugar');
+  const between1 = column('entre_calle_1');
+  const between2 = column('entre_calle_2');
+  const crossStatus = column('estado_entrecalles');
+  const attribution = column('fuente_entrecalles');
   const status = column('estado_geocodificacion');
   const cache = new Map();
   const output = [headers];
@@ -76,13 +92,36 @@ export async function processGeocodingFile(input, { geocode = reverseGeocode, si
     row[address] = '';
     row[place] = '';
     row[antenna] = '';
+    row[between1] = '';
+    row[between2] = '';
+    row[crossStatus] = 'NO_APLICA';
+    row[attribution] = '';
     if (lat === null || lng === null || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
       row[status] = 'COORDENADAS_INVALIDAS';
     } else {
       const key = `${lat},${lng}`;
       if (!cache.has(key)) {
-        const result = await geocode(lat, lng, { signal });
-        if (result.status === 'OK') await onLocation({ ubicacion: result.address, lugar: result.place, latitude: lat, longitude: lng });
+        const saved = await findLocation(lat, lng);
+        if (signal?.aborted) throw new Error('Procesamiento cancelado.');
+        let result = saved || await geocode(lat, lng, { signal });
+        const originalAddress = result.address, originalPlace = result.place;
+        let refreshed = false;
+        if (saved && refreshStoredCrossStreets && result.crossStreetStatus !== 'ENCONTRADAS') {
+          const local = await crossStreets(lat, lng, { street: result.street, signal });
+          if (local.crossStreetStatus !== 'RED_LOCAL_NO_CARGADA') {
+            Object.assign(result, local);
+            refreshed = true;
+          }
+        }
+        if (!saved && result.status === 'OK') {
+          Object.assign(result, await crossStreets(lat, lng, { street: result.street, signal }));
+        }
+        if (result.status === 'OK') result = formatGeocodingLocation(result);
+        if (result.status === 'OK' && (!saved || refreshed || result.address !== originalAddress || result.place !== originalPlace)) {
+          await onLocation({ ubicacion: result.address, lugar: result.place, latitude: lat, longitude: lng,
+            entre_calle_1: result.betweenStreet1, entre_calle_2: result.betweenStreet2, estado_entrecalles: result.crossStreetStatus,
+            componentes_direccion: result.addressDetails || null });
+        }
         cache.set(key, { ...result, antenna: cache.size + 1 });
       }
       const result = cache.get(key);
@@ -90,6 +129,10 @@ export async function processGeocodingFile(input, { geocode = reverseGeocode, si
       row[address] = result.address;
       row[place] = result.place;
       row[status] = result.status;
+      row[between1] = result.betweenStreet1 || '';
+      row[between2] = result.betweenStreet2 || '';
+      row[crossStatus] = result.crossStreetStatus || 'NO_APLICA';
+      row[attribution] = result.betweenStreet1 ? '© OpenStreetMap contributors https://www.openstreetmap.org/copyright' : '';
     }
     output.push(row);
     if ((output.length - 1) % 25 === 0 || output.length === rows.length) await onProgress(output.length - 1);

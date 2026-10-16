@@ -435,15 +435,14 @@ s<!DOCTYPE html>
           const duplicates = JSON.parse(duplicatesParam);
           const tableBody = document.getElementById('imeiDuplicatesTableBody');
           if (Array.isArray(duplicates) && tableBody) {
-            duplicates.forEach((dup) => {
+            duplicates.slice(0, 20).forEach((dup) => {
+              if (!dup || typeof dup !== 'object') return;
               const row = document.createElement('tr');
-              row.innerHTML = `
-                <td>${dup.imei || ''}</td>
-                <td>${dup.numObjetivo || ''}</td>
-                <td>${dup.nuc || ''}</td>
-                <td>${dup.ano || ''}</td>
-                <td>${dup.tipo || ''}</td>
-              `;
+              for (const field of ['imei', 'numObjetivo', 'nuc', 'ano', 'tipo']) {
+                const cell = document.createElement('td');
+                cell.textContent = String(dup[field] ?? '');
+                row.appendChild(cell);
+              }
               tableBody.appendChild(row);
             });
             $('#imeiDuplicatesModal').modal('show');
@@ -458,16 +457,14 @@ s<!DOCTYPE html>
           const partials = JSON.parse(partialsParam);
           const tableBody = document.getElementById('imeiPartialsTableBody');
           if (Array.isArray(partials) && tableBody) {
-            partials.forEach((dup) => {
+            partials.slice(0, 20).forEach((dup) => {
+              if (!dup || typeof dup !== 'object') return;
               const row = document.createElement('tr');
-              row.innerHTML = `
-                <td>${dup.imei || ''}</td>
-                <td>${dup.numObjetivo || ''}</td>
-                <td>${dup.nuc || ''}</td>
-                <td>${dup.ano || ''}</td>
-                <td>${dup.tipo || ''}</td>
-                <td>${dup.issue || ''}</td>
-              `;
+              for (const field of ['imei', 'numObjetivo', 'nuc', 'ano', 'tipo', 'issue']) {
+                const cell = document.createElement('td');
+                cell.textContent = String(dup[field] ?? '');
+                row.appendChild(cell);
+              }
               tableBody.appendChild(row);
             });
             $('#imeiPartialsModal').modal('show');

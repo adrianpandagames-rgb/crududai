@@ -151,12 +151,21 @@ ecosystem.config.js
 localhost+2-key.pem
 localhost+2.pem
 run-dev.bat
-.env.example
+!.env.example
 add-audit-log.js
 add-ruta-admin.js
 
 
 # End of https://www.toptal.com/developers/gitignore/api/node
+/data/osm/
+/data/map-tiles/
+/data/previews/
+
+# TLS credentials and local backups must never enter version control.
+/certs/
+/backups/
+*.key
+*.pem
 
 # Required for reproducible Docker builds.
 !package-lock.json
@@ -165,3 +174,8 @@ add-ruta-admin.js
 docker/mysql.env
 docker/init/*.sql
 docker/init/*.partial
+
+# Python Telegram bot
+.venv-telegram/
+__pycache__/
+*.py[cod]

@@ -3,11 +3,11 @@
     <thead>
       <tr>
         <th style="width: 5%;">#</th>
-        <th style="width: 20%;">Latitud</th>
-        <th style="width: 20%;">Longitud</th>
-        <th style="width: 30%;">Ubicación</th>
+        <th style="width: 15%;">Latitud</th>
+        <th style="width: 15%;">Longitud</th>
+        <th>Ubicación</th>
         <th style="width: 20%;">Lugar</th>
-        <th style="width: 10%;">Acción</th>
+        <th style="width: 190px;">Acción</th>
       </tr>
     </thead>
     <tbody>
@@ -25,7 +25,12 @@
           <td><%= item.ubicacion %></td>
           <td><%= item.lugar %></td>
           <td>
+            <div class="d-flex align-items-center gap-2 flex-nowrap ubicaciones-actions">
+            <% if (typeof currentUser !== 'undefined' && currentUser.isAdmin === true) { %>
+            <button type="button" class="btn btn-sm btn-outline-secondary edit-location-btn" data-id="<%= item.idUbicacion %>" data-latitude="<%= item.latitude %>" data-longitude="<%= item.longitude %>" data-ubicacion="<%= item.ubicacion %>" data-lugar="<%= item.lugar %>">Modificar</button>
+            <% } %>
             <button type="button" class="btn btn-sm btn-outline-primary copy-location-btn" data-latitude="<%= item.latitude %>" data-longitude="<%= item.longitude %>" data-ubicacion="<%= item.ubicacion %>" data-lugar="<%= item.lugar %>">Copiar</button>
+            </div>
           </td>
         </tr>
         <% }); %>

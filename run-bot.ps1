@@ -1,0 +1,1 @@
+Start-Process -FilePath "cmd.exe" -ArgumentList '/c "C:\Users\UDAI-ALC\Documents\crududai\run-bot.bat"' -WorkingDirectory "C:\Users\UDAI-ALC\Documents\crududai" -WindowStyle Hidden

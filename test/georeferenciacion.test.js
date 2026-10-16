@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx';
 import ejs from 'ejs';
 import express from 'express';
 import { createGeoreferenciacionRouter } from '../src/georeferenciacionRouter.js';
-import { saveGeocodingLocation } from '../src/georeferenciacionUbicaciones.js';
+import { saveGeocodingLocation, findGeocodingLocation } from '../src/georeferenciacionUbicaciones.js';
 import { readGeocodingFile, processGeocodingFile, reverseGeocode } from '../src/georeferenciacionService.js';
 import { createRutaCsv, createRutaXlsx, processRutaXlsx } from '../src/rutaService.js';
 
@@ -50,7 +50,8 @@ test('Google request uses latlng and Spanish; address components are selected by
     assert.equal(url.searchParams.get('language'), 'es');
     return { ok: true, json: async () => ({ status: 'OK', results: [{ formatted_address: 'Dirección', address_components: [{ long_name: 'Sonora', types: ['administrative_area_level_1'] }, { long_name: 'Hermosillo', types: ['locality'] }] }] }) };
   } });
-  assert.deepEqual(result, { address: 'Dirección', place: 'Hermosillo', status: 'OK' });
+  assert.deepEqual(result, { address: 'Dirección', street: '', place: 'Hermosillo', status: 'OK',
+    addressDetails: { street: '', neighborhood: '', postalCode: '', city: 'Hermosillo', state: 'Sonora', originalAddress: 'Dirección' } });
 });
 
 test('Google zero results, denied requests, quota, timeout and missing key are handled without leaking secrets', async () => {
@@ -137,7 +138,7 @@ test('only successful unique coordinates are persisted with the four requested f
     onLocation: (location) => saveGeocodingLocation(pool, location),
   });
   assert.equal(saved.length, 1);
-  assert.deepEqual(saved[0].values, ['Dirección', 'Hermosillo', 29, -110]);
+  assert.deepEqual(saved[0].values, ['Dirección', 'Hermosillo', 29, -110, '', '', 'REQUIERE_REVISION', null]);
   assert.ok(saved[0].sql.includes('ON DUPLICATE KEY UPDATE'));
 });
 
@@ -146,4 +147,60 @@ test('only admins see the georeferencing menu entry', async () => {
     const html = await ejs.renderFile('views/includes/header.ejs', { currentUser: { isAdmin } });
     assert.equal(html.includes('href="/georeferenciacion"'), isAdmin);
   }
+});
+
+test('registered coordinates reuse database results across files without external calls or writes', async () => {
+  const saved = { address: 'Dirección guardada', place: 'Ciudad', status: 'OK',
+    betweenStreet1: 'Hidalgo', betweenStreet2: 'Morelos', crossStreetStatus: 'ENCONTRADAS' };
+  let reads = 0;
+  const forbidden = async () => assert.fail('Registered coordinates must not call external services or rewrite storage');
+  const input = readGeocodingFile(Buffer.from('lat,lon\n29,-110\n29,-110\n,-110'), '.csv');
+  for (let i = 0; i < 2; i++) {
+    const rows = await processGeocodingFile(input, {
+      findLocation: async (lat, lng) => { reads++; assert.deepEqual([lat, lng], [29, -110]); return saved; },
+      geocode: forbidden, crossStreets: forbidden, onLocation: forbidden,
+    });
+    for (const row of rows.slice(1, 3)) {
+      assert.equal(row[rows[0].indexOf('ubicacion')], 'Dirección guardada');
+      assert.equal(row[rows[0].indexOf('entre_calle_2')], 'Morelos');
+      assert.equal(row[rows[0].indexOf('estado_entrecalles')], 'ENCONTRADAS');
+    }
+    assert.equal(rows[1][rows[0].indexOf('antena')], rows[2][rows[0].indexOf('antena')]);
+  }
+  assert.equal(reads, 2);
+});
+
+test('existing incomplete entrecalles stay cached while only new coordinates call providers', async () => {
+  const input = readGeocodingFile(Buffer.from('lat,lon\n29,-110\n30,-111\n30,-111'), '.csv');
+  const calls = [], stored = [];
+  const rows = await processGeocodingFile(input, {
+    findLocation: async (lat) => lat === 29 ? { address: 'Guardada', place: 'Ciudad', status: 'OK', crossStreetStatus: 'SERVICIO_NO_DISPONIBLE' } : null,
+    geocode: async (lat, lng) => { calls.push(['google', lat, lng]); return { address: 'Nueva', place: 'Ciudad', street: 'Juárez', status: 'OK' }; },
+    crossStreets: async (lat, lng) => { calls.push(['roads', lat, lng]); return { betweenStreet1: 'A', betweenStreet2: 'B', crossStreetStatus: 'ENCONTRADAS' }; },
+    onLocation: async (location) => stored.push(location),
+  });
+  assert.deepEqual(calls, [['google', 30, -111], ['roads', 30, -111]]);
+  assert.equal(stored.length, 1);
+  assert.equal(rows[1][rows[0].indexOf('estado_entrecalles')], 'SERVICIO_NO_DISPONIBLE');
+  assert.equal(rows[2][rows[0].indexOf('entre_calle_1')], 'A');
+});
+
+test('database lookup uses indexed coordinate equality at stored decimal precision', async () => {
+  const pool = { execute: async (sql, values) => {
+    assert.ok(sql.includes('latitude = CAST(? AS DECIMAL(12,9))'));
+    assert.ok(sql.includes('longitude = CAST(? AS DECIMAL(12,9))'));
+    assert.deepEqual(values, [29.12345678912, -110]);
+    return [[{ ubicacion: 'Guardada', lugar: 'Ciudad', entre_calle_1: 'A', entre_calle_2: 'B', estado_entrecalles: 'ENCONTRADAS' }]];
+  } };
+  assert.deepEqual(await findGeocodingLocation(pool, 29.12345678912, -110), {
+    address: 'Guardada', place: 'Ciudad', betweenStreet1: 'A', betweenStreet2: 'B', crossStreetStatus: 'ENCONTRADAS', status: 'OK',
+  });
+  assert.equal(await findGeocodingLocation({ execute: async () => [[]] }, 0, 0), null);
+});
+
+test('a failed database lookup stops processing instead of making external requests', async () => {
+  await assert.rejects(processGeocodingFile(readGeocodingFile(Buffer.from('lat,lon\n29,-110'), '.csv'), {
+    findLocation: async () => { throw new Error('Database unavailable'); },
+    geocode: async () => assert.fail('Must not fall back to billable requests'),
+  }), /Database unavailable/);
 });

@@ -2,7 +2,8 @@ import express from 'express';
 import multer from 'multer';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { initializeGeocodingLocations, saveGeocodingLocation, listGeocodingLocations } from './georeferenciacionUbicaciones.js';
+import { initializeLocalRoads, createLocalCrossStreetLookup, getLocalRoadStatus } from './redVialLocal.js';
+import { initializeGeocodingLocations, saveGeocodingLocation, listGeocodingLocations, findGeocodingLocation } from './georeferenciacionUbicaciones.js';
 import { createRutaCsv, createRutaXlsx, getRutaXlsxMetadata } from './rutaService.js';
 import { getGeocodingKey, readGeocodingFile, processGeocodingFile } from './georeferenciacionService.js';
 
@@ -15,6 +16,7 @@ export function createGeoreferenciacionRouter(pool) {
   const initialize = () => {
     if (!storage) storage = (async () => {
       await initializeGeocodingLocations(pool);
+      await initializeLocalRoads(pool);
       await pool.query(`CREATE TABLE IF NOT EXISTS georeferenciacion_archivos (
         id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
         file_uuid CHAR(36) NOT NULL UNIQUE,
@@ -58,7 +60,7 @@ export function createGeoreferenciacionRouter(pool) {
         WHERE user_id = ? AND expires_at > NOW() ORDER BY id DESC`, [req.session.userId]);
       res.render('pages/georeferenciacion', {
         ...await listGeocodingLocations(pool, req.query),
-        files, configured: Boolean(getGeocodingKey()),
+        files, configured: Boolean(getGeocodingKey()), localRoads: await getLocalRoadStatus(pool),
         message: typeof req.query.message === 'string' ? req.query.message : '',
         messageType: req.query.type,
       });
@@ -102,6 +104,9 @@ export function createGeoreferenciacionRouter(pool) {
         const [files] = await pool.execute('SELECT file_uuid FROM georeferenciacion_archivos WHERE file_uuid = ? AND expires_at > NOW()', [id]);
         if (!files.length || controller.signal.aborted) return;
         const rows = await processGeocodingFile(input, {
+          crossStreets: createLocalCrossStreetLookup(pool),
+          refreshStoredCrossStreets: true,
+          findLocation: (latitude, longitude) => findGeocodingLocation(pool, latitude, longitude),
           onLocation: (location) => saveGeocodingLocation(pool, location),
           signal: controller.signal,
           onProgress: async (processed) => {

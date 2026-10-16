@@ -4,6 +4,7 @@ import fs from 'fs';
 import https from 'https';
 import http from 'http';
 import path from 'path';
+import { fileURLToPath } from 'node:url';
 import selfsigned from 'selfsigned';
 import mysql from 'mysql2/promise';
 import express from "express";
@@ -17,9 +18,17 @@ import { auditOperationSql, auditResourceSql, auditResources, describeAuditActio
 import { buildSessionCookieOptions, isSessionExpired, SESSION_TIMEOUT_MS } from './src/sessionUtils.js';
 import { startImeiMetadataDailyJob } from './src/imeiMetadataService.js';
 import { hashPassword, verifyPassword } from './src/passwordUtils.js';
+import { buildAuditDetails, sanitizeAuditData } from './src/auditDetails.js';
+import { requireSameOrigin } from './src/requestSecurity.js';
+import { createTelegramApiRouter } from './src/telegramApiRouter.js';
+import { createPlaneacionRouter } from './src/planeacionRouter.js';
 
 
 const app = express();
+// Trust only hosting proxies that replace forwarded headers.
+if (process.env.TRUST_PROXY) {
+  app.set('trust proxy', process.env.TRUST_PROXY.split(',').map(value => value.trim()).filter(Boolean));
+}
 
 const swaggerOptions = {
   definition: {
@@ -30,7 +39,7 @@ const swaggerOptions = {
       description: 'API documentation for CRUDUDAI',
     },
     servers: [
-      { url: 'https://127.0.0.1:3443' },
+      { url: '/' },
     ],
   },
   apis: ['./app.js', './src/router.js'],
@@ -45,7 +54,7 @@ app.use((req, res, next) => {
 });
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb', parameterLimit: 50000 }));
-app.use("/public", express.static("public"));
+app.use("/public", express.static(fileURLToPath(new URL('./public/', import.meta.url))));
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 const sessions = new Map();
@@ -53,11 +62,11 @@ const pendingRouteToasts = new Map();
 const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const NON_MUTATING_POST_PATHS = new Set(['/api/telefono/validar']);
 
-const writeAuditLog = ({ userId = null, userEmail = '', action, requestPath, statusCode, ipAddress }) => {
+const writeAuditLog = ({ userId = null, userEmail = '', action, requestPath, statusCode, ipAddress, details = null }) => {
   pool.execute(
-    `INSERT INTO audit_logs (user_id, user_email, method, request_path, status_code, ip_address)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [userId, userEmail, action, requestPath, statusCode, ipAddress],
+    `INSERT INTO audit_logs (user_id, user_email, method, request_path, status_code, ip_address, details)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [userId, userEmail, action, requestPath, statusCode, ipAddress, details === null ? null : JSON.stringify(sanitizeAuditData(details))],
   ).catch((error) => console.error('Unable to write audit log:', error.message));
 };
 
@@ -88,6 +97,11 @@ const revokeUserSessions = (userId) => {
 };
 
 app.use((req, res, next) => {
+  if (MUTATION_METHODS.has(req.method) && getAuthToken(req)) return requireSameOrigin(req, res, next);
+  return next();
+});
+
+app.use((req, res, next) => {
   res.on('finish', () => {
     const requestPath = req.path;
     const isAuditable = MUTATION_METHODS.has(req.method) && !NON_MUTATING_POST_PATHS.has(requestPath);
@@ -100,6 +114,7 @@ app.use((req, res, next) => {
       requestPath: auditRequestPath(requestPath, req.query),
       statusCode: res.statusCode,
       ipAddress: req.ip,
+      details: buildAuditDetails(req),
     });
   });
   next();
@@ -115,15 +130,15 @@ const requireAuth = async (req, res, next) => {
   const now = Date.now();
   if (isSessionExpired(session, now)) {
     sessions.delete(token);
-    res.clearCookie('auth', { path: '/', httpOnly: true, sameSite: 'lax' });
+    res.clearCookie('auth', buildSessionCookieOptions());
     return res.redirect('/');
   }
 
   try {
-    const [rows] = await pool.execute('SELECT is_active, is_admin, role, must_change_password FROM users WHERE id = ?', [session.userId]);
-    if (rows.length !== 1 || Number(rows[0].is_active) !== 1) {
+    const [rows] = await pool.execute('SELECT password, is_active, is_admin, role, must_change_password FROM users WHERE id = ?', [session.userId]);
+    if (rows.length !== 1 || Number(rows[0].is_active) !== 1 || session.credentialHash !== rows[0].password || sessions.get(token) !== session) {
       sessions.delete(token);
-      res.clearCookie('auth', { path: '/', httpOnly: true, sameSite: 'lax' });
+      res.clearCookie('auth', buildSessionCookieOptions());
       return res.redirect('/');
     }
 
@@ -174,7 +189,9 @@ const requireAdmin = async (req, res, next) => {
   });
 };
 
-app.use(['/metricas', '/Crud', '/imei', '/lineas', '/ubicaciones', '/georeferenciacion', '/ruta', '/inicio', '/telefono', '/api/telefono', '/api/localidades', '/cambiar-contrasena'], requireAuth);
+app.use(['/metricas', '/Crud', '/imei', '/lineas', '/ubicaciones', '/api/ubicaciones', '/estudiantes', '/georeferenciacion', '/ruta', '/inicio', '/telefono', '/api/telefono', '/api/localidades', '/cambiar-contrasena'], requireAuth);
+app.use('/api/bot', createTelegramApiRouter(pool));
+app.use('/planeacion-geografica', requireAdmin, createPlaneacionRouter(pool));
 
 
 
@@ -270,7 +287,7 @@ app.post('/api/login', async (req, res) => {
 app.set("view engine", "ejs");
 app.set("views", "./views");
 
-app.post('/login', async (req, res) => {
+app.post('/login', requireSameOrigin, async (req, res) => {
   const { email, password } = req.body;
     const normalizedEmail = String(email || '').trim().toLowerCase();
 
@@ -298,6 +315,7 @@ app.post('/login', async (req, res) => {
         const shouldRemember = false;
         sessions.set(authToken, {
           userId: user.id,
+          credentialHash: user.password,
           email: user.email,
           isAdmin: Number(user.is_admin) === 1 || user.role === 'admin',
           role: Number(user.is_admin) === 1 ? 'admin' : (user.role || 'usuario'),
@@ -322,8 +340,7 @@ app.get('/logout', (req, res) => {
     sessions.delete(token);
   }
 
-  res.clearCookie('auth', { path: '/', httpOnly: true, sameSite: 'lax' });
-  res.setHeader('Set-Cookie', 'auth=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax');
+  res.clearCookie('auth', buildSessionCookieOptions());
   return res.redirect('/');
 });
 
@@ -337,7 +354,7 @@ app.get('/api/route-toast', async (req, res) => {
   const now = Date.now();
   if (isSessionExpired(session, now)) {
     sessions.delete(token);
-    res.clearCookie('auth', { path: '/', httpOnly: true, sameSite: 'lax' });
+    res.clearCookie('auth', buildSessionCookieOptions());
     return res.status(401).json({ message: null, fileId: null });
   }
 
@@ -397,9 +414,11 @@ app.get('/cambiar-contrasena', requireAuth, (req, res) => {
   return res.render('pages/cambiar-contrasena', { error: null });
 });
 
-app.post('/cambiar-contrasena', requireAuth, async (req, res, next) => {
+app.post('/cambiar-contrasena', requireSameOrigin, requireAuth, async (req, res, next) => {
   const password = String(req.body.password || '');
   const confirmPassword = String(req.body.confirmPassword || '');
+  // Capture the credential before bcrypt yields; other requests may rotate sessions.
+  const expectedCredentialHash = req.session.credentialHash;
 
   if (password.length < 8) {
     return res.status(400).render('pages/cambiar-contrasena', { error: 'La contraseña debe tener al menos 8 caracteres.' });
@@ -410,8 +429,20 @@ app.post('/cambiar-contrasena', requireAuth, async (req, res, next) => {
 
   try {
     const passwordHash = await hashPassword(password);
-    await pool.execute('UPDATE users SET password = ?, must_change_password = 0 WHERE id = ?', [passwordHash, req.session.userId]);
-    req.session.mustChangePassword = false;
+    const [result] = await pool.execute(
+      'UPDATE users SET password = ?, must_change_password = 0 WHERE id = ? AND BINARY password = ?',
+      [passwordHash, req.session.userId, expectedCredentialHash],
+    );
+    if (result.affectedRows !== 1) {
+      sessions.delete(getAuthToken(req));
+      res.clearCookie('auth', buildSessionCookieOptions());
+      return res.redirect('/');
+    }
+    revokeUserSessions(req.session.userId);
+    req.session = { ...req.session, credentialHash: passwordHash, mustChangePassword: false, lastActivity: Date.now() };
+    const authToken = crypto.randomBytes(24).toString('hex');
+    sessions.set(authToken, req.session);
+    res.cookie('auth', authToken, buildSessionCookieOptions());
     return res.redirect('/Crud');
   } catch (error) {
     return next(error);
@@ -449,7 +480,7 @@ app.get('/auditoria', requireAdmin, async (req, res, next) => {
     }
     const [users] = await pool.execute("SELECT DISTINCT user_email FROM audit_logs WHERE user_email <> '' ORDER BY user_email");
     const [entries] = filterError ? [[]] : await pool.execute(
-      `SELECT user_email, method, request_path, status_code, ip_address,
+      `SELECT user_email, method, request_path, status_code, ip_address, details,
               ${auditOperationSql} AS operation, ${auditResourceSql} AS resource,
               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
        FROM audit_logs
@@ -598,7 +629,8 @@ app.post('/usuarios/:id/restablecer-contrasena', requireAdmin, async (req, res, 
     const passwordHash = await hashPassword(generatedPassword);
     const [result] = await pool.execute('UPDATE users SET password = ?, must_change_password = 1 WHERE id = ?', [passwordHash, userId]);
     if (result.affectedRows !== 1) return res.status(404).redirect('/usuarios?error=Usuario%20no%20encontrado.');
-    if (userId === req.session.userId) req.session.mustChangePassword = true;
+    revokeUserSessions(userId);
+    if (userId === req.session.userId) res.clearCookie('auth', buildSessionCookieOptions());
     return renderUsersPage(res, { message: 'Contraseña restablecida. Cópiala antes de salir de esta página.', generatedPassword });
   } catch (error) {
     return next(error);
@@ -646,57 +678,60 @@ app.post('/usuarios/:id/estado', requireAdmin, async (req, res, next) => {
 app.use("/", router);
 
 const CERT_DIR = path.resolve('./certs');
-const MKCERT_KEY = path.resolve('./localhost+2-key.pem');
-const MKCERT_CERT = path.resolve('./localhost+2.pem');
-const CERT_KEY_PATH = fs.existsSync(MKCERT_KEY) ? MKCERT_KEY : path.join(CERT_DIR, 'server.key');
-const CERT_CERT_PATH = fs.existsSync(MKCERT_CERT) ? MKCERT_CERT : path.join(CERT_DIR, 'server.crt');
+const hasConfiguredTls = Boolean(process.env.TLS_KEY_PATH || process.env.TLS_CERT_PATH);
+if (hasConfiguredTls && (!process.env.TLS_KEY_PATH || !process.env.TLS_CERT_PATH)) {
+  throw new Error('Configura TLS_KEY_PATH y TLS_CERT_PATH juntos.');
+}
+// New filenames prevent automatic reuse of credentials previously tracked by Git.
+const CERT_KEY_PATH = hasConfiguredTls ? path.resolve(process.env.TLS_KEY_PATH) : path.join(CERT_DIR, 'runtime-server.key');
+const CERT_CERT_PATH = hasConfiguredTls ? path.resolve(process.env.TLS_CERT_PATH) : path.join(CERT_DIR, 'runtime-server.crt');
 const HOST = process.env.HOST || '0.0.0.0';
 const PORT = Number(process.env.PORT || 3600);
 const HTTPS_PORT = Number(process.env.HTTPS_PORT || 3443);
 
 const ensureLocalCerts = () => {
+  const keyExists = fs.existsSync(CERT_KEY_PATH);
+  const certExists = fs.existsSync(CERT_CERT_PATH);
+  if (keyExists && certExists) return;
+  if (hasConfiguredTls || keyExists || certExists) {
+    throw new Error('Falta el par TLS configurado. No se sobrescriben credenciales existentes.');
+  }
   if (!fs.existsSync(CERT_DIR)) {
     fs.mkdirSync(CERT_DIR, { recursive: true });
   }
 
-  if (!fs.existsSync(CERT_KEY_PATH) || !fs.existsSync(CERT_CERT_PATH)) {
-    if (fs.existsSync(MKCERT_KEY) && fs.existsSync(MKCERT_CERT)) {
-      fs.copyFileSync(MKCERT_KEY, path.join(CERT_DIR, 'server.key'));
-      fs.copyFileSync(MKCERT_CERT, path.join(CERT_DIR, 'server.crt'));
-      console.log('Copied mkcert certificates to:', CERT_DIR);
-    } else {
-      console.log('Generando certificados HTTPS auto-firmados para desarrollo local...');
-      const attrs = [{ name: 'commonName', value: 'localhost' }];
-      const pems = selfsigned.generate(attrs, {
-        algorithm: 'sha256',
-        days: 365,
-        keySize: 2048,
-        extensions: [
-          { name: 'basicConstraints', cA: true },
-          { name: 'keyUsage', keyCertSign: true, digitalSignature: true, keyEncipherment: true },
-          { name: 'subjectAltName', altNames: [{ type: 2, value: 'localhost' }, { type: 7, ip: '127.0.0.1' }] },
-        ],
-      });
+  console.log('Generando certificados HTTPS auto-firmados para desarrollo local...');
+  const attrs = [{ name: 'commonName', value: 'localhost' }];
+  const pems = selfsigned.generate(attrs, {
+    algorithm: 'sha256',
+    days: 365,
+    keySize: 2048,
+    extensions: [
+      { name: 'basicConstraints', cA: true },
+      { name: 'keyUsage', keyCertSign: true, digitalSignature: true, keyEncipherment: true },
+      { name: 'subjectAltName', altNames: [{ type: 2, value: 'localhost' }, { type: 7, ip: '127.0.0.1' }] },
+    ],
+  });
 
-      fs.writeFileSync(path.join(CERT_DIR, 'server.key'), pems.private);
-      fs.writeFileSync(path.join(CERT_DIR, 'server.crt'), pems.cert);
-      console.log('Certificados HTTPS generados en:', CERT_DIR);
-    }
-  }
+  fs.writeFileSync(CERT_KEY_PATH, pems.private, { flag: 'wx', mode: 0o600 });
+  fs.writeFileSync(CERT_CERT_PATH, pems.cert, { flag: 'wx', mode: 0o600 });
+  console.log('Certificados HTTPS generados en:', CERT_DIR);
 };
 
-ensureLocalCerts();
-
-const httpsOptions = {
-  key: fs.readFileSync(CERT_KEY_PATH),
-  cert: fs.readFileSync(CERT_CERT_PATH),
-};
-
-const httpsServer = https.createServer(httpsOptions, app);
-httpsServer.listen(HTTPS_PORT, HOST, () => {
-  console.log(`Servidor HTTPS local en https://127.0.0.1:${HTTPS_PORT}`);
-});
-
+// Managed hosting terminates public HTTPS and forwards HTTP to PORT.
+const serverProtocol = process.env.SERVER_PROTOCOL || (process.env.NODE_ENV === 'production' ? 'http' : 'https');
+if (!['http', 'https'].includes(serverProtocol)) {
+  throw new Error('SERVER_PROTOCOL debe ser http o https.');
+}
+if (serverProtocol === 'http') {
+  http.createServer(app).listen(PORT, HOST, () => console.log(`Servidor HTTP en ${HOST}:${PORT}`));
+} else {
+  ensureLocalCerts();
+  https.createServer({
+    key: fs.readFileSync(CERT_KEY_PATH),
+    cert: fs.readFileSync(CERT_CERT_PATH),
+  }, app).listen(HTTPS_PORT, HOST, () => console.log(`Servidor HTTPS en ${HOST}:${HTTPS_PORT}`));
+}
 
 startImeiMetadataDailyJob((result) => {
   if (result && result.error) {

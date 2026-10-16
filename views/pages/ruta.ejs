@@ -28,7 +28,11 @@
               </div>
               <div class="mb-3">
                 <label for="archivo" class="form-label">Archivo CSV o Excel (.xlsx)</label>
-                <input type="file" id="archivo" name="archivo" class="form-control" accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required />
+                <div id="rutaDropZone" class="csv-drop-zone">
+                  <p id="rutaDropHint" class="small text-muted mb-2">Arrastra y suelta tu archivo CSV o Excel (.xlsx) aquí o selecciónalo.</p>
+                  <input type="file" id="archivo" name="archivo" class="form-control" accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-describedby="rutaDropHint rutaDropStatus" required />
+                  <p id="rutaDropStatus" class="small mb-0 mt-2" role="status" aria-live="polite"></p>
+                </div>
                 <div class="form-text">Se conservan las columnas originales. Se actualizan antena, ubicación, lugar, latitud y longitud; si alguna no existe, se agrega.</div>
               </div>
               <button type="submit" class="btn btn-primary w-100">Importar archivo</button>
@@ -73,8 +77,8 @@
                         <% } else { %>
                           <button type="button" class="btn btn-sm btn-secondary" disabled>Exportar XLSX</button>
                         <% } %>
-                        <form action="/ruta/eliminar/<%= file.id %>" method="POST" class="m-0 flex-shrink-0" onsubmit="return confirm('¿Eliminar este archivo de Ruta?');">
-                          <button type="submit" class="btn btn-sm btn-outline-danger" aria-label="Eliminar archivo" title="Eliminar archivo">
+                        <form action="/ruta/eliminar/<%= file.id %>" method="POST" class="m-0 flex-shrink-0 ruta-delete-form" data-line-number="<%= file.lineNumber %>">
+                          <button type="button" class="btn btn-sm btn-outline-danger ruta-delete-open" aria-label="Eliminar archivo" title="Eliminar archivo">
                             <i class="bi bi-trash3" aria-hidden="true"></i>
                           </button>
                         </form>
@@ -95,9 +99,23 @@
       </div>
     </main>
 
+    <dialog id="rutaDeleteModal" class="ruta-delete-modal" aria-labelledby="rutaDeleteTitle" aria-describedby="rutaDeleteMessage">
+      <h3 id="rutaDeleteTitle" class="h5 mb-3">Eliminar ruta</h3>
+      <p id="rutaDeleteMessage">¿Desea eliminar ruta de línea "<span id="rutaDeleteLine"></span>"?</p>
+      <div class="d-flex justify-content-end gap-2">
+        <button type="button" id="rutaDeleteConfirm" class="btn btn-danger">Eliminar</button>
+        <button type="button" id="rutaDeleteCancel" class="btn btn-secondary" autofocus>Cancelar</button>
+      </div>
+    </dialog>
+
+    <script src="/public/js/ruta-delete.js"></script>
+    <script src="/public/js/ruta-upload.js"></script>
+
     <% if (files.some((file) => file.status === 'pendiente')) { %>
       <script>
-        setTimeout(() => window.location.reload(), 5000);
+        setInterval(() => {
+          if (!document.getElementById('rutaDeleteModal').open) window.location.reload();
+        }, 5000);
       </script>
     <% } %>
 

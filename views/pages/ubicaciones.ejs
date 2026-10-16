@@ -8,7 +8,33 @@
 
     <script src="/public/js/clipboard-utils.js"></script>
 
-    <div class="container page-offset">
+    <% if (typeof currentUser !== 'undefined' && currentUser.isAdmin === true) { %>
+    <dialog id="editLocationModal" class="ruta-delete-modal" aria-labelledby="editLocationTitle">
+      <h3 id="editLocationTitle" class="h5">Modificar ubicación</h3>
+      <form id="editLocationForm" method="POST">
+        <div class="mb-3">
+          <label for="editLocationCoordinates" class="form-label">Coordenadas</label>
+          <input id="editLocationCoordinates" name="coordinates" class="form-control" required />
+        </div>
+        <div class="mb-3">
+          <label for="editLocationName" class="form-label">Ubicación</label>
+          <input id="editLocationName" name="ubicacion" class="form-control" required />
+        </div>
+        <div class="mb-3">
+          <label for="editLocationPlace" class="form-label">Lugar (ciudad y estado)</label>
+          <input id="editLocationPlace" name="lugar" class="form-control" required />
+        </div>
+        <p id="editLocationError" class="text-danger" role="alert" hidden></p>
+        <div class="d-flex justify-content-end gap-2">
+          <button type="submit" id="editLocationSave" class="btn btn-primary">Guardar cambios</button>
+          <button type="button" id="editLocationCancel" class="btn btn-secondary">Cancelar</button>
+        </div>
+      </form>
+    </dialog>
+    <script src="/public/js/ubicaciones-edit.js"></script>
+    <% } %>
+
+    <div class="container page-offset ubicaciones-container">
       <div class="row justify-content-md-center mb-5">
         <div class="col-md-12 mt-5">
           <h2 class="text-center title">
@@ -48,14 +74,23 @@
                 <input type="text" id="ubicacion" name="ubicacion" class="form-control" placeholder="Nombre de la ubicación" required autocomplete="off" autocapitalize="none" spellcheck="false" />
               </div>
               <div class="mb-3">
-                <label for="estado" class="form-label">Estado de México</label>
-                <input type="text" id="estado" name="estado" class="form-control" list="estadosList" placeholder="Buscar estado" required autocomplete="off" />
-                <datalist id="estadosList"></datalist>
+                <label for="estadoBusqueda" class="form-label">Estado de México</label>
+                <div class="position-relative">
+                  <input type="text" id="estadoBusqueda" class="form-select" placeholder="Buscar y seleccionar estado" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="estadoOpciones" autocomplete="off" required disabled />
+                  <div id="estadoOpciones" role="listbox" aria-label="Estados" class="position-absolute w-100 bg-white border rounded shadow-sm" style="max-height: 240px; overflow-y: auto; z-index: 1000" hidden></div>
+                </div>
+                <input type="hidden" id="estado" name="estado" />
               </div>
               <div class="mb-3">
-                <label for="lugar" class="form-label">Ciudad o localidad</label>
-                <input type="text" id="lugar" name="lugar" class="form-control" list="localidadesList" placeholder="Busca una ciudad o localidad" required autocomplete="off" disabled />
-                <datalist id="localidadesList"></datalist>
+                <label for="localidadBusqueda" class="form-label">Ciudad o localidad</label>
+                <div class="position-relative" id="localidadCombobox">
+                  <input type="text" id="localidadBusqueda" class="form-select" placeholder="Buscar y seleccionar localidad" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="localidadOpciones" aria-describedby="localidadEstado" autocomplete="off" required disabled />
+                  <div id="localidadOpciones" role="listbox" aria-label="Localidades" class="position-absolute w-100 bg-white border rounded shadow-sm" style="max-height: 240px; overflow-y: auto; z-index: 1000" hidden></div>
+                </div>
+                <select id="lugar" name="lugar" hidden disabled>
+                  <option value="" disabled selected>Selecciona primero un estado</option>
+                </select>
+                <div id="localidadEstado" class="form-text" role="status">Busca y selecciona una opción de la lista.</div>
               </div>
               <button type="submit" class="btn btn-primary w-100">Registrar ubicación</button>
             </form>
@@ -63,34 +98,204 @@
             <script>
               const estadoSelect = document.getElementById('estado');
               const ciudadSelect = document.getElementById('lugar');
-              const estadosList = document.getElementById('estadosList');
-              const localidadesList = document.getElementById('localidadesList');
+              const estadoBusqueda = document.getElementById('estadoBusqueda');
+              const estadoOpciones = document.getElementById('estadoOpciones');
+              let estadoActiveIndex = -1;
+              const localidadBusqueda = document.getElementById('localidadBusqueda');
+              const localidadEstado = document.getElementById('localidadEstado');
+              const localidadOpciones = document.getElementById('localidadOpciones');
+              let selectedLocalidad = '';
+              let activeIndex = -1;
+              const cerrarLocalidades = () => {
+                localidadOpciones.hidden = true;
+                localidadBusqueda.setAttribute('aria-expanded', 'false');
+                localidadBusqueda.removeAttribute('aria-activedescendant');
+              };
               let estados = [];
+              let localidades = [];
+              let requestVersion = 0;
 
               const loadStates = async () => {
                 const response = await fetch('/api/localidades');
+                if (!response.ok) throw new Error('No se pudieron cargar los estados');
                 const data = await response.json();
                 estados = data.estados || [];
-                estados.forEach((estado) => estadosList.appendChild(new Option(estado, estado)));
+                estadoBusqueda.disabled = estados.length === 0;
+                estadoBusqueda.setCustomValidity('Selecciona un estado de la lista.');
               };
 
               const normalizeText = (value) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+              const cerrarEstados = () => {
+                estadoOpciones.hidden = true;
+                estadoBusqueda.setAttribute('aria-expanded', 'false');
+                estadoBusqueda.removeAttribute('aria-activedescendant');
+              };
+              const seleccionarEstado = value => {
+                estadoSelect.value = value;
+                estadoBusqueda.value = value;
+                estadoBusqueda.setCustomValidity('');
+                cerrarEstados();
+                estadoSelect.dispatchEvent(new Event('change'));
+              };
+              const filtrarEstados = () => {
+                estadoActiveIndex = -1;
+                estadoBusqueda.removeAttribute('aria-activedescendant');
+                estadoOpciones.replaceChildren();
+                const matches = estados.filter(value => normalizeText(value).includes(normalizeText(estadoBusqueda.value)));
+                matches.forEach((value, index) => {
+                  const option = document.createElement('div');
+                  option.id = `estado-opcion-${index}`;
+                  option.setAttribute('role', 'option');
+                  option.setAttribute('aria-selected', String(value === estadoSelect.value));
+                  option.className = 'px-3 py-2';
+                  option.style.cursor = 'pointer';
+                  option.textContent = value;
+                  option.addEventListener('mousedown', event => event.preventDefault());
+                  option.addEventListener('click', () => seleccionarEstado(value));
+                  estadoOpciones.appendChild(option);
+                });
+                if (!matches.length) {
+                  const empty = document.createElement('div');
+                  empty.className = 'px-3 py-2 text-muted';
+                  empty.textContent = 'Sin coincidencias';
+                  estadoOpciones.appendChild(empty);
+                }
+                estadoOpciones.hidden = false;
+                estadoBusqueda.setAttribute('aria-expanded', 'true');
+              };
+              estadoBusqueda.addEventListener('input', () => {
+                estadoSelect.value = '';
+                estadoBusqueda.setCustomValidity('Selecciona un estado de la lista.');
+                estadoSelect.dispatchEvent(new Event('change'));
+                filtrarEstados();
+              });
+              estadoBusqueda.addEventListener('focus', filtrarEstados);
+              estadoBusqueda.addEventListener('click', filtrarEstados);
+              estadoBusqueda.addEventListener('blur', cerrarEstados);
+              estadoBusqueda.addEventListener('keydown', event => {
+                if (event.key === 'Escape' || event.key === 'Tab') { cerrarEstados(); return; }
+                if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                  event.preventDefault();
+                  if (estadoOpciones.hidden) filtrarEstados();
+                  const options = [...estadoOpciones.querySelectorAll('[role="option"]')];
+                  if (!options.length) return;
+                  estadoActiveIndex = Math.max(0, Math.min(options.length - 1, estadoActiveIndex + (event.key === 'ArrowDown' ? 1 : -1)));
+                  options.forEach((option, index) => option.classList.toggle('bg-light', index === estadoActiveIndex));
+                  estadoBusqueda.setAttribute('aria-activedescendant', options[estadoActiveIndex].id);
+                  options[estadoActiveIndex].scrollIntoView({ block: 'nearest' });
+                } else if (event.key === 'Enter' && !estadoOpciones.hidden) {
+                  event.preventDefault();
+                  const option = estadoOpciones.querySelectorAll('[role="option"]')[estadoActiveIndex];
+                  if (option) seleccionarEstado(option.textContent);
+                }
+              });
 
-              estadoSelect.addEventListener('input', async () => {
-                const selectedState = estados.find((estado) => normalizeText(estado) === normalizeText(estadoSelect.value));
-                localidadesList.replaceChildren();
+              const filtrarLocalidades = () => {
+                const matches = localidades.filter(value => normalizeText(value).includes(normalizeText(localidadBusqueda.value)));
+                activeIndex = -1;
+                localidadBusqueda.removeAttribute('aria-activedescendant');
+                localidadOpciones.replaceChildren();
+                matches.forEach((value, index) => {
+                  const option = document.createElement('div');
+                  option.id = `localidad-opcion-${index}`;
+                  option.dataset.value = value;
+                  option.setAttribute('role', 'option');
+                  option.setAttribute('aria-selected', String(value === selectedLocalidad));
+                  option.className = 'px-3 py-2';
+                  option.style.cursor = 'pointer';
+                  option.textContent = value;
+                  option.addEventListener('mousedown', event => event.preventDefault());
+                  option.textContent = capitalizarLocalidad(value);
+                  option.addEventListener('click', () => seleccionarLocalidad(value));
+                  localidadOpciones.appendChild(option);
+                });
+                if (!matches.length) {
+                  const empty = document.createElement('div');
+                  empty.className = 'px-3 py-2 text-muted';
+                  empty.textContent = 'Sin coincidencias';
+                  localidadOpciones.appendChild(empty);
+                }
+                localidadOpciones.hidden = false;
+                localidadBusqueda.setAttribute('aria-expanded', 'true');
+                localidadEstado.textContent = matches.length ? 'Selecciona una opción de la lista para registrarla.' : 'No hay localidades que coincidan con la búsqueda.';
+              };
+              const capitalizarLocalidad = value => String(value).toLocaleLowerCase('es-MX')
+                .replace(/(^|\s)(\p{L})/gu, (_, space, letter) => space + letter.toLocaleUpperCase('es-MX'));
+              const seleccionarLocalidad = value => {
+                selectedLocalidad = value;
+                ciudadSelect.value = value;
+                localidadBusqueda.value = capitalizarLocalidad(value);
+                localidadBusqueda.setCustomValidity('');
+                localidadEstado.textContent = 'Localidad seleccionada.';
+                cerrarLocalidades();
+              };
+              localidadBusqueda.addEventListener('input', () => {
+                selectedLocalidad = '';
                 ciudadSelect.value = '';
-                ciudadSelect.disabled = true;
-                if (!selectedState) return;
+                localidadBusqueda.setCustomValidity('Selecciona una localidad de la lista.');
+                filtrarLocalidades();
+              });
+              localidadBusqueda.addEventListener('focus', filtrarLocalidades);
+              localidadBusqueda.addEventListener('click', filtrarLocalidades);
+              localidadBusqueda.addEventListener('blur', cerrarLocalidades);
+              localidadBusqueda.addEventListener('keydown', event => {
+                if (event.key === 'Escape' || event.key === 'Tab') { cerrarLocalidades(); return; }
+                if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                  event.preventDefault();
+                  if (localidadOpciones.hidden) filtrarLocalidades();
+                  const options = [...localidadOpciones.querySelectorAll('[role="option"]')];
+                  if (!options.length) return;
+                  activeIndex = Math.max(0, Math.min(options.length - 1, activeIndex + (event.key === 'ArrowDown' ? 1 : -1)));
+                  options.forEach((option, index) => option.classList.toggle('bg-light', index === activeIndex));
+                  localidadBusqueda.setAttribute('aria-activedescendant', options[activeIndex].id);
+                  options[activeIndex].scrollIntoView({ block: 'nearest' });
+                } else if (event.key === 'Enter' && !localidadOpciones.hidden) {
+                  event.preventDefault();
+                  const option = localidadOpciones.querySelectorAll('[role="option"]')[activeIndex];
+                  if (option) seleccionarLocalidad(option.dataset.value);
+                }
+              });
+              ciudadSelect.form.addEventListener('submit', event => {
+                if (!estadoSelect.value || ciudadSelect.disabled || !ciudadSelect.value) {
+                  event.preventDefault();
+                  localidadEstado.textContent = 'Selecciona un estado y una ciudad o localidad de la lista.';
+                }
+              });
 
-                const response = await fetch(`/api/localidades?estado=${encodeURIComponent(selectedState)}`);
-                const data = await response.json();
-                (data.localidades || []).forEach((localidad) => localidadesList.appendChild(new Option(localidad, localidad)));
-                ciudadSelect.disabled = false;
+              estadoSelect.addEventListener('change', async () => {
+                const version = ++requestVersion;
+                const selectedState = estados.find((estado) => normalizeText(estado) === normalizeText(estadoSelect.value));
+                localidades = [];
+                selectedLocalidad = '';
+                cerrarLocalidades();
+                ciudadSelect.replaceChildren(new Option('Selecciona primero un estado', ''));
+                localidadBusqueda.value = '';
+                localidadBusqueda.setCustomValidity('Selecciona una localidad de la lista.');
+                localidadBusqueda.disabled = true;
+                ciudadSelect.disabled = true;
+                if (!selectedState) {
+                  localidadEstado.textContent = 'Selecciona primero un estado de la lista.';
+                  return;
+                }
+                localidadEstado.textContent = 'Cargando localidades…';
+                try {
+                  const response = await fetch(`/api/localidades?estado=${encodeURIComponent(selectedState)}`);
+                  if (!response.ok) throw new Error('No se pudieron cargar las localidades');
+                  const data = await response.json();
+                  if (version !== requestVersion) return;
+                  localidades = data.localidades || [];
+                  estadoSelect.value = selectedState;
+                  localidades.forEach(value => ciudadSelect.appendChild(new Option(value, value)));
+                  localidadEstado.textContent = localidades.length ? 'Busca y selecciona una opción de la lista.' : 'No hay localidades para este estado.';
+                  ciudadSelect.disabled = localidades.length === 0;
+                  localidadBusqueda.disabled = localidades.length === 0;
+                } catch {
+                  if (version === requestVersion) localidadEstado.textContent = 'No se pudieron cargar las localidades. Vuelve a seleccionar el estado.';
+                }
               });
 
               loadStates().catch(() => {
-                estadoSelect.placeholder = 'No fue posible cargar los estados';
+                estadoBusqueda.placeholder = 'No fue posible cargar los estados';
               });
             </script>
           </div>
@@ -459,6 +664,7 @@
       }
 
       document.addEventListener('click', async function(event) {
+        if (event.target.closest('.edit-location-btn')) return;
         const button = event.target.closest('.copy-location-btn');
         if (button) {
           event.preventDefault();

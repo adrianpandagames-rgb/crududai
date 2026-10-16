@@ -1,4 +1,5 @@
 import pool from "./db.js";
+import { normalizeStoredCity } from './locationText.js';
 
 const formatCoordinateValue = (value) => {
   if (value === null || value === undefined || value === "") {
@@ -420,7 +421,7 @@ export const agregarUbicacion = async ({ latitude, longitude, ubicacion, lugar }
     const normalizedLatitude = formatCoordinateValue(Number(latitude).toFixed(6));
     const normalizedLongitude = formatCoordinateValue(Number(longitude).toFixed(6));
     const normalizedUbicacion = normalizeLocationText(ubicacion);
-    const normalizedLugar = normalizeLocationText(lugar);
+    const normalizedLugar = normalizeLocationText(normalizeStoredCity(lugar));
 
     const [existingRows] = await pool.query(
       "SELECT idUbicacion FROM ubicaciones WHERE latitude = ? AND longitude = ? LIMIT 1",
@@ -442,6 +443,22 @@ export const agregarUbicacion = async ({ latitude, longitude, ubicacion, lugar }
     }
     throw { status: 500, message: "Error al agregar ubicación" };
   }
+};
+
+export const actualizarUbicacion = async (id, { latitude, longitude, ubicacion, lugar }) => {
+  const normalizedLatitude = formatCoordinateValue(Number(latitude).toFixed(6));
+  const normalizedLongitude = formatCoordinateValue(Number(longitude).toFixed(6));
+  const [existing] = await pool.execute('SELECT idUbicacion FROM ubicaciones WHERE idUbicacion = ?', [id]);
+  if (!existing.length) throw { status: 404, message: 'La ubicación ya no existe.' };
+  const [duplicates] = await pool.execute(
+    'SELECT idUbicacion FROM ubicaciones WHERE latitude = ? AND longitude = ? AND idUbicacion <> ? LIMIT 1',
+    [normalizedLatitude, normalizedLongitude, id],
+  );
+  if (duplicates.length) throw { status: 409, message: 'La coordenada ya se encuentra registrada.' };
+  await pool.execute(
+    'UPDATE ubicaciones SET latitude = ?, longitude = ?, ubicacion = ?, lugar = ? WHERE idUbicacion = ?',
+    [normalizedLatitude, normalizedLongitude, normalizeLocationText(ubicacion), normalizeLocationText(normalizeStoredCity(lugar)), id],
+  );
 };
 
 export const listarUbicaciones = async (searchTerm = "", page = 1, pageSize = 10) => {

@@ -169,6 +169,11 @@ document.getElementById('importCsvButton').addEventListener('click', function(ev
                 const curso_dc = cursoSelect.value;
                 const csvFile = csvInput.files[0];
 
+                if (!sinUtilidadInput.checked && csvFile && csvFile.size > 5 * 1024 * 1024) {
+                  alert('El CSV supera el límite de 5 MB.');
+                  return;
+                }
+
                 if (!numObjetivo || !nucObjetivo || !ano || !curso_dc || (!sinUtilidadInput.checked && !csvFile)) {
                   alert('Todos los campos son requeridos');
                   return;
@@ -311,9 +316,8 @@ document.getElementById('importCsvButton').addEventListener('click', function(ev
 
               function showDuplicadoModal(duplicado, form) {
                 $('#duplicadoObjetivoModal').data('form', form).modal('show');
-                document.getElementById('duplicadoObjetivoMessage').innerHTML = 
-                  `La línea <strong>${duplicado.numObjetivo}</strong> ya está registrada con los mismos contactos.` +
-                  `<br>Tipo actual: <strong>${duplicado.tipoExistente}</strong>`;
+                document.getElementById('duplicadoObjetivoMessage').textContent =
+                  `La línea ${duplicado.numObjetivo} ya está registrada con los mismos contactos. Tipo actual: ${duplicado.tipoExistente}`;
               }
 
               window.confirmarGuardarComoSeguimiento = function(form) {
@@ -493,15 +497,14 @@ document.getElementById('importCsvButton').addEventListener('click', function(ev
           sessionStorage.removeItem('crudImportPartials');
           const partialsBody = document.getElementById('partialsTableBody');
           if (Array.isArray(partials) && partialsBody && partials.length > 0) {
-            partials.forEach((dup) => {
+            partials.slice(0, 20).forEach((dup) => {
+              if (!dup || typeof dup !== 'object') return;
               const row = document.createElement('tr');
-              row.innerHTML = `
-                <td>${dup.contacto || ''}</td>
-                <td>${dup.numObjetivo || ''}</td>
-                <td>${dup.nuc || ''}</td>
-                <td>${dup.ano || ''}</td>
-                <td>${dup.tipo || ''}</td>
-              `;
+              for (const field of ['contacto', 'numObjetivo', 'nuc', 'ano', 'tipo']) {
+                const cell = document.createElement('td');
+                cell.textContent = String(dup[field] ?? '');
+                row.appendChild(cell);
+              }
               partialsBody.appendChild(row);
             });
             $('#partialsModal').modal('show');
