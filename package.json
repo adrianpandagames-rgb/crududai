@@ -20,7 +20,8 @@
     "migrate:ruta-files": "node scripts/add-ruta-files.js",
     "migrate:ubicaciones": "node scripts/normalize-ubicaciones.js",
     "migrate:localidades": "node scripts/import-localidades.js",
-    "package:win": "pkg . --targets node18-win-x64 --output dist/correlatador.exe"
+    "package:win": "pkg . --targets node18-win-x64 --output dist/correlatador.exe",
+    "build": "node --check app.js"
   },
   "keywords": [],
   "author": "",
@@ -45,5 +46,8 @@
     "mocha": "^11.7.6",
     "nodemon": "^3.1.14",
     "pkg": "^5.8.1"
+  },
+  "engines": {
+    "node": "22.x"
   }
 }

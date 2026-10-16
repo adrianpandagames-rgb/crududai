@@ -1,4 +1,5 @@
 import os
+import asyncio
 import ssl
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -22,13 +23,26 @@ def create_client():
         path = Path(certificate)
         context.load_verify_locations(cafile=str(path if path.is_absolute() else ROOT / path))
     return httpx.AsyncClient(base_url=base + '/', headers={'Authorization': f'Bearer {token}'},
-                             verify=context, timeout=httpx.Timeout(60, connect=10, pool=10), follow_redirects=False, trust_env=False)
+                             verify=context, timeout=httpx.Timeout(60, connect=10, pool=10),
+                             limits=httpx.Limits(max_keepalive_connections=0),
+                             follow_redirects=False, trust_env=False)
+
+
+async def api_get(client, path, **kwargs):
+    # Retry only read-only requests interrupted before receiving a response.
+    for attempt in range(2):
+        try:
+            return await client.get(path, **kwargs)
+        except (httpx.ReadError, httpx.RemoteProtocolError):
+            if attempt:
+                raise
+            await asyncio.sleep(0.3)
 
 
 async def search_api(client, command, term, page, user_id):
     if command not in ('linea', 'imei', 'antena'):
         raise ValueError('Comando desconocido.')
-    response = await client.get(f'api/bot/{command}', params={'q': term, 'page': page},
+    response = await api_get(client, f'api/bot/{command}', params={'q': term, 'page': page},
                                 headers={'X-Telegram-User-Id': str(user_id)})
     response.raise_for_status()
     data = response.json()

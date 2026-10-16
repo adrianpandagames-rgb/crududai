@@ -1,6 +1,8 @@
 import express from 'express';
 import crypto from 'node:crypto';
 import { parseSearchCoordinates } from './coordinateSearch.js';
+import { generateAntennaMap, validateAntennaMap } from './antenaMapService.js';
+import { createCoverageGeocoder } from './telegramGeocodingService.js';
 
 const PAGE_SIZE = 5;
 
@@ -44,7 +46,7 @@ export function buildTelegramQuery(command, term, page) {
   return { sql, params: command === 'linea' ? params : [...params, PAGE_SIZE + 1, (page - 1) * PAGE_SIZE] };
 }
 
-export function createTelegramApiRouter(pool, config = process.env) {
+export function createTelegramApiRouter(pool, config = process.env, mapRenderer = generateAntennaMap, geocodingLookup = createCoverageGeocoder(pool)) {
   const router = express.Router();
   router.use((req, res, next) => {
     res.set('Cache-Control', 'no-store');
@@ -58,6 +60,30 @@ export function createTelegramApiRouter(pool, config = process.env) {
     const userId = req.get('X-Telegram-User-Id');
     if (!userId || !ids.includes(userId)) return res.status(403).json({ error: 'Usuario no autorizado.' });
     next();
+  });
+  let rendering = false;
+  router.post('/cobertura/ubicacion', express.json({ limit: '4kb' }), async (req, res) => {
+    let parameters;
+    try { parameters = validateAntennaMap(req.body || {}); }
+    catch (error) { return res.status(400).json({ error: error.message }); }
+    try {
+      return res.json(await geocodingLookup(parameters.lat, parameters.lng));
+    } catch {
+      return res.status(503).json({ error: 'No fue posible consultar o guardar la ubicación de Geocoding. Revisa la configuración de Google Geocoding y la base de datos.' });
+    }
+  });
+  router.get('/cobertura', async (req, res) => {
+    let parameters;
+    try { parameters = validateAntennaMap(req.query); }
+    catch (error) { return res.status(400).json({ error: error.message }); }
+    if (rendering) return res.status(429).json({ error: 'Hay un mapa en proceso. Intenta nuevamente en unos segundos.' });
+    rendering = true;
+    try {
+      const image = await mapRenderer(parameters);
+      return res.type('png').send(image);
+    } catch {
+      return res.status(503).json({ error: 'No fue posible cargar el mapa de fondo. Intenta nuevamente más tarde.' });
+    } finally { rendering = false; }
   });
   for (const command of ['linea', 'imei', 'antena']) {
     router.get(`/${command}`, async (req, res) => {

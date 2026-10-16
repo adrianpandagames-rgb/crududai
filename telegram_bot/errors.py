@@ -16,4 +16,6 @@ def api_error_details(error):
         return 'API_TIMEOUT', 'La API tardó demasiado en responder. Revisa el servidor Node y su conexión MySQL.'
     if isinstance(error, httpx.ConnectError):
         return 'API_CONNECTION', 'No se pudo conectar con la API. Revisa que Node esté iniciado, la URL y el certificado HTTPS.'
+    if isinstance(error, (httpx.ReadError, httpx.RemoteProtocolError)):
+        return 'API_READ_INTERRUPTED', 'Se interrumpió la conexión con Node al recibir la respuesta. Intenta nuevamente y verifica que Node siga iniciado.'
     return type(error).__name__, 'No se pudo consultar la API del sistema. Intenta más tarde.'

@@ -21,9 +21,14 @@ import { hashPassword, verifyPassword } from './src/passwordUtils.js';
 import { buildAuditDetails, sanitizeAuditData } from './src/auditDetails.js';
 import { requireSameOrigin } from './src/requestSecurity.js';
 import { createTelegramApiRouter } from './src/telegramApiRouter.js';
+import { createPlaneacionRouter } from './src/planeacionRouter.js';
 
 
 const app = express();
+// Trust only hosting proxies that replace forwarded headers.
+if (process.env.TRUST_PROXY) {
+  app.set('trust proxy', process.env.TRUST_PROXY.split(',').map(value => value.trim()).filter(Boolean));
+}
 
 const swaggerOptions = {
   definition: {
@@ -34,7 +39,7 @@ const swaggerOptions = {
       description: 'API documentation for CRUDUDAI',
     },
     servers: [
-      { url: 'https://127.0.0.1:3443' },
+      { url: '/' },
     ],
   },
   apis: ['./app.js', './src/router.js'],
@@ -186,6 +191,7 @@ const requireAdmin = async (req, res, next) => {
 
 app.use(['/metricas', '/Crud', '/imei', '/lineas', '/ubicaciones', '/api/ubicaciones', '/estudiantes', '/georeferenciacion', '/ruta', '/inicio', '/telefono', '/api/telefono', '/api/localidades', '/cambiar-contrasena'], requireAuth);
 app.use('/api/bot', createTelegramApiRouter(pool));
+app.use('/planeacion-geografica', requireAdmin, createPlaneacionRouter(pool));
 
 
 
@@ -712,18 +718,20 @@ const ensureLocalCerts = () => {
   console.log('Certificados HTTPS generados en:', CERT_DIR);
 };
 
-ensureLocalCerts();
-
-const httpsOptions = {
-  key: fs.readFileSync(CERT_KEY_PATH),
-  cert: fs.readFileSync(CERT_CERT_PATH),
-};
-
-const httpsServer = https.createServer(httpsOptions, app);
-httpsServer.listen(HTTPS_PORT, HOST, () => {
-  console.log(`Servidor HTTPS local en https://127.0.0.1:${HTTPS_PORT}`);
-});
-
+// Managed hosting terminates public HTTPS and forwards HTTP to PORT.
+const serverProtocol = process.env.SERVER_PROTOCOL || (process.env.NODE_ENV === 'production' ? 'http' : 'https');
+if (!['http', 'https'].includes(serverProtocol)) {
+  throw new Error('SERVER_PROTOCOL debe ser http o https.');
+}
+if (serverProtocol === 'http') {
+  http.createServer(app).listen(PORT, HOST, () => console.log(`Servidor HTTP en ${HOST}:${PORT}`));
+} else {
+  ensureLocalCerts();
+  https.createServer({
+    key: fs.readFileSync(CERT_KEY_PATH),
+    cert: fs.readFileSync(CERT_CERT_PATH),
+  }, app).listen(HTTPS_PORT, HOST, () => console.log(`Servidor HTTPS en ${HOST}:${HTTPS_PORT}`));
+}
 
 startImeiMetadataDailyJob((result) => {
   if (result && result.error) {

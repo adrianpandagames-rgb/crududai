@@ -53,6 +53,10 @@ def format_row(command, row):
     def value(key):
         return str(row.get(key) if row.get(key) is not None else '—')[:500]
     if command == 'antena':
+        if row.get('fuente') == 'geocoding':
+            return (f"Antena (Geocoding)\nCoordenadas: {value('latitude')}, {value('longitude')}\n"
+                    f"Ubicación: {value('ubicacion')}\nLugar: {value('lugar')}\n"
+                    f"Mapa: https://www.google.com/maps?q={value('latitude')},{value('longitude')}")
         result = f"Antena #{value('idUbicacion')}\nCoordenadas: {value('latitude')}, {value('longitude')}\nUbicación: {value('ubicacion')}\nLugar: {value('lugar')}"
         try:
             lat, lng = float(row['latitude']), float(row['longitude'])

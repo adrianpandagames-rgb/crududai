@@ -1,5 +1,7 @@
 # CRUD UDAI
 
+Para publicar desde GitHub en GoDaddy, consulta [GODADDY.md](GODADDY.md).
+
 ## Entrecalles en Georreferenciación
 
 Al importar un CSV o XLSX con latitud y longitud, se obtiene la dirección con
@@ -262,6 +264,23 @@ Pronto se agregarán capturas de la interfaz para mostrar el flujo principal de 
 
 Si deseas, también puedo preparar una versión del README en inglés o agregar ejemplos más detallados de uso.
 
+## Iniciar el servidor al iniciar sesión en Windows
+
+Windows no inicia un archivo `.ps1` directamente desde la lista de aplicaciones
+de inicio. Crea un acceso directo y, en sus propiedades, configura:
+
+```text
+Destino: %SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "C:\ruta\completa\crududai\run.server.ps1"
+Iniciar en: C:\ruta\completa\crududai
+```
+
+Escribe únicamente el valor de cada línea en el campo con ese nombre; no incluyas
+las etiquetas `Destino:` ni `Iniciar en:`. Reemplaza las rutas por la ubicación
+del proyecto y agrega el acceso directo a la carpeta de inicio de Windows
+(abre `shell:startup`). El script ejecuta `npm run dev`;
+los registros quedan en `%LOCALAPPDATA%\CRUDUDAI\logs\server.stdout.log` y
+`server.stderr.log`.
+
 ## Crear un ejecutable Windows y ejecutarlo como servicio (`correlatador`)
 
 Si quieres un "ejecutable" que pueda iniciarse y ejecutarse en segundo plano con un nombre fácil de identificar, sigue estos pasos.
@@ -294,4 +313,3 @@ Notas:
 - El servicio creado se llamará `correlatador` y puede gestionarse desde `services.msc` o con `Start-Service`/`Stop-Service`.
 - Asegúrate de construir el ejecutable compatible con tu arquitectura (el script usa `node18-win-x64`).
 - Si prefieres no instalar como servicio, puedes ejecutar el exe directamente; para iniciarlo sin consola usa un acceso directo con la opción de inicio minimizado.
-

@@ -1,0 +1,8 @@
+{
+  "ignore": [
+    "data/**",
+    "backups/**",
+    "certs/**",
+    ".venv-telegram/**"
+  ]
+}
