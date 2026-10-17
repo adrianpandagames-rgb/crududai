@@ -169,9 +169,18 @@
             <h3 class="h5">Agregar usuario</h3>
             <p class="text-muted">Al crear el usuario, el sistema generará una contraseña segura y guardará únicamente su hash.</p>
             <form action="/usuarios" method="POST" class="row g-2">
-              <div class="col-md-8">
+              <div class="col-md-5">
                 <label class="visually-hidden" for="email">Correo</label>
                 <input class="form-control" type="email" name="email" id="email" placeholder="correo@ejemplo.com" required autocomplete="email">
+              </div>
+              <div class="col-md-3">
+                <label class="visually-hidden" for="new-user-role">Tipo de usuario</label>
+                <select class="form-select" name="role" id="new-user-role" aria-label="Tipo de usuario">
+                  <option value="usuario" selected>Usuario</option>
+                  <option value="uecs">UECS</option>
+                  <option value="semiadmin">Semiadministrador</option>
+                  <option value="admin">Administrador</option>
+                </select>
               </div>
               <div class="col-md-4">
                 <button class="btn btn-primary w-100" type="submit">Crear y generar contraseña</button>
@@ -192,7 +201,7 @@
                       <td data-label="Correo"><%= user.email %></td>
                       <td data-label="Rol">
                         <% const userRole = Number(user.is_admin) === 1 ? 'admin' : (user.role || 'usuario'); %>
-                        <span class="badge <%= userRole === 'admin' ? 'bg-primary' : userRole === 'semiadmin' ? 'bg-warning text-dark' : 'bg-secondary' %>"><%= userRole === 'admin' ? 'Administrador' : userRole === 'semiadmin' ? 'Semiadministrador' : 'Usuario' %></span>
+                        <span class="badge <%= userRole === 'admin' ? 'bg-primary' : userRole === 'semiadmin' ? 'bg-warning text-dark' : 'bg-secondary' %>"><%= userRole === 'admin' ? 'Administrador' : userRole === 'semiadmin' ? 'Semiadministrador' : userRole === 'uecs' ? 'UECS' : 'Usuario' %></span>
                       </td>
                       <td data-label="Estado"><span class="badge <%= Number(user.is_active) === 1 ? 'bg-success' : 'bg-danger' %>"><%= Number(user.is_active) === 1 ? 'Activo' : 'Deshabilitado' %></span></td>
                       <td class="text-end" data-label="Acciones">
@@ -200,6 +209,7 @@
                         <form action="/usuarios/<%= user.id %>/rol" method="POST">
                           <select name="role" class="form-select form-select-sm user-action-button" aria-label="Rol de <%= user.email %>">
                             <option value="usuario" <%= userRole === 'usuario' ? 'selected' : '' %>>Usuario</option>
+                            <option value="uecs" <%= userRole === 'uecs' ? 'selected' : '' %>>UECS</option>
                             <option value="semiadmin" <%= userRole === 'semiadmin' ? 'selected' : '' %>>Semiadministrador</option>
                             <option value="admin" <%= userRole === 'admin' ? 'selected' : '' %>>Administrador</option>
                           </select>

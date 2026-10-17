@@ -42,7 +42,9 @@ export function createGeoreferenciacionRouter(pool) {
   const redirect = (res, message, type = 'error') => res.redirect('/georeferenciacion?' + new URLSearchParams({ message, type }));
   router.use(async (req, res, next) => {
     if (!req.session?.userId) return res.redirect('/');
-    if (req.session.isAdmin !== true) return res.status(403).send('Georeferenciación está disponible solo para administradores.');
+    if (req.session.isAdmin !== true && req.session.role !== 'uecs') {
+      return res.status(403).send('Georeferenciación está disponible solo para administradores y usuarios UECS.');
+    }
     res.setHeader('Cache-Control', 'no-store');
     try {
       await initialize();

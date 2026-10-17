@@ -152,6 +152,7 @@ const requireAuth = async (req, res, next) => {
       id: session.userId,
       email: session.email,
       isAdmin: session.isAdmin === true,
+      role: session.role,
       canEditRecords: session.isAdmin === true || session.role === 'semiadmin',
     };
 
@@ -189,7 +190,15 @@ const requireAdmin = async (req, res, next) => {
   });
 };
 
+const requireNonUecs = (req, res, next) => {
+  if (req.session.role === 'uecs') {
+    return res.status(403).redirect('/Crud');
+  }
+  return next();
+};
+
 app.use(['/metricas', '/Crud', '/imei', '/lineas', '/ubicaciones', '/api/ubicaciones', '/estudiantes', '/georeferenciacion', '/ruta', '/inicio', '/telefono', '/api/telefono', '/api/localidades', '/cambiar-contrasena'], requireAuth);
+app.use('/metricas', requireNonUecs);
 app.use('/api/bot', createTelegramApiRouter(pool));
 app.use('/planeacion-geografica', requireAdmin, createPlaneacionRouter(pool));
 
@@ -594,6 +603,7 @@ app.get('/medidores', requireAdmin, async (req, res, next) => {
 
 app.post('/usuarios', requireAdmin, async (req, res, next) => {
   const email = String(req.body.email || '').trim().toLowerCase();
+  const role = ['admin', 'semiadmin', 'usuario', 'uecs'].includes(req.body.role) ? req.body.role : 'usuario';
   if (!EMAIL_PATTERN.test(email)) {
     return renderUsersPage(res, { error: 'Ingresa un correo electrónico válido.' }).catch(next);
   }
@@ -601,7 +611,7 @@ app.post('/usuarios', requireAdmin, async (req, res, next) => {
   const generatedPassword = generateSecurePassword();
   try {
     const passwordHash = await hashPassword(generatedPassword);
-    await pool.execute('INSERT INTO users (email, password, is_admin, role, must_change_password) VALUES (?, ?, 0, \'usuario\', 1)', [email, passwordHash]);
+    await pool.execute('INSERT INTO users (email, password, is_admin, role, must_change_password) VALUES (?, ?, ?, ?, 1)', [email, passwordHash, role === 'admin' ? 1 : 0, role]);
     return renderUsersPage(res, {
       message: `Usuario creado para ${email}. Copia la contraseña antes de salir de esta página.`,
       generatedPassword,
@@ -639,7 +649,7 @@ app.post('/usuarios/:id/restablecer-contrasena', requireAdmin, async (req, res, 
 
 app.post('/usuarios/:id/rol', requireAdmin, async (req, res, next) => {
   const userId = Number.parseInt(req.params.id, 10);
-  const role = ['admin', 'semiadmin', 'usuario'].includes(req.body.role) ? req.body.role : 'usuario';
+  const role = ['admin', 'semiadmin', 'usuario', 'uecs'].includes(req.body.role) ? req.body.role : 'usuario';
   const isAdmin = role === 'admin';
   if (!Number.isSafeInteger(userId) || userId < 1) return res.status(400).redirect('/usuarios?error=Usuario%20inválido.');
   if (userId === req.session.userId && !isAdmin) return res.redirect('/usuarios?error=No%20puedes%20quitarte%20tu%20propio%20acceso%20de%20administrador.');
