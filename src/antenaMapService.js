@@ -1,6 +1,6 @@
 import sharp from 'sharp';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { coverageSector } from '../public/js/planeacion-geometry.js';
+import { coverageSector, destination } from '../public/js/planeacion-geometry.js';
 
 const SIZE = 768;
 const CACHE = new URL('../data/map-tiles/', import.meta.url);
@@ -18,9 +18,9 @@ export function validateAntennaMap(query) {
   const azimuth = query.azimuth === undefined ? null : number('azimuth');
   const radius = number('radius', '500');
   if (!Number.isFinite(lat) || Math.abs(lat) > 85 || !Number.isFinite(lng) || Math.abs(lng) > 180
-      || (azimuth !== null && (!Number.isFinite(azimuth) || azimuth < 0 || azimuth >= 360))
+      || (azimuth !== null && (!Number.isFinite(azimuth) || azimuth < 0 || azimuth > 360))
       || !Number.isFinite(radius) || radius < 1 || radius > 10000) {
-    throw new Error('Latitud: -85 a 85; longitud: -180 a 180; azimut: 0 a menos de 360; alcance: 1 a 10000 m.');
+    throw new Error('Latitud: -85 a 85; longitud: -180 a 180; azimut: 0 a 360 (360 = todas las direcciones); alcance: 1 a 10000 m.');
   }
   return { lat, lng, azimuth, radius };
 }
@@ -90,7 +90,10 @@ export async function generateAntennaMap({ lat, lng, azimuth = null, radius = 50
     .composite(tiles).png().toBuffer();
   const cropped = await sharp(background).extract({ left: left - tileLeft * 256, top: top - tileTop * 256, width: SIZE, height: SIZE }).png().toBuffer();
   const world = 256 * 2 ** zoom;
-  const path = (azimuth === null ? [] : coverageSector(lat, lng, azimuth, radius)).map(([phi, lambda]) => {
+  const points = azimuth === null ? [] : azimuth === 360
+    ? Array.from({ length: 120 }, (_, index) => destination(lat, lng, index * 3, radius))
+    : coverageSector(lat, lng, azimuth, radius);
+  const path = points.map(([phi, lambda]) => {
     const [x, y] = project(phi, lambda, zoom);
     const dx = ((x - cx + world / 2) % world + world) % world - world / 2;
     return `${(cx + dx - left).toFixed(2)},${(y - top).toFixed(2)}`;
