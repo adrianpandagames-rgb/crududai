@@ -20,6 +20,11 @@
     <li>
       <a class="menu-item" href="/ubicaciones">Ubicaciones</a>
     </li>
+    <% if (typeof currentUser !== 'undefined' && (currentUser.isAdmin || currentUser.role === 'uecs')) { %>
+    <li>
+      <a class="menu-item" href="/georeferenciacion">Georeferenciación</a>
+    </li>
+    <% } %>
     <li>
       <a class="menu-item" href="/ruta">Ruta</a>
     </li>
@@ -31,7 +36,6 @@
       <details>
         <summary class="menu-item">Administración</summary>
         <ul class="admin-submenu">
-          <li><a class="menu-item" href="/georeferenciacion">Georeferenciación</a></li>
           <li><a class="menu-item" href="/planeacion-geografica">Planeación geográfica</a></li>
           <li><a class="menu-item" href="/usuarios">Usuarios</a></li>
           <li><a class="menu-item" href="/auditoria">Auditoría</a></li>
