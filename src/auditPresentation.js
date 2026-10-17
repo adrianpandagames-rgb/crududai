@@ -16,6 +16,7 @@ export function presentAuditEntry(entry) {
   return {
     ...entry,
     details,
+    origin: details?.origen === 'Telegram' ? `Telegram · /${details.comando || ''}` : 'Página web',
     searched: searched.map(([key, value]) => `${key}: ${typeof value === 'object' ? JSON.stringify(value) : value}`).join(' · ')
       || (entry.operation === 'SEARCH' ? 'Sin término registrado' : '—'),
     day: timestamp.split(' ')[0] || '—',

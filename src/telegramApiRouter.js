@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { parseSearchCoordinates } from './coordinateSearch.js';
 import { generateAntennaMap, validateAntennaMap } from './antenaMapService.js';
 import { createCoverageGeocoder } from './telegramGeocodingService.js';
+import { buildAuditDetails } from './auditDetails.js';
 
 const PAGE_SIZE = 5;
 
@@ -59,6 +60,27 @@ export function createTelegramApiRouter(pool, config = process.env, mapRenderer 
     const ids = (config.TELEGRAM_ALLOWED_USER_IDS || '').split(',').map(id => id.trim()).filter(id => /^[1-9]\d*$/.test(id));
     const userId = req.get('X-Telegram-User-Id');
     if (!userId || !ids.includes(userId)) return res.status(403).json({ error: 'Usuario no autorizado.' });
+    // Only attribute activity after validating both the bot credential and user.
+    req.auditTelegram = true;
+    const requestPath = `${req.baseUrl}${req.path}`;
+    const command = req.path.replace(/^\//, '');
+    res.on('finish', () => {
+      req.app.locals.writeAuditLog?.({
+        userId: null,
+        userEmail: `Telegram ID ${userId}`,
+        action: 'SEARCH',
+        requestPath,
+        statusCode: res.statusCode,
+        ipAddress: req.ip,
+        details: {
+          ...(buildAuditDetails(req) || {}),
+          origen: 'Telegram',
+          telegram_user_id: userId,
+          comando: command,
+          metodo: req.method,
+        },
+      });
+    });
     next();
   });
   let rendering = false;

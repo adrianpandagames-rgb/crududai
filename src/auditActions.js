@@ -34,6 +34,11 @@ export const auditOperationSql = `CASE
   ELSE 'OTRO' END`;
 
 export const auditResourceSql = `CASE
+  WHEN LOWER(request_path) REGEXP '^/api/bot/linea(/|$)' THEN 'LINEA'
+  WHEN LOWER(request_path) REGEXP '^/api/bot/imei(/|$)' THEN 'IMEI'
+  WHEN LOWER(request_path) REGEXP '^/api/bot/antena(/|$)' THEN 'UBICACION'
+  WHEN LOWER(request_path) REGEXP '^/api/bot/cobertura/ubicacion(/|$)' THEN 'GEOREFERENCIACION'
+  WHEN LOWER(request_path) REGEXP '^/api/bot/cobertura(/|$)' THEN 'PLANEACION'
   WHEN LOWER(request_path) REGEXP '^/georeferenciacion(/|$)' THEN 'GEOREFERENCIACION'
   WHEN LOWER(request_path) REGEXP '^/planeacion-geografica(/|$)' THEN 'PLANEACION'
   WHEN LOWER(request_path) REGEXP '^/(api/)?telefono(/|$)' THEN 'TELEFONO'

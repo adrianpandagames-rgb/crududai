@@ -21,7 +21,7 @@ export function auditRequestAction(req) {
 export function auditActivity(req, res, next) {
   res.on('finish', () => {
     const action = auditRequestAction(req);
-    if (!action || !req.session) return;
+    if (!action || !req.session || req.auditTelegram) return;
     req.app.locals.writeAuditLog?.({
       userId: req.session.userId,
       userEmail: req.session.email,

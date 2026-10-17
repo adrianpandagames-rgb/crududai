@@ -73,7 +73,7 @@
                       <td class="text-nowrap"><%= entry.day %></td>
                       <td class="text-nowrap"><%= entry.time %></td>
                       <td><%= entry.user_email %></td>
-                      <td><%= auditResources[entry.resource] || 'Otro' %></td>
+                      <td><%= auditResources[entry.resource] || 'Otro' %><div class="small text-muted"><%= entry.origin %></div></td>
                       <td><span class="badge bg-secondary"><%= describeAuditAction(entry) %></span></td>
                       <td class="text-break"><%= entry.searched %></td>
                       <td><code><%= entry.request_path %></code></td>
