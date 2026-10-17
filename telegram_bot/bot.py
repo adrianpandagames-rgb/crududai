@@ -16,6 +16,7 @@ HELP = ('Consultas disponibles:\n'
         'Azimut y alcance opcionales. Usa --alcance 1000 para indicar solo el alcance.\n'
         '/cobertura 29.0729 -110.9559 50 — imagen de antena, alcance 500 m\n'
         '/cobertura 29.0729 -110.9559 50 1000 — alcance opcional en metros\n'
+        '/cobertura 29.0729 -110.9559 360 1000 — cobertura circular sin dirección, radio de 1000 m\n'
         '/linea 6621234567 — todas las coincidencias de la línea o contacto\n'
         '/línea 6621234567 — también acepta el comando con tilde\n'
         '/imei 123456789012345 — IMEI registrado\n'
@@ -137,7 +138,7 @@ def main():
                     data = {'rows': [], 'status': 'ERROR'}
             stage = 'envio_datos_telegram'
             for row in data['rows']:
-                await update.effective_message.reply_text(format_row('antena', row), protect_content=True)
+                await update.effective_message.reply_text(format_row('antena', row), protect_content=False)
             if not data['rows'] and data.get('status') != 'ERROR':
                 await update.effective_message.reply_text('Geocoding no encontró una dirección para esas coordenadas. Se generará el mapa con la ubicación indicada.')
             if has_more:

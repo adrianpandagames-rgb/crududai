@@ -9,8 +9,10 @@ test('coverage inputs validate required fields, radius and finite coordinates', 
   assert.deepEqual(validateAntennaMap({ lat: '29.0729', lng: '-110.9559', azimuth: '50' }),
     { lat: 29.0729, lng: -110.9559, azimuth: 50, radius: 500 });
   assert.deepEqual(validateAntennaMap({ lat: '29', lng: '-110' }), { lat: 29, lng: -110, azimuth: null, radius: 500 });
+  assert.deepEqual(validateAntennaMap({ lat: '29', lng: '-110', azimuth: '360', radius: '1000' }),
+    { lat: 29, lng: -110, azimuth: 360, radius: 1000 });
   for (const query of [{}, { lat: 'NaN', lng: '0', azimuth: '50' }, { lat: '90', lng: '0', azimuth: '50' },
-    { lat: '29', lng: '-110', azimuth: '360' }, { lat: '29', lng: '-110', azimuth: '50', radius: '0' }]) {
+    { lat: '29', lng: '-110', azimuth: '361' }, { lat: '29', lng: '-110', azimuth: '50', radius: '0' }]) {
     assert.throws(() => validateAntennaMap(query));
   }
 });
@@ -54,4 +56,18 @@ test('coverage API requires bot credentials and user authorization, and never qu
   assert.equal(response.status, 200);
   assert.ok(response.headers.get('content-type').startsWith('image/png'));
   assert.equal(calls, 1);
+});
+
+test('360 coverage fills every direction and stops at the requested radius', async () => {
+  const tile = await sharp({ create: { width: 256, height: 256, channels: 3, background: '#eeeeee' } }).png().toBuffer();
+  for (const radius of [500, 1000]) {
+    const image = await generateAntennaMap({ lat: 29, lng: -110, azimuth: 360, radius }, { tileLoader: async () => tile });
+    const { data, info } = await sharp(image).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+    const pixel = (x, y) => Array.from(data.subarray((y * info.width + x) * info.channels, (y * info.width + x) * info.channels + 3));
+    for (const [x, y] of [[484, 384], [284, 384], [384, 284], [384, 484]]) {
+      const color = pixel(x, y);
+      assert.ok(color[2] > color[0], `coverage at ${x},${y}, radius ${radius}`);
+    }
+    assert.deepEqual(pixel(734, 384), [238, 238, 238]);
+  }
 });

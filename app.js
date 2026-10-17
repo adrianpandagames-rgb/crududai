@@ -718,6 +718,7 @@ const ensureLocalCerts = () => {
   console.log('Certificados HTTPS generados en:', CERT_DIR);
 };
 
+
 // Managed hosting terminates public HTTPS and forwards HTTP to PORT.
 const serverProtocol = process.env.SERVER_PROTOCOL || (process.env.NODE_ENV === 'production' ? 'http' : 'https');
 if (!['http', 'https'].includes(serverProtocol)) {
