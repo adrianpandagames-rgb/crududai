@@ -53,6 +53,11 @@
       <div id="planningMap" aria-label="Mapa con sectores de cobertura de las antenas"></div>
     </section>
     <section id="planningData" class="card p-3 planning-data-panel">
+      <div class="planning-antennas mb-3" aria-labelledby="planningAntennasTitle">
+        <h3 id="planningAntennasTitle" class="h6">Frecuencia de antenas</h3>
+        <p class="small text-muted mb-2">Apariciones en el archivo. Pulsa una antena para identificarla en el mapa.</p>
+        <div id="planningAntennas" class="planning-antennas-list"><p class="small mb-0">Importa un archivo para ver las antenas.</p></div>
+      </div>
       <h3 class="h5">Información del archivo</h3>
       <p class="small text-muted">Marca las casillas o haz clic en los registros para mostrar únicamente las antenas seleccionadas. Vuelve a pulsar para quitar una selección. Usa “Ver todas las antenas” para recuperar la vista completa.</p>
       <p id="planningFile" class="small">No hay archivo importado.</p>
@@ -64,6 +69,6 @@
   </main>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="/public/js/ruta-upload.js"></script>
-  <script type="module" src="/public/js/planeacion-geografica.js?v=3"></script>
+  <script type="module" src="/public/js/planeacion-geografica.js?v=4"></script>
 </body>
 </html>
