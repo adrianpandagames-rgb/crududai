@@ -11,7 +11,6 @@ export function createPlaneacionRouter(pool) {
   } }).single('archivo');
   router.use((req, res, next) => {
     if (!req.session?.userId) return res.status(401).json({ error: 'Inicia sesión para continuar.' });
-    if (req.session.isAdmin !== true) return res.status(403).json({ error: 'Disponible solo para administradores.' });
     res.setHeader('Cache-Control', 'no-store');
     // OSM requires a Referer; cross-origin requests send only the site origin.
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');

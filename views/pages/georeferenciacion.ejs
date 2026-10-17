@@ -16,6 +16,13 @@
       <% if (!configured) { %>
         <div class="alert alert-warning">La geocodificación no está configurada. Solicita al administrador configurar la clave de Google Geocoding en el servidor.</div>
       <% } %>
+      <% if (typeof googleGeocodingQuota !== 'undefined') { %>
+        <% if (googleGeocodingQuota.isBlocked) { %>
+          <div class="alert alert-danger" role="alert">ALARMA: se alcanzó el límite de <%= googleGeocodingQuota.limit %> consultas a Google Geocoding. El servicio está bloqueado; solicita a un administrador reiniciar el contador.</div>
+        <% } else { %>
+          <p class="text-muted text-center">Consultas a Google Geocoding: <%= googleGeocodingQuota.requestCount %> / <%= googleGeocodingQuota.limit %></p>
+        <% } %>
+      <% } %>
       <p class="text-muted text-center">Direcciones obtenidas mediante Google Maps. Tus archivos estarán disponibles durante 48 horas.</p>
       <% if (message) { %>
         <div class="alert <%= messageType === 'error' ? 'alert-danger' : 'alert-success' %>"><%= message %></div>
@@ -35,7 +42,7 @@
                 <input type="file" id="archivo" name="archivo" class="form-control" accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required />
                 <div class="form-text">Incluye columnas latitud y longitud (decimales o grados, minutos y segundos). Máximo 20 MB y 100000 filas. </div>
               </div>
-              <button type="submit" class="btn btn-primary w-100" <%= configured ? '' : 'disabled' %>>Importar y geocodificar</button>
+              <button type="submit" class="btn btn-primary w-100" <%= configured && (typeof googleGeocodingQuota === 'undefined' || !googleGeocodingQuota.isBlocked) ? '' : 'disabled' %>>Importar y geocodificar</button>
 
             </form>
           </div>

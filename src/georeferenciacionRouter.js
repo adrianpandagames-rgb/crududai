@@ -5,7 +5,8 @@ import crypto from 'node:crypto';
 import { initializeLocalRoads, createLocalCrossStreetLookup, getLocalRoadStatus } from './redVialLocal.js';
 import { initializeGeocodingLocations, saveGeocodingLocation, listGeocodingLocations, findGeocodingLocation } from './georeferenciacionUbicaciones.js';
 import { createRutaCsv, createRutaXlsx, getRutaXlsxMetadata } from './rutaService.js';
-import { getGeocodingKey, readGeocodingFile, processGeocodingFile } from './georeferenciacionService.js';
+import { getGeocodingKey, readGeocodingFile, processGeocodingFile, reverseGeocode } from './georeferenciacionService.js';
+import { getGoogleGeocodingQuota, reserveGoogleGeocodingRequest } from './googleGeocodingQuota.js';
 
 export function createGeoreferenciacionRouter(pool) {
   const router = express.Router();
@@ -17,6 +18,7 @@ export function createGeoreferenciacionRouter(pool) {
     if (!storage) storage = (async () => {
       await initializeGeocodingLocations(pool);
       await initializeLocalRoads(pool);
+      await getGoogleGeocodingQuota(pool);
       await pool.query(`CREATE TABLE IF NOT EXISTS georeferenciacion_archivos (
         id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
         file_uuid CHAR(36) NOT NULL UNIQUE,
@@ -62,6 +64,7 @@ export function createGeoreferenciacionRouter(pool) {
         WHERE user_id = ? AND expires_at > NOW() ORDER BY id DESC`, [req.session.userId]);
       res.render('pages/georeferenciacion', {
         ...await listGeocodingLocations(pool, req.query),
+        googleGeocodingQuota: await getGoogleGeocodingQuota(pool),
         files, configured: Boolean(getGeocodingKey()), localRoads: await getLocalRoadStatus(pool),
         message: typeof req.query.message === 'string' ? req.query.message : '',
         messageType: req.query.type,
@@ -70,8 +73,14 @@ export function createGeoreferenciacionRouter(pool) {
       res.status(500).send('No fue posible listar los archivos de Georeferenciación.');
     }
   });
-  router.post('/importar', (req, res, next) => {
+  router.post('/importar', async (req, res, next) => {
     if (!getGeocodingKey()) return redirect(res, 'Falta configurar GOOGLE_GEOCODING_API_KEY en el servidor.');
+    try {
+      const quota = await getGoogleGeocodingQuota(pool);
+      if (quota.isBlocked) return redirect(res, 'Se alcanzó el límite de 8000 consultas a Google Geocoding. Un administrador debe reiniciar el contador.');
+    } catch (error) {
+      return next(error);
+    }
     if (jobs.size >= 20) return redirect(res, 'La cola está llena. Espera a que finalicen los archivos en proceso.');
     upload(req, res, (error) => error
       ? redirect(res, error.code === 'LIMIT_FILE_SIZE' ? 'El archivo supera el límite de 20 MB.' : 'No fue posible recibir el archivo.')
@@ -106,6 +115,10 @@ export function createGeoreferenciacionRouter(pool) {
         const [files] = await pool.execute('SELECT file_uuid FROM georeferenciacion_archivos WHERE file_uuid = ? AND expires_at > NOW()', [id]);
         if (!files.length || controller.signal.aborted) return;
         const rows = await processGeocodingFile(input, {
+          geocode: (latitude, longitude, options) => reverseGeocode(latitude, longitude, {
+            ...options,
+            beforeRequest: () => reserveGoogleGeocodingRequest(pool),
+          }),
           crossStreets: createLocalCrossStreetLookup(pool),
           refreshStoredCrossStreets: true,
           findLocation: (latitude, longitude) => findGeocodingLocation(pool, latitude, longitude),

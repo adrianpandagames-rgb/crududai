@@ -1,9 +1,13 @@
 import { processGeocodingFile, reverseGeocode } from './georeferenciacionService.js';
+import { reserveGoogleGeocodingRequest } from './googleGeocodingQuota.js';
 import { initializeGeocodingLocations, findGeocodingLocation, saveGeocodingLocation } from './georeferenciacionUbicaciones.js';
 import { initializeLocalRoads, createLocalCrossStreetLookup } from './redVialLocal.js';
 
 export function createCoverageGeocoder(pool, {
-  geocode = reverseGeocode,
+  geocode = (latitude, longitude, options) => reverseGeocode(latitude, longitude, {
+    ...options,
+    beforeRequest: () => reserveGoogleGeocodingRequest(pool),
+  }),
   initialize = async () => { await initializeGeocodingLocations(pool); await initializeLocalRoads(pool); },
   findLocation = (lat, lng) => findGeocodingLocation(pool, lat, lng),
   saveLocation = (location) => saveGeocodingLocation(pool, location),

@@ -22,6 +22,7 @@ import { buildAuditDetails, sanitizeAuditData } from './src/auditDetails.js';
 import { requireSameOrigin } from './src/requestSecurity.js';
 import { createTelegramApiRouter } from './src/telegramApiRouter.js';
 import { createPlaneacionRouter } from './src/planeacionRouter.js';
+import { getGoogleGeocodingQuota, resetGoogleGeocodingQuota } from './src/googleGeocodingQuota.js';
 
 
 const app = express();
@@ -200,7 +201,7 @@ const requireNonUecs = (req, res, next) => {
 app.use(['/metricas', '/Crud', '/imei', '/lineas', '/ubicaciones', '/api/ubicaciones', '/estudiantes', '/georeferenciacion', '/ruta', '/inicio', '/telefono', '/api/telefono', '/api/localidades', '/cambiar-contrasena'], requireAuth);
 app.use('/metricas', requireNonUecs);
 app.use('/api/bot', createTelegramApiRouter(pool));
-app.use('/planeacion-geografica', requireAdmin, createPlaneacionRouter(pool));
+app.use('/planeacion-geografica', requireAuth, createPlaneacionRouter(pool));
 
 
 
@@ -463,7 +464,8 @@ const generateSecurePassword = () => crypto.randomBytes(24).toString('base64url'
 
 const renderUsersPage = async (res, { message = null, error = null, generatedPassword = null } = {}) => {
   const [users] = await pool.execute('SELECT id, email, is_admin, role, is_active, is_initial_admin FROM users ORDER BY email ASC');
-  return res.render('pages/usuarios', { users, message, error, generatedPassword });
+  const googleGeocodingQuota = await getGoogleGeocodingQuota(pool);
+  return res.render('pages/usuarios', { users, message, error, generatedPassword, googleGeocodingQuota });
 };
 
 app.get('/usuarios', requireAdmin, async (req, res, next) => {
@@ -471,6 +473,15 @@ app.get('/usuarios', requireAdmin, async (req, res, next) => {
     await renderUsersPage(res, { message: req.query.message || null, error: req.query.error || null });
   } catch (error) {
     next(error);
+  }
+});
+
+app.post('/usuarios/google-geocoding/reiniciar', requireAdmin, async (req, res, next) => {
+  try {
+    await resetGoogleGeocodingQuota(pool);
+    return renderUsersPage(res, { message: 'Contador de Google Geocoding reiniciado y servicio desbloqueado.' });
+  } catch (error) {
+    return next(error);
   }
 });
 

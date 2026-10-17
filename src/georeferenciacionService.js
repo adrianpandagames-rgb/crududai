@@ -17,10 +17,11 @@ export function readGeocodingFile(buffer, extension) {
   return { rows, delimiter, latitude, longitude };
 }
 
-export async function reverseGeocode(latitude, longitude, { apiKey = getGeocodingKey(), fetchImpl = fetch, signal } = {}) {
+export async function reverseGeocode(latitude, longitude, { apiKey = getGeocodingKey(), fetchImpl = fetch, signal, beforeRequest = async () => {} } = {}) {
   if (!apiKey) throw new Error('Falta configurar GOOGLE_GEOCODING_API_KEY en el servidor.');
   const url = new URL('https://maps.googleapis.com/maps/api/geocode/json');
   url.search = new URLSearchParams({ latlng: `${latitude},${longitude}`, language: 'es', key: apiKey }).toString();
+  await beforeRequest();
   let data;
   try {
     const response = await fetchImpl(url, { signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000) });
