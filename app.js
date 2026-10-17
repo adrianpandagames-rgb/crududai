@@ -14,11 +14,13 @@ import swaggerUi from 'swagger-ui-express';
 import router from "./src/router.js"; // Importa el enrutador
 import pool from "./src/db.js";
 import { buildAuditFilters, auditActionLabels } from './src/auditFilters.js';
-import { auditOperationSql, auditResourceSql, auditResources, describeAuditAction, auditRequestPath } from './src/auditActions.js';
+import { auditOperationSql, auditResourceSql, auditResources, describeAuditAction } from './src/auditActions.js';
 import { buildSessionCookieOptions, isSessionExpired, SESSION_TIMEOUT_MS } from './src/sessionUtils.js';
 import { startImeiMetadataDailyJob } from './src/imeiMetadataService.js';
 import { hashPassword, verifyPassword } from './src/passwordUtils.js';
-import { buildAuditDetails, sanitizeAuditData } from './src/auditDetails.js';
+import { sanitizeAuditData } from './src/auditDetails.js';
+import { auditActivity } from './src/auditMiddleware.js';
+import { presentAuditEntry } from './src/auditPresentation.js';
 import { requireSameOrigin } from './src/requestSecurity.js';
 import { createTelegramApiRouter } from './src/telegramApiRouter.js';
 import { createPlaneacionRouter } from './src/planeacionRouter.js';
@@ -61,7 +63,6 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 const sessions = new Map();
 const pendingRouteToasts = new Map();
 const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
-const NON_MUTATING_POST_PATHS = new Set(['/api/telefono/validar']);
 
 const writeAuditLog = ({ userId = null, userEmail = '', action, requestPath, statusCode, ipAddress, details = null }) => {
   pool.execute(
@@ -102,24 +103,7 @@ app.use((req, res, next) => {
   return next();
 });
 
-app.use((req, res, next) => {
-  res.on('finish', () => {
-    const requestPath = req.path;
-    const isAuditable = MUTATION_METHODS.has(req.method) && !NON_MUTATING_POST_PATHS.has(requestPath);
-    if (!isAuditable || !req.session || res.statusCode < 200 || res.statusCode >= 400) return;
-
-    writeAuditLog({
-      userId: req.session.userId,
-      userEmail: req.session.email,
-      action: req.method,
-      requestPath: auditRequestPath(requestPath, req.query),
-      statusCode: res.statusCode,
-      ipAddress: req.ip,
-      details: buildAuditDetails(req),
-    });
-  });
-  next();
-});
+app.use(auditActivity);
 
 const requireAuth = async (req, res, next) => {
   const token = getAuthToken(req);
@@ -510,7 +494,7 @@ app.get('/auditoria', requireAdmin, async (req, res, next) => {
       selection.values,
     );
     return res.status(filterError ? 400 : 200).render('pages/auditoria', {
-      entries, users, filters: selection.filters, filterError, auditActionLabels, auditResources, describeAuditAction,
+      entries: entries.map(presentAuditEntry), users, filters: selection.filters, filterError, auditActionLabels, auditResources, describeAuditAction,
     });
   } catch (error) {
     next(error);

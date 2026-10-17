@@ -182,23 +182,6 @@ const rutaUpload = (req, res, next) => {
   });
 };
 
-const writeSearchAuditLog = (req, res, path, searchTerm) => {
-  const normalizedTerm = String(searchTerm || '').trim();
-  if (!normalizedTerm || !req.session) return;
-
-  res.on('finish', () => {
-    if (res.statusCode < 200 || res.statusCode >= 400) return;
-    req.app.locals.writeAuditLog?.({
-      userId: req.session.userId,
-      userEmail: req.session.email,
-      action: 'SEARCH',
-      requestPath: `${path}?search=${normalizedTerm.slice(0, 200)}`,
-      statusCode: res.statusCode,
-      ipAddress: req.ip,
-    });
-  });
-};
-
 const normalizePhoneNumber = (value) => String(value || '').replace(/\D/g, '');
 
 const requestPhoneValidation = (url) => new Promise((resolve, reject) => {
@@ -838,7 +821,6 @@ router.post('/metricas/identificaciones', async (req, res) => {
 router.get("/Crud", async (req, res) => {
   try {
     const searchTerm = req.query.numObjetivo || req.query.search || "";
-    writeSearchAuditLog(req, res, '/Crud', searchTerm);
     const page = Number.isInteger(parseInt(req.query.page, 10)) ? Math.max(parseInt(req.query.page, 10), 1) : 1;
     const pageSize = Number.isInteger(parseInt(req.query.pageSize, 10)) ? Math.max(parseInt(req.query.pageSize, 10), 1) : 10;
 
@@ -925,7 +907,6 @@ router.post('/api/telefono/validar', async (req, res) => {
 router.get("/imei", async (req, res) => {
   try {
     const searchTerm = req.query.search || "";
-    writeSearchAuditLog(req, res, '/imei', searchTerm);
     const page = Number.isInteger(parseInt(req.query.page, 10)) ? Math.max(parseInt(req.query.page, 10), 1) : 1;
     const pageSize = Number.isInteger(parseInt(req.query.pageSize, 10)) ? Math.max(parseInt(req.query.pageSize, 10), 1) : 10;
 
@@ -965,7 +946,6 @@ export { fetchImeiMetadata };
 router.get("/ubicaciones", async (req, res) => {
   try {
     const searchTerm = req.query.search || "";
-    writeSearchAuditLog(req, res, '/ubicaciones', searchTerm);
     const page = Number.isInteger(parseInt(req.query.page, 10)) ? Math.max(parseInt(req.query.page, 10), 1) : 1;
     const pageSize = Number.isInteger(parseInt(req.query.pageSize, 10)) ? Math.max(parseInt(req.query.pageSize, 10), 1) : 10;
 

@@ -5,6 +5,8 @@ export const auditResources = {
   RECEPCION: 'Recepción', EXTRACCION: 'Extracción', INSPECCION: 'Inspección',
   OFICIO: 'Oficio vario', ALCANCE: 'Vía alcance', CARPETA: 'Carpeta',
   ESTUDIANTE: 'Estudiante', OTRO: 'Otro',
+  GEOREFERENCIACION: 'Georreferenciación', PLANEACION: 'Planeación geográfica',
+  TELEFONO: 'Teléfono', RED: 'Red telefónica', AUDITORIA: 'Auditoría', METRICAS: 'Métricas',
 };
 
 const metricTypes = {
@@ -22,7 +24,7 @@ export function auditRequestPath(requestPath, query = {}) {
 }
 
 export const auditOperationSql = `CASE
-  WHEN method IN ('LOGIN', 'LOGIN_FAILED', 'SEARCH') THEN method
+  WHEN method IN ('LOGIN', 'LOGIN_FAILED', 'SEARCH', 'CONSULTA') THEN method
   WHEN method = 'DELETE' OR LOWER(request_path) REGEXP '/(eliminar|delete)(/|$)' THEN 'ELIMINADO'
   WHEN method IN ('PUT', 'PATCH')
     OR LOWER(request_path) REGEXP '/(editar|update|restablecer-contrasena|rol|estado)(/|$)'
@@ -32,6 +34,11 @@ export const auditOperationSql = `CASE
   ELSE 'OTRO' END`;
 
 export const auditResourceSql = `CASE
+  WHEN LOWER(request_path) REGEXP '^/georeferenciacion(/|$)' THEN 'GEOREFERENCIACION'
+  WHEN LOWER(request_path) REGEXP '^/planeacion-geografica(/|$)' THEN 'PLANEACION'
+  WHEN LOWER(request_path) REGEXP '^/(api/)?telefono(/|$)' THEN 'TELEFONO'
+  WHEN LOWER(request_path) REGEXP '^/red-telefonica(/|$)' THEN 'RED'
+  WHEN LOWER(request_path) REGEXP '^/auditoria(/|$)' THEN 'AUDITORIA'
   WHEN LOWER(request_path) REGEXP '^/ubicaciones(/|$)' THEN 'UBICACION'
   WHEN LOWER(request_path) REGEXP '^/ruta(/|$)' THEN 'RUTA'
   WHEN LOWER(request_path) REGEXP '^/crud(/|$)' OR LOWER(request_path) = '/metricas/datos-conservados' THEN 'DATOS'
@@ -48,9 +55,12 @@ export const auditResourceSql = `CASE
     `WHEN LOWER(request_path) LIKE '/metricas/registros/%?tipo=${encodeURIComponent(type).toLowerCase().replace(/%/g, '!%')}' ESCAPE '!' THEN '${resource}'`).join('\n  ')}
   WHEN LOWER(request_path) LIKE '/metricas/registros/%' THEN 'CARPETA'
   WHEN LOWER(request_path) REGEXP '^/estudiantes(/|$)' THEN 'ESTUDIANTE'
+  WHEN LOWER(request_path) REGEXP '^/api/(ubicaciones|localidades)(/|$)' THEN 'UBICACION'
+  WHEN LOWER(request_path) REGEXP '^/(metricas|medidores)(/|$)' THEN 'METRICAS'
   ELSE 'OTRO' END`;
 
 export const auditActionLabels = {
+  CONSULTA: 'Consulta de página o datos',
   LOGIN: 'Inicio de sesión', LOGIN_FAILED: 'Intento de sesión fallido', SEARCH: 'Búsqueda',
   REGISTRO: 'Creado', EDITADO: 'Editado', ELIMINADO: 'Eliminado',
   OTRO: 'Otra acción',
