@@ -687,6 +687,13 @@ app.post('/usuarios/:id/estado', requireAdmin, async (req, res, next) => {
 // Usa el enrutador para las rutas relacionadas con estudiantes
 app.use("/", router);
 
+app.use((req, res) => {
+  if (req.path === '/api' || req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'Ruta no encontrada.' });
+  }
+  return res.status(404).render('404');
+});
+
 const CERT_DIR = path.resolve('./certs');
 const hasConfiguredTls = Boolean(process.env.TLS_KEY_PATH || process.env.TLS_CERT_PATH);
 if (hasConfiguredTls && (!process.env.TLS_KEY_PATH || !process.env.TLS_CERT_PATH)) {
