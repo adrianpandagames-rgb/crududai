@@ -74,6 +74,7 @@ const writeAuditLog = ({ userId = null, userEmail = '', action, requestPath, sta
 
 app.locals.writeAuditLog = writeAuditLog;
 app.locals.pendingRouteToasts = pendingRouteToasts;
+const truecallerIntegration = createTruecallerIntegration();
 
 const getAuthToken = (req) => {
   const cookieHeader = req.headers.cookie || '';
@@ -398,6 +399,11 @@ app.get('/health/ready', async (_req, res) => {
 // Carga la página de inicio
 app.get("/", (req, res) => {
   res.render("index", { error: null, success: null });
+});
+
+app.get('/terminos', (_req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  return res.render('pages/terminos');
 });
 
 app.get('/inicio', (req, res) => {
