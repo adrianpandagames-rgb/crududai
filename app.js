@@ -74,7 +74,6 @@ const writeAuditLog = ({ userId = null, userEmail = '', action, requestPath, sta
 
 app.locals.writeAuditLog = writeAuditLog;
 app.locals.pendingRouteToasts = pendingRouteToasts;
-const truecallerIntegration = createTruecallerIntegration();
 
 const getAuthToken = (req) => {
   const cookieHeader = req.headers.cookie || '';

@@ -195,18 +195,6 @@ IMEI_SERVICE_ID=0
 
 > Nunca guardes secretos reales en el repositorio. Agrega `.env.development` y `.env.production` al `.gitignore` o usa un archivo local no versionado.
 
-### Truecaller para sitios móviles
-
-La pestaña **OSINT** integra la verificación web de Truecaller en Android. Solo muestra el perfil que la persona usuaria acepta compartir; no sirve para buscar perfiles de terceros por número. Los datos del perfil se mantienen temporalmente en memoria y no se almacenan en la base de datos.
-
-Registra una aplicación de tipo **Web** en el [portal de desarrolladores de Truecaller](https://developer.truecaller.com/login), usando el dominio `app.aiuecs.tech` y este callback HTTPS exacto:
-
-```text
-https://app.aiuecs.tech/api/truecaller/callback
-```
-
-Configura `TRUECALLER_APP_KEY`, `TRUECALLER_APP_NAME`, `TRUECALLER_PRIVACY_URL` y `TRUECALLER_TERMS_URL` en el entorno de producción. Usa `https://app.aiuecs.tech/terminos` como URL de términos. `TRUECALLER_PRIVACY_URL` debe apuntar a una política de privacidad HTTPS publicada por tu organización. Reinicia la app después de guardar la configuración. La documentación de [generación de App Key](https://docs.truecaller.com/truecaller-sdk/mobile-websites/generating-app-key) describe el callback y los requisitos HTTPS.
-
 ### Scripts recomendados
 
 En `package.json` puedes dejar esto:
