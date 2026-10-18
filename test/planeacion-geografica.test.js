@@ -7,20 +7,21 @@ import express from 'express';
 import { createPlaneacionRouter } from '../src/planeacionRouter.js';
 import ejs from 'ejs';
 
-test('only administrators see geographic planning in the Administration menu', async () => {
+test('all users see geographic planning outside Administration', async () => {
   const template = new URL('../views/includes/header.ejs', import.meta.url);
   const { fileURLToPath } = await import('node:url');
   const admin = await ejs.renderFile(fileURLToPath(template), { currentUser: { isAdmin: true } });
   const user = await ejs.renderFile(fileURLToPath(template), { currentUser: { isAdmin: false } });
   assert.ok(admin.includes('href="/planeacion-geografica"'));
-  assert.ok(!user.includes('href="/planeacion-geografica"'));
+  assert.ok(user.includes('href="/planeacion-geografica"'));
+  assert.ok(!user.includes('<summary class="menu-item">Administración</summary>'));
 });
 
-test('planning upload rejects non-admins and returns enriched map data for admins', async (t) => {
+test('planning upload is available to all authenticated users and returns enriched map data', async (t) => {
   const app = express();
   let queries = 0;
   app.use((req, res, next) => {
-    req.session = { userId: 1, isAdmin: req.headers['x-test-admin'] === 'yes' };
+    req.session = { userId: 1, isAdmin: req.headers['x-test-admin'] === 'yes', role: 'usuario' };
     next();
   });
   app.use('/planeacion-geografica', createPlaneacionRouter({ query: async () => {
@@ -31,20 +32,20 @@ test('planning upload rejects non-admins and returns enriched map data for admin
   await new Promise((resolve) => server.once('listening', resolve));
   t.after(() => { server.closeAllConnections(); server.close(); });
   const url = `http://127.0.0.1:${server.address().port}/planeacion-geografica/importar`;
-  const denied = await fetch(url, { method: 'POST' });
-  assert.equal(denied.status, 403);
-  assert.equal(queries, 0);
-  const body = new FormData();
-  body.append('linea', '123');
-  body.append('archivo', new Blob(['antena,azimuth\nABC,50\n'], { type: 'text/csv' }), 'antenas.csv');
-  const response = await fetch(url, { method: 'POST', headers: { 'x-test-admin': 'yes' }, body });
-  assert.equal(response.status, 200);
-  assert.equal(response.headers.get('cache-control'), 'no-store');
-  assert.equal(response.headers.get('referrer-policy'), 'strict-origin-when-cross-origin');
-  const result = await response.json();
-  assert.equal(result.line, '123');
-  assert.deepEqual(result.points, [{ lat: 29.1, lng: -110.9, azimuth: 50, row: 1 }]);
-  assert.ok(result.csv.includes('Hermosillo'));
+  for (const headers of [{}, { 'x-test-admin': 'yes' }]) {
+    const body = new FormData();
+    body.append('linea', '123');
+    body.append('archivo', new Blob(['antena,azimuth\nABC,50\n'], { type: 'text/csv' }), 'antenas.csv');
+    const response = await fetch(url, { method: 'POST', headers, body });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    assert.equal(response.headers.get('referrer-policy'), 'strict-origin-when-cross-origin');
+    const result = await response.json();
+    assert.equal(result.line, '123');
+    assert.deepEqual(result.points, [{ lat: 29.1, lng: -110.9, azimuth: 50, row: 1 }]);
+    assert.ok(result.csv.includes('Hermosillo'));
+  }
+  assert.equal(queries, 2);
   const emptyBody = new FormData();
   emptyBody.append('linea', '123');
   const invalid = await fetch(url, { method: 'POST', headers: { 'x-test-admin': 'yes' }, body: emptyBody });

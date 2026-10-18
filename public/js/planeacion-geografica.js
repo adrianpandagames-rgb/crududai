@@ -1,4 +1,5 @@
 import { coverageSector } from './planeacion-geometry.js';
+import { summarizeAntennas } from './planeacion-antenas.js';
 
 const byId = (id) => document.getElementById(id);
 const status = byId('planningStatus');
@@ -77,6 +78,41 @@ if (!window.L) {
   let pointsByRow = new Map();
   let coordinateFilter = null;
   const coordinateKey = (point) => point ? `${point.lat.toFixed(6)},${point.lng.toFixed(6)}` : null;
+  function antennaSummary() {
+    const fragment = document.createDocumentFragment();
+    for (const group of summarizeAntennas(data)) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'planning-antenna';
+      const title = document.createElement('strong');
+      title.textContent = `${group.name} · ${group.rows.length} registros`;
+      const location = document.createElement('span');
+      location.textContent = `Ubicación: ${group.ubicacion || 'Sin información'} · Lugar: ${group.lugar || 'Sin información'}`;
+      const coordinates = document.createElement('span');
+      coordinates.textContent = group.coordinates;
+      button.append(title, location, coordinates);
+      button.addEventListener('click', () => {
+        if (!radius.reportValidity()) return;
+        selectedRows.clear();
+        group.points.forEach((point) => selectedRows.add(point.row));
+        selectionActive = true;
+        coordinateFilter = null;
+        table();
+        draw();
+        const description = document.createElement('div');
+        description.textContent = `${group.name} · ${group.ubicacion} · ${group.lugar} · ${group.rows.length} registros`;
+        if (group.points.length) {
+          const point = group.points[0];
+          L.popup().setLatLng([point.lat, point.lng]).setContent(description).openOn(map);
+          mapElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else {
+          message(`${group.name}: ${group.rows.length} registros sin coordenadas válidas para mostrar en el mapa.`, true);
+        }
+      });
+      fragment.append(button);
+    }
+    byId('planningAntennas').replaceChildren(fragment);
+  }
   function showCoordinateRecords(point) {
     coordinateFilter = coordinateKey(point);
     table();
@@ -228,6 +264,7 @@ if (!window.L) {
       selectionActive = false;
       coordinateFilter = null;
       pointsByRow = new Map(data.points.map((point) => [point.row, point]));
+      antennaSummary();
       const tr = document.createElement('tr');
       const selectionHeader = document.createElement('th');
       selectionHeader.scope = 'col';

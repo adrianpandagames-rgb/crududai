@@ -10,8 +10,14 @@ class CoverageTests(unittest.TestCase):
         self.assertEqual(float(parameters['azimuth']), 50)
         self.assertEqual(float(coverage_parameters(['29', '-110', '50', '1000'])['radius']), 1000)
 
+    def test_full_circle_preserves_range(self):
+        for args in [['29', '-110', '360', '1000'], ['29', '-110', '--azimut', '360', '--alcance', '1000']]:
+            parameters = coverage_parameters(args)
+            self.assertEqual(float(parameters['azimuth']), 360)
+            self.assertEqual(float(parameters['radius']), 1000)
+
     def test_invalid_inputs(self):
-        for args in [[], ['nan', '-110', '50'], ['29', '-110', '360'], ['29', '-110', '50', '0']]:
+        for args in [[], ['nan', '-110', '50'], ['29', '-110', '361'], ['29', '-110', '50', '0']]:
             with self.subTest(args=args), self.assertRaises(ValueError):
                 coverage_parameters(args)
 
@@ -30,6 +36,14 @@ class CoverageTests(unittest.TestCase):
 
 
 class CoverageAsyncTests(unittest.IsolatedAsyncioTestCase):
+    async def test_full_circle_caption(self):
+        message = AsyncMock()
+        await send_coverage(message, b'PNG', coverage_parameters(['29', '-110', '360', '1000']))
+        caption = message.reply_photo.call_args.kwargs['caption']
+        self.assertIn('1000 m', caption)
+        self.assertIn('circular de 360°', caption)
+        self.assertNotIn('±45', caption)
+
     async def test_geocoding_sends_explicit_post_with_coordinates_and_identity(self):
         import httpx
         import json
@@ -81,6 +95,6 @@ class CoverageAsyncTests(unittest.IsolatedAsyncioTestCase):
             message = AsyncMock()
             await send_coverage(message, image, parameters)
             kwargs = message.reply_photo.call_args.kwargs
-            self.assertTrue(kwargs['protect_content'])
+            self.assertFalse(kwargs['protect_content'])
             self.assertEqual(kwargs['photo'].getvalue(), image)
             self.assertIn('500 m', kwargs['caption'])

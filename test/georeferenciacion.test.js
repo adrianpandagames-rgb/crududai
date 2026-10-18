@@ -54,6 +54,25 @@ test('Google request uses latlng and Spanish; address components are selected by
     addressDetails: { street: '', neighborhood: '', postalCode: '', city: 'Hermosillo', state: 'Sonora', originalAddress: 'Dirección' } });
 });
 
+test('Google quota reservation completes before the external request starts', async () => {
+  const order = [];
+  await reverseGeocode(29, -110, {
+    apiKey: 'test-key',
+    beforeRequest: async () => { order.push('reserve'); },
+    fetchImpl: async () => {
+      order.push('google');
+      return { ok: true, json: async () => ({ status: 'ZERO_RESULTS' }) };
+    },
+  });
+  assert.deepEqual(order, ['reserve', 'google']);
+
+  await assert.rejects(reverseGeocode(29, -110, {
+    apiKey: 'test-key',
+    beforeRequest: async () => { throw new Error('quota blocked'); },
+    fetchImpl: async () => { throw new Error('Google should not be called'); },
+  }), /quota blocked/);
+});
+
 test('Google zero results, denied requests, quota, timeout and missing key are handled without leaking secrets', async () => {
   const response = (status) => async () => ({ ok: true, json: async () => ({ status, error_message: 'secret-test-key' }) });
   assert.equal((await reverseGeocode(0, 0, { apiKey: 'test', fetchImpl: response('ZERO_RESULTS') })).status, 'SIN_RESULTADOS');
@@ -98,7 +117,9 @@ test('routes require a session and scope exports and deletes to the owner', asyn
   const pool = {
     query: async () => [[]],
     execute: async (sql, parameters) => {
-      queries.push({ sql, parameters });
+      if (sql.startsWith('INSERT IGNORE')) return [{ affectedRows: 1 }];
+      if (sql.startsWith('SELECT request_count')) return [[{ requestCount: 0, isBlocked: 0 }]];
+      if (sql.includes('user_id = ?')) queries.push({ sql, parameters });
       return sql.startsWith('DELETE') ? [{ affectedRows: 0 }] : [[]];
     },
   };

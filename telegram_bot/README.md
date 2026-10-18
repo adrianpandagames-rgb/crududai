@@ -69,3 +69,5 @@ Pruebas aisladas sin BD ni Telegram reales:
 .\.venv-telegram\Scripts\python.exe -m unittest telegram_bot.test_core telegram_bot.test_api telegram_bot.test_line_results
 node --test test/telegram-api.test.js test/request-security.test.js
 ```
+
+Para omitir la dirección del azimut y conservar el alcance, usa `360`: `/cobertura 29.0729 -110.9559 360 1000`. Dibuja cobertura circular de 1000 m de radio. Sin indicar azimut sigue mostrando únicamente la antena.

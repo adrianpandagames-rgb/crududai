@@ -45,9 +45,9 @@ def coverage_parameters(args):
     except ValueError:
         raise ValueError('Usa números separados por espacios, con punto decimal.') from None
     if not all(math.isfinite(value) for value in (lat, lng, radius)) or not (
-        -85 <= lat <= 85 and -180 <= lng <= 180 and (azimuth is None or math.isfinite(azimuth) and 0 <= azimuth < 360) and 1 <= radius <= 10000
+        -85 <= lat <= 85 and -180 <= lng <= 180 and (azimuth is None or math.isfinite(azimuth) and 0 <= azimuth <= 360) and 1 <= radius <= 10000
     ):
-        raise ValueError('Latitud: -85 a 85; longitud: -180 a 180; azimut: 0 a menos de 360; alcance: 1 a 10000 m.')
+        raise ValueError('Latitud: -85 a 85; longitud: -180 a 180; azimut: 0 a 360 (360 = todas las direcciones); alcance: 1 a 10000 m.')
     parameters = {'lat': format(lat, '.10f'), 'lng': format(lng, '.10f'), 'radius': format(radius, '.10f')}
     if azimuth is not None:
         parameters['azimuth'] = format(azimuth, '.10f')
@@ -81,6 +81,8 @@ async def send_coverage(message, image, parameters):
     photo.name = 'cobertura-antena.png'
     details = (f"Azimut: {float(parameters['azimuth']):g}° · Alcance: {float(parameters['radius']):g} m\n"
                'Sector de ±45°. Cobertura ilustrativa.') if 'azimuth' in parameters else 'Sin azimut: se muestra únicamente la ubicación de la antena.'
+    if float(parameters.get('azimuth', -1)) == 360:
+        details = f"Sin dirección de azimut · Alcance: {float(parameters['radius']):g} m\nCobertura circular de 360°. Cobertura ilustrativa."
     await message.reply_photo(photo=photo, caption=(
         f"Antena: {float(parameters['lat']):g}, {float(parameters['lng']):g}\n"
-        + details), protect_content=True)
+        + details), protect_content=False)

@@ -14,15 +14,17 @@ import swaggerUi from 'swagger-ui-express';
 import router from "./src/router.js"; // Importa el enrutador
 import pool from "./src/db.js";
 import { buildAuditFilters, auditActionLabels } from './src/auditFilters.js';
-import { auditOperationSql, auditResourceSql, auditResources, describeAuditAction, auditRequestPath } from './src/auditActions.js';
+import { auditOperationSql, auditResourceSql, auditResources, describeAuditAction } from './src/auditActions.js';
 import { buildSessionCookieOptions, isSessionExpired, SESSION_TIMEOUT_MS } from './src/sessionUtils.js';
 import { startImeiMetadataDailyJob } from './src/imeiMetadataService.js';
 import { hashPassword, verifyPassword } from './src/passwordUtils.js';
-import { buildAuditDetails, sanitizeAuditData } from './src/auditDetails.js';
+import { sanitizeAuditData } from './src/auditDetails.js';
+import { auditActivity } from './src/auditMiddleware.js';
+import { presentAuditEntry } from './src/auditPresentation.js';
 import { requireSameOrigin } from './src/requestSecurity.js';
 import { createTelegramApiRouter } from './src/telegramApiRouter.js';
 import { createPlaneacionRouter } from './src/planeacionRouter.js';
-import { createTruecallerIntegration } from './src/truecallerRouter.js';
+import { getGoogleGeocodingQuota, resetGoogleGeocodingQuota } from './src/googleGeocodingQuota.js';
 
 
 const app = express();
@@ -61,7 +63,6 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 const sessions = new Map();
 const pendingRouteToasts = new Map();
 const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
-const NON_MUTATING_POST_PATHS = new Set(['/api/telefono/validar']);
 
 const writeAuditLog = ({ userId = null, userEmail = '', action, requestPath, statusCode, ipAddress, details = null }) => {
   pool.execute(
@@ -103,24 +104,7 @@ app.use((req, res, next) => {
   return next();
 });
 
-app.use((req, res, next) => {
-  res.on('finish', () => {
-    const requestPath = req.path;
-    const isAuditable = MUTATION_METHODS.has(req.method) && !NON_MUTATING_POST_PATHS.has(requestPath);
-    if (!isAuditable || !req.session || res.statusCode < 200 || res.statusCode >= 400) return;
-
-    writeAuditLog({
-      userId: req.session.userId,
-      userEmail: req.session.email,
-      action: req.method,
-      requestPath: auditRequestPath(requestPath, req.query),
-      statusCode: res.statusCode,
-      ipAddress: req.ip,
-      details: buildAuditDetails(req),
-    });
-  });
-  next();
-});
+app.use(auditActivity);
 
 const requireAuth = async (req, res, next) => {
   const token = getAuthToken(req);
@@ -154,6 +138,7 @@ const requireAuth = async (req, res, next) => {
       id: session.userId,
       email: session.email,
       isAdmin: session.isAdmin === true,
+      role: session.role,
       canEditRecords: session.isAdmin === true || session.role === 'semiadmin',
     };
 
@@ -191,11 +176,17 @@ const requireAdmin = async (req, res, next) => {
   });
 };
 
-app.use('/api/truecaller/callback', truecallerIntegration.callbackRouter);
-app.use(['/metricas', '/Crud', '/imei', '/lineas', '/ubicaciones', '/api/ubicaciones', '/estudiantes', '/georeferenciacion', '/ruta', '/inicio', '/telefono', '/api/telefono', '/api/localidades', '/osint', '/api/truecaller', '/cambiar-contrasena'], requireAuth);
+const requireNonUecs = (req, res, next) => {
+  if (req.session.role === 'uecs') {
+    return res.status(403).redirect('/Crud');
+  }
+  return next();
+};
+
+app.use(['/metricas', '/Crud', '/imei', '/lineas', '/ubicaciones', '/api/ubicaciones', '/estudiantes', '/georeferenciacion', '/ruta', '/inicio', '/telefono', '/api/telefono', '/api/localidades', '/cambiar-contrasena'], requireAuth);
+app.use('/metricas', requireNonUecs);
 app.use('/api/bot', createTelegramApiRouter(pool));
-app.use('/api/truecaller', truecallerIntegration.userRouter);
-app.use('/planeacion-geografica', requireAdmin, createPlaneacionRouter(pool));
+app.use('/planeacion-geografica', requireAuth, createPlaneacionRouter(pool));
 
 
 
@@ -463,7 +454,8 @@ const generateSecurePassword = () => crypto.randomBytes(24).toString('base64url'
 
 const renderUsersPage = async (res, { message = null, error = null, generatedPassword = null } = {}) => {
   const [users] = await pool.execute('SELECT id, email, is_admin, role, is_active, is_initial_admin FROM users ORDER BY email ASC');
-  return res.render('pages/usuarios', { users, message, error, generatedPassword });
+  const googleGeocodingQuota = await getGoogleGeocodingQuota(pool);
+  return res.render('pages/usuarios', { users, message, error, generatedPassword, googleGeocodingQuota });
 };
 
 app.get('/usuarios', requireAdmin, async (req, res, next) => {
@@ -471,6 +463,15 @@ app.get('/usuarios', requireAdmin, async (req, res, next) => {
     await renderUsersPage(res, { message: req.query.message || null, error: req.query.error || null });
   } catch (error) {
     next(error);
+  }
+});
+
+app.post('/usuarios/google-geocoding/reiniciar', requireAdmin, async (req, res, next) => {
+  try {
+    await resetGoogleGeocodingQuota(pool);
+    return renderUsersPage(res, { message: 'Contador de Google Geocoding reiniciado y servicio desbloqueado.' });
+  } catch (error) {
+    return next(error);
   }
 });
 
@@ -499,7 +500,7 @@ app.get('/auditoria', requireAdmin, async (req, res, next) => {
       selection.values,
     );
     return res.status(filterError ? 400 : 200).render('pages/auditoria', {
-      entries, users, filters: selection.filters, filterError, auditActionLabels, auditResources, describeAuditAction,
+      entries: entries.map(presentAuditEntry), users, filters: selection.filters, filterError, auditActionLabels, auditResources, describeAuditAction,
     });
   } catch (error) {
     next(error);
@@ -603,6 +604,7 @@ app.get('/medidores', requireAdmin, async (req, res, next) => {
 
 app.post('/usuarios', requireAdmin, async (req, res, next) => {
   const email = String(req.body.email || '').trim().toLowerCase();
+  const role = ['admin', 'semiadmin', 'usuario', 'uecs'].includes(req.body.role) ? req.body.role : 'usuario';
   if (!EMAIL_PATTERN.test(email)) {
     return renderUsersPage(res, { error: 'Ingresa un correo electrónico válido.' }).catch(next);
   }
@@ -610,7 +612,7 @@ app.post('/usuarios', requireAdmin, async (req, res, next) => {
   const generatedPassword = generateSecurePassword();
   try {
     const passwordHash = await hashPassword(generatedPassword);
-    await pool.execute('INSERT INTO users (email, password, is_admin, role, must_change_password) VALUES (?, ?, 0, \'usuario\', 1)', [email, passwordHash]);
+    await pool.execute('INSERT INTO users (email, password, is_admin, role, must_change_password) VALUES (?, ?, ?, ?, 1)', [email, passwordHash, role === 'admin' ? 1 : 0, role]);
     return renderUsersPage(res, {
       message: `Usuario creado para ${email}. Copia la contraseña antes de salir de esta página.`,
       generatedPassword,
@@ -648,7 +650,7 @@ app.post('/usuarios/:id/restablecer-contrasena', requireAdmin, async (req, res, 
 
 app.post('/usuarios/:id/rol', requireAdmin, async (req, res, next) => {
   const userId = Number.parseInt(req.params.id, 10);
-  const role = ['admin', 'semiadmin', 'usuario'].includes(req.body.role) ? req.body.role : 'usuario';
+  const role = ['admin', 'semiadmin', 'usuario', 'uecs'].includes(req.body.role) ? req.body.role : 'usuario';
   const isAdmin = role === 'admin';
   if (!Number.isSafeInteger(userId) || userId < 1) return res.status(400).redirect('/usuarios?error=Usuario%20inválido.');
   if (userId === req.session.userId && !isAdmin) return res.redirect('/usuarios?error=No%20puedes%20quitarte%20tu%20propio%20acceso%20de%20administrador.');
@@ -726,6 +728,7 @@ const ensureLocalCerts = () => {
   fs.writeFileSync(CERT_CERT_PATH, pems.cert, { flag: 'wx', mode: 0o600 });
   console.log('Certificados HTTPS generados en:', CERT_DIR);
 };
+
 
 // Managed hosting terminates public HTTPS and forwards HTTP to PORT.
 const serverProtocol = process.env.SERVER_PROTOCOL || (process.env.NODE_ENV === 'production' ? 'http' : 'https');

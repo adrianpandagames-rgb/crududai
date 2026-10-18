@@ -13,6 +13,11 @@
 .planning-table thead { position: sticky; top: 0; z-index: 1; background: #fff; }
 .planning-table td { min-width: 100px; }
 .planning-record { cursor: pointer; }
+.planning-antennas { border: 1px solid #d5e1ec; border-radius: 8px; padding: 12px; background: #f7faff; }
+.planning-antennas-list { max-height: 210px; overflow-y: auto; display: grid; gap: 6px; }
+.planning-antenna { display: grid; gap: 3px; width: 100%; padding: 8px 10px; border: 1px solid #d5e1ec; border-radius: 6px; background: #fff; color: #16456b; text-align: left; cursor: pointer; font-size: 12px; overflow-wrap: anywhere; }
+.planning-antenna:hover { background: #eaf3ff; }
+.planning-antenna:focus-visible { outline: 2px solid #087cf0; outline-offset: -2px; }
 .planning-record:hover > td, .planning-record-selected > td { background-color: #dceeff; }
 .planning-record:focus-visible { outline: 2px solid #087cf0; outline-offset: -2px; }
 @media (max-width: 576px) { #planningMap { min-height: 320px; height: 55vh; } }

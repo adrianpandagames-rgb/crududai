@@ -62,18 +62,20 @@
             <div class="table-responsive">
               <table class="table table-sm align-middle mb-0">
                 <thead>
-                  <tr><th>Fecha</th><th>Usuario</th><th>Tipo</th><th>Acción</th><th>Ruta</th><th>Estado</th><th>IP</th><th>Información registrada</th></tr>
+                  <tr><th>Día</th><th>Hora</th><th>Quién</th><th>Dónde / sección</th><th>Acción</th><th>Qué buscó / parámetros</th><th>Página / ruta</th><th>Estado</th><th>IP</th><th>Información registrada</th></tr>
                 </thead>
                 <tbody>
                   <% if (entries.length === 0) { %>
-                    <tr><td colspan="8" class="text-center text-muted py-4"><%= filterError ? 'Corrige los filtros para consultar la actividad.' : 'No hay actividad que coincida con los filtros.' %></td></tr>
+                    <tr><td colspan="10" class="text-center text-muted py-4"><%= filterError ? 'Corrige los filtros para consultar la actividad.' : 'No hay actividad que coincida con los filtros.' %></td></tr>
                   <% } %>
                   <% entries.forEach((entry) => { %>
                     <tr>
-                      <td class="text-nowrap"><%= entry.createdAt %></td>
+                      <td class="text-nowrap"><%= entry.day %></td>
+                      <td class="text-nowrap"><%= entry.time %></td>
                       <td><%= entry.user_email %></td>
-                      <td><%= auditResources[entry.resource] || 'Otro' %></td>
+                      <td><%= auditResources[entry.resource] || 'Otro' %><div class="small text-muted"><%= entry.origin %></div></td>
                       <td><span class="badge bg-secondary"><%= describeAuditAction(entry) %></span></td>
+                      <td class="text-break"><%= entry.searched %></td>
                       <td><code><%= entry.request_path %></code></td>
                       <td><%= entry.status_code %></td>
                       <td><%= entry.ip_address || '-' %></td>
