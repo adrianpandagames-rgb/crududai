@@ -22,6 +22,7 @@ import { buildAuditDetails, sanitizeAuditData } from './src/auditDetails.js';
 import { requireSameOrigin } from './src/requestSecurity.js';
 import { createTelegramApiRouter } from './src/telegramApiRouter.js';
 import { createPlaneacionRouter } from './src/planeacionRouter.js';
+import { createTruecallerIntegration } from './src/truecallerRouter.js';
 
 
 const app = express();
@@ -72,6 +73,7 @@ const writeAuditLog = ({ userId = null, userEmail = '', action, requestPath, sta
 
 app.locals.writeAuditLog = writeAuditLog;
 app.locals.pendingRouteToasts = pendingRouteToasts;
+const truecallerIntegration = createTruecallerIntegration();
 
 const getAuthToken = (req) => {
   const cookieHeader = req.headers.cookie || '';
@@ -189,8 +191,10 @@ const requireAdmin = async (req, res, next) => {
   });
 };
 
-app.use(['/metricas', '/Crud', '/imei', '/lineas', '/ubicaciones', '/api/ubicaciones', '/estudiantes', '/georeferenciacion', '/ruta', '/inicio', '/telefono', '/api/telefono', '/api/localidades', '/cambiar-contrasena'], requireAuth);
+app.use('/api/truecaller/callback', truecallerIntegration.callbackRouter);
+app.use(['/metricas', '/Crud', '/imei', '/lineas', '/ubicaciones', '/api/ubicaciones', '/estudiantes', '/georeferenciacion', '/ruta', '/inicio', '/telefono', '/api/telefono', '/api/localidades', '/osint', '/api/truecaller', '/cambiar-contrasena'], requireAuth);
 app.use('/api/bot', createTelegramApiRouter(pool));
+app.use('/api/truecaller', truecallerIntegration.userRouter);
 app.use('/planeacion-geografica', requireAdmin, createPlaneacionRouter(pool));
 
 
@@ -404,6 +408,11 @@ app.get('/health/ready', async (_req, res) => {
 // Carga la página de inicio
 app.get("/", (req, res) => {
   res.render("index", { error: null, success: null });
+});
+
+app.get('/terminos', (_req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  return res.render('pages/terminos');
 });
 
 app.get('/inicio', (req, res) => {

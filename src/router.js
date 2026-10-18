@@ -48,6 +48,7 @@ import {
 import { maskApiKeyInUrl } from "./loggingUtils.js";
 import { createRutaCsv, createRutaXlsx, getRutaXlsxMetadata, processRutaCsv, processRutaXlsx } from "./rutaService.js";
 import pool from "./db.js";
+import { isTruecallerConfigured } from './truecallerRouter.js';
 
 const RUTA_MAX_FILE_SIZE = 20 * 1024 * 1024;
 const CONTACTS_MAX_FILE_SIZE = 5 * 1024 * 1024;
@@ -885,6 +886,11 @@ router.use('/georeferenciacion', createGeoreferenciacionRouter(pool));
 
 router.get('/telefono', (req, res) => {
   res.render('pages/telefono');
+});
+
+router.get('/osint', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.render('pages/osint', { truecallerConfigured: isTruecallerConfigured() });
 });
 
 /**
