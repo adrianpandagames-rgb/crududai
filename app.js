@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { notifyUser } from './src/userNotifications.js';
 import crypto from 'crypto';
 import fs from 'fs';
 import https from 'https';
@@ -442,6 +443,10 @@ app.post('/cambiar-contrasena', requireSameOrigin, requireAuth, async (req, res,
     const authToken = crypto.randomBytes(24).toString('hex');
     sessions.set(authToken, req.session);
     res.cookie('auth', authToken, buildSessionCookieOptions());
+    const notification = await notifyUser(req.session.email, 'changed');
+    if (!notification.sent) {
+      return res.render('pages/cambiar-contrasena', { error: `Contraseña actualizada. ${notification.warning}`, completed: true });
+    }
     return res.redirect('/Crud');
   } catch (error) {
     return next(error);
@@ -451,10 +456,10 @@ app.post('/cambiar-contrasena', requireSameOrigin, requireAuth, async (req, res,
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const generateSecurePassword = () => crypto.randomBytes(24).toString('base64url');
 
-const renderUsersPage = async (res, { message = null, error = null, generatedPassword = null } = {}) => {
+const renderUsersPage = async (res, { message = null, error = null } = {}) => {
   const [users] = await pool.execute('SELECT id, email, is_admin, role, is_active, is_initial_admin FROM users ORDER BY email ASC');
   const googleGeocodingQuota = await getGoogleGeocodingQuota(pool);
-  return res.render('pages/usuarios', { users, message, error, generatedPassword, googleGeocodingQuota });
+  return res.render('pages/usuarios', { users, message, error, googleGeocodingQuota });
 };
 
 app.get('/usuarios', requireAdmin, async (req, res, next) => {
@@ -612,9 +617,12 @@ app.post('/usuarios', requireAdmin, async (req, res, next) => {
   try {
     const passwordHash = await hashPassword(generatedPassword);
     await pool.execute('INSERT INTO users (email, password, is_admin, role, must_change_password) VALUES (?, ?, ?, ?, 1)', [email, passwordHash, role === 'admin' ? 1 : 0, role]);
+    const notification = await notifyUser(email, 'created', { temporaryPassword: generatedPassword });
     return renderUsersPage(res, {
-      message: `Usuario creado para ${email}. Copia la contraseña antes de salir de esta página.`,
-      generatedPassword,
+      error: notification.sent ? null : `${notification.warning} Restablece la contraseña para recuperar el acceso del usuario.`,
+      message: notification.sent
+        ? `Usuario creado para ${email}. La contraseña temporal se envió a su correo.`
+        : `Usuario creado para ${email}. No se pudo enviar la contraseña temporal.`,
     });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
@@ -629,7 +637,7 @@ app.post('/usuarios/:id/restablecer-contrasena', requireAdmin, async (req, res, 
   if (!Number.isSafeInteger(userId) || userId < 1) return res.status(400).redirect('/usuarios?error=Usuario%20inválido.');
 
   try {
-    const [users] = await pool.execute('SELECT is_initial_admin FROM users WHERE id = ?', [userId]);
+    const [users] = await pool.execute('SELECT is_initial_admin, email FROM users WHERE id = ?', [userId]);
     if (users.length !== 1) return res.status(404).redirect('/usuarios?error=Usuario%20no%20encontrado.');
     if (Number(users[0].is_initial_admin) === 1 && userId !== req.session.userId) {
       return res.status(403).redirect('/usuarios?error=Solo%20el%20administrador%20inicial%20puede%20cambiar%20su%20contrase%C3%B1a.');
@@ -641,7 +649,13 @@ app.post('/usuarios/:id/restablecer-contrasena', requireAdmin, async (req, res, 
     if (result.affectedRows !== 1) return res.status(404).redirect('/usuarios?error=Usuario%20no%20encontrado.');
     revokeUserSessions(userId);
     if (userId === req.session.userId) res.clearCookie('auth', buildSessionCookieOptions());
-    return renderUsersPage(res, { message: 'Contraseña restablecida. Cópiala antes de salir de esta página.', generatedPassword });
+    const notification = await notifyUser(users[0].email, 'reset', { temporaryPassword: generatedPassword });
+    return renderUsersPage(res, {
+      message: notification.sent
+        ? 'Contraseña restablecida. La contraseña temporal se envió al correo del usuario.'
+        : 'Contraseña restablecida. No se pudo enviar la contraseña temporal.',
+      error: notification.sent ? null : `${notification.warning} Revisa la configuración del correo y vuelve a restablecer la contraseña para generar y enviar una nueva.`,
+    });
   } catch (error) {
     return next(error);
   }

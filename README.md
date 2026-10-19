@@ -313,3 +313,20 @@ Notas:
 - El servicio creado se llamará `correlatador` y puede gestionarse desde `services.msc` o con `Start-Service`/`Stop-Service`.
 - Asegúrate de construir el ejecutable compatible con tu arquitectura (el script usa `node18-win-x64`).
 - Si prefieres no instalar como servicio, puedes ejecutar el exe directamente; para iniciarlo sin consola usa un acceso directo con la opción de inicio minimizado.
+# Correos de usuarios
+
+Al crear una cuenta, restablecer una contraseña desde administración o guardar una
+nueva contraseña, se envía un correo al usuario. Al crear la cuenta o restablecer la contraseña, el correo
+incluye la contraseña temporal, que debe cambiarse al iniciar sesión y no se muestra
+al administrador. Solo se guarda su hash en la base de datos. El aviso de cambio
+de contraseña por el usuario no incluye la contraseña.
+
+Configura `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` y `SMTP_FROM`
+en `.env` (en Docker, `.env.docker`) y reinicia la aplicación. Consulta `.env.example`.
+El puerto 587 exige STARTTLS; el 465 utiliza TLS desde la conexión, según la
+[configuración SMTP de Nodemailer](https://nodemailer.com/smtp).
+Si el proveedor exige una contraseña de aplicación, úsala en `SMTP_PASSWORD`.
+Sin configuración o ante un error de envío, la operación se conserva y la pantalla
+muestra una advertencia. Los correos fallidos no se reintentan automáticamente.
+Si falla el correo de creación o restablecimiento, revisa SMTP y vuelve a restablecer
+la contraseña para generar y enviar una nueva.

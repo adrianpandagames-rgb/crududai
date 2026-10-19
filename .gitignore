@@ -179,3 +179,4 @@ docker/init/*.partial
 .venv-telegram/
 __pycache__/
 *.py[cod]
+.npm-cache/
