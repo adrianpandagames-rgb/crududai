@@ -32,6 +32,7 @@ s<!DOCTYPE html>
       <% } %>
 
       <div class="row justify-content-md-center mb-5">
+        <% if (typeof currentUser === 'undefined' || currentUser.role !== 'uecs') { %>
         <div class="col-md-4 mb-5">
           <div class="card p-4">
             <h3 class="text-center mb-4">
@@ -123,7 +124,9 @@ s<!DOCTYPE html>
           </div>
         </div>
 
-        <div class="col-md-8 py-3 custom_table">
+        <% } %>
+
+        <div class="<%= typeof currentUser !== 'undefined' && currentUser.role === 'uecs' ? 'col-md-12' : 'col-md-8' %> py-3 custom_table">
           <h3 class="text-center">
             Lista de IMEI
             <hr />
@@ -319,6 +322,7 @@ s<!DOCTYPE html>
       </div>
     </div>
 
+    <% if (typeof currentUser === 'undefined' || currentUser.role !== 'uecs') { %>
     <script>
       const imeiForm = document.getElementById('imeiForm');
       const imeiBaseInput = document.getElementById('imeiBase');
@@ -403,6 +407,7 @@ s<!DOCTYPE html>
 
     </script>
 
+    <% } %>
     <%- include('../includes/scripts') %>
     <script>
       const queryParams = new URLSearchParams(window.location.search);

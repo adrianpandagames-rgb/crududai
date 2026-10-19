@@ -1,3 +1,4 @@
+import { requireRecordCreator } from './recordPermissions.js';
 import express from "express";
 import { removeParentheticalText, capitalizeLocationWords } from './locationText.js';
 import { createGeoreferenciacionRouter } from './georeferenciacionRouter.js';
@@ -1003,7 +1004,7 @@ router.post('/ubicaciones/:id/modificar', async (req, res) => {
   }
 });
 
-router.post('/ubicaciones/register', async (req, res) => {
+router.post('/ubicaciones/register', requireRecordCreator, async (req, res) => {
   try {
     const { coordinates, ubicacion, estado, lugar } = req.body;
     const city = removeParentheticalText(lugar);
@@ -1157,7 +1158,7 @@ router.get("/No", async (req, res) => {
 
 
 
-router.post('/imei/register', async (req, res) => {
+router.post('/imei/register', requireRecordCreator, async (req, res) => {
   try {
     const { imeiBase, nucObjetivo, curso_dc, ano } = req.body;
     const normalizedImeiBase = String(imeiBase || '').replace(/\D/g, '').slice(0, 14);
@@ -1272,7 +1273,7 @@ const contactsUpload = (req, res, next) => {
   });
 };
 
-router.post('/Crud/import-csv', contactsUpload, async (req, res) => {
+router.post('/Crud/import-csv', requireRecordCreator, contactsUpload, async (req, res) => {
   try {
     if (req.body.sinUtilidad === 'true') {
       const { numObjetivo, nucObjetivo, curso_dc, ano } = req.body;
@@ -1467,7 +1468,7 @@ router.post('/Crud/import-csv', contactsUpload, async (req, res) => {
 });
 
 // Registrar un nuevo estudiante
-router.post("/estudiantes", async (req, res) => {
+router.post("/estudiantes", requireRecordCreator, async (req, res) => {
   const { nombre_alumno, email_alumno, curso_alumno } = req.body;
 
   try {
