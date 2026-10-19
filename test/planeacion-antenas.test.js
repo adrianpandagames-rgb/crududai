@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { summarizeAntennas } from '../public/js/planeacion-antenas.js';
+import { summarizeAntennas, antennaClipboardText } from '../public/js/planeacion-antenas.js';
+
+test('antenna clipboard contains five columns without headings and uses all records for the percentage', () => {
+  assert.equal(antennaClipboardText({
+    coordinates: '29.000000, -110.000000', rows: [1, 2], ubicacion: 'Centro\nNorte', lugar: 'Hermosillo\tSonora',
+  }, 3), '29.000000, -110.000000\t2\t66.67%\tCentro Norte\tHermosillo Sonora');
+  assert.equal(antennaClipboardText({ coordinates: '', rows: [], ubicacion: '', lugar: '' }, 0), '\t0\t0.00%\t\t');
+});
 
 test('antenna frequency counts repeated records across azimuths and keeps different antennas separate', () => {
   const groups = summarizeAntennas({

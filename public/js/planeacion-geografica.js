@@ -1,8 +1,28 @@
 import { coverageSector } from './planeacion-geometry.js';
-import { summarizeAntennas } from './planeacion-antenas.js';
+import { summarizeAntennas, antennaClipboardText } from './planeacion-antenas.js';
 
 const byId = (id) => document.getElementById(id);
 const status = byId('planningStatus');
+async function copyAntenna(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return;
+  } catch {
+    const input = document.createElement('textarea');
+    input.value = text;
+    input.style.position = 'fixed';
+    input.style.opacity = '0';
+    (document.fullscreenElement || document.body).append(input);
+    const previousFocus = document.activeElement;
+    try {
+      input.select();
+      if (!document.execCommand('copy')) throw new Error('No fue posible copiar la antena.');
+    } finally {
+      input.remove();
+      previousFocus?.focus({ preventScroll: true });
+    }
+  }
+}
 function message(text, error = false) {
   status.textContent = text;
   status.className = 'alert ' + (error ? 'alert-danger' : 'alert-info');
@@ -92,6 +112,8 @@ if (!window.L) {
       coordinates.textContent = group.coordinates;
       button.append(title, location, coordinates);
       button.addEventListener('click', () => {
+        copyAntenna(antennaClipboardText(group, data.rows.length))
+          .catch(() => message('No fue posible copiar la antena al portapapeles. Intenta de nuevo.', true));
         if (!radius.reportValidity()) return;
         selectedRows.clear();
         group.points.forEach((point) => selectedRows.add(point.row));

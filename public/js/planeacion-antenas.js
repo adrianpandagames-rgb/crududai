@@ -1,3 +1,10 @@
+export function antennaClipboardText(group, totalRecords) {
+  const percentage = totalRecords > 0 ? group.rows.length / totalRecords * 100 : 0;
+  return [group.coordinates, group.rows.length, `${percentage.toFixed(2)}%`, group.ubicacion, group.lugar]
+    .map((value) => String(value ?? '').replace(/[\t\r\n]+/g, ' '))
+    .join('\t');
+}
+
 export function summarizeAntennas(data) {
   const headers = data.headers.map((value) => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase());
   const column = (pattern) => headers.findIndex((header) => pattern.test(header));
