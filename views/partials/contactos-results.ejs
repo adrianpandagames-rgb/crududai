@@ -3,11 +3,11 @@
     <thead>
       <tr>
         <th style="width: 5%;">#</th>
-        <th style="width: 20%;">Objetivo</th>
-        <th style="width: 25%;">Contactos</th>
-        <th style="width: 12%;">NUC</th>
-        <th>Delito</th>
-        <th style="width: 11%;">Año</th>
+        <th style="width: 18%;">Objetivo</th>
+        <th style="width: 20%;">Contactos</th>
+        <th style="width: 9%;">NUC</th>
+        <th style="width: 20%;">Delito</th>
+        <th style="width: 8%;">Año</th>
         <th style="width: 12%;">Tipo</th>
         <% if (typeof currentUser !== 'undefined' && currentUser.canEditRecords) { %>
           <th>Acción</th>
@@ -27,7 +27,17 @@
           <td><%= objetivo.numObjetivo %></td>
           <td><%= objetivo.contacto %></td>
           <td><%= objetivo.nuc %></td>
-          <td><%= objetivo.delito || '—' %></td>
+          <td>
+            <% const delito = String(objetivo.delito || '').trim(); %>
+            <% if (delito) { %>
+              <details class="delito-details">
+                <summary aria-label="Mostrar u ocultar delito completo"><span class="delito-preview"><%= delito.split(/\s+/)[0] %><%= /\s/.test(delito) ? '…' : '' %></span></summary>
+                <div class="delito-completo"><%= delito %></div>
+              </details>
+            <% } else { %>
+              —
+            <% } %>
+          </td>
           <td><%= objetivo.ano %></td>
           <td><%= objetivo.tipo %></td>
           <% if (typeof currentUser !== 'undefined' && currentUser.canEditRecords) { %>

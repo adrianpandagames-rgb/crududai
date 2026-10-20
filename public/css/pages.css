@@ -70,3 +70,25 @@
 .ruta-delete-modal { width: min(440px, calc(100% - 2rem)); padding: 1.5rem; border: 0; border-radius: 12px; box-shadow: 0 12px 40px rgba(0, 0, 0, .25); }
 .ruta-delete-modal::backdrop { background: rgba(0, 0, 0, .55); }
 .ruta-delete-modal p { overflow-wrap: anywhere; }
+.contactos-results-table .delito-details {
+  max-width: 16rem;
+}
+
+.contactos-results-table .delito-details summary {
+  cursor: pointer;
+}
+
+.contactos-results-table .delito-preview {
+  display: inline-block;
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.contactos-results-table .delito-completo {
+  margin-top: .5rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
