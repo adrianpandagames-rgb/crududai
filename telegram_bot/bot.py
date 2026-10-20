@@ -7,7 +7,7 @@ from .api import create_client, search_api
 from .line_results import send_line_results
 from .errors import api_error_details
 from .command_aliases import line_alias_handler
-from .core import PAGE_SIZE, allowed_user_ids, can_query, format_row, query_for
+from .core import PAGE_SIZE, can_query, format_row, query_for
 from .coverage import coverage_parameters, coverage_image, send_coverage, coverage_geocoding
 
 HELP = ('Consultas disponibles:\n'
@@ -39,10 +39,6 @@ def main():
     token = os.getenv('TELEGRAM_BOT_TOKEN', '').strip()
     if not token:
         raise SystemExit('Configura TELEGRAM_BOT_TOKEN en .env antes de iniciar el bot.')
-    try:
-        allowed_ids = allowed_user_ids(os.getenv('TELEGRAM_ALLOWED_USER_IDS', ''))
-    except ValueError as error:
-        raise SystemExit(str(error)) from None
     logging.basicConfig(level=logging.WARNING, format='%(levelname)s %(name)s: %(message)s')
     last_query = {}
     try:
@@ -56,7 +52,7 @@ def main():
         if update.effective_chat.type != 'private':
             await update.effective_message.reply_text('Utiliza el bot en un chat privado.')
             return False
-        if not can_query(update.effective_chat.type, update.effective_user.id, allowed_ids):
+        if not can_query(update.effective_chat.type, update.effective_user.id, None):
             await update.effective_message.reply_text('No tienes autorización para consultar. Solicita acceso al administrador.')
             return False
         return True

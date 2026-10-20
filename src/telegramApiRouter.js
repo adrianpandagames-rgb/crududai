@@ -4,6 +4,7 @@ import { parseSearchCoordinates } from './coordinateSearch.js';
 import { generateAntennaMap, validateAntennaMap } from './antenaMapService.js';
 import { createCoverageGeocoder } from './telegramGeocodingService.js';
 import { buildAuditDetails } from './auditDetails.js';
+import { telegramIdHash } from './telegramIdCrypto.js';
 
 const PAGE_SIZE = 5;
 
@@ -57,31 +58,35 @@ export function createTelegramApiRouter(pool, config = process.env, mapRenderer 
     const expected = `Bearer ${secret}`;
     const digest = value => crypto.createHash('sha256').update(value).digest();
     if (!crypto.timingSafeEqual(digest(provided), digest(expected))) return res.status(401).json({ error: 'Credencial inválida.' });
-    const ids = (config.TELEGRAM_ALLOWED_USER_IDS || '').split(',').map(id => id.trim()).filter(id => /^[1-9]\d*$/.test(id));
     const userId = req.get('X-Telegram-User-Id');
-    if (!userId || !ids.includes(userId)) return res.status(403).json({ error: 'Usuario no autorizado.' });
-    // Only attribute activity after validating both the bot credential and user.
-    req.auditTelegram = true;
-    const requestPath = `${req.baseUrl}${req.path}`;
-    const command = req.path.replace(/^\//, '');
-    res.on('finish', () => {
-      req.app.locals.writeAuditLog?.({
-        userId: null,
-        userEmail: `Telegram ID ${userId}`,
-        action: 'SEARCH',
-        requestPath,
-        statusCode: res.statusCode,
-        ipAddress: req.ip,
-        details: {
-          ...(buildAuditDetails(req) || {}),
-          origen: 'Telegram',
-          telegram_user_id: userId,
-          comando: command,
-          metodo: req.method,
-        },
-      });
-    });
-    next();
+    if (!userId || !/^[1-9]\d{0,19}$/.test(userId)) return res.status(403).json({ error: 'Usuario no autorizado.' });
+    pool.execute('SELECT id FROM users WHERE telegram_id_hash = ? AND is_active = 1 LIMIT 1', [telegramIdHash(userId, config)])
+      .then(([rows]) => {
+        if (rows.length !== 1) return res.status(403).json({ error: 'Usuario no autorizado.' });
+        // Only attribute activity after validating both the bot credential and linked active user.
+        req.auditTelegram = true;
+        const requestPath = `${req.baseUrl}${req.path}`;
+        const command = req.path.replace(/^\//, '');
+        res.on('finish', () => {
+          req.app.locals.writeAuditLog?.({
+            userId: null,
+            userEmail: `Telegram ID ${userId}`,
+            action: 'SEARCH',
+            requestPath,
+            statusCode: res.statusCode,
+            ipAddress: req.ip,
+            details: {
+              ...(buildAuditDetails(req) || {}),
+              origen: 'Telegram',
+              telegram_user_id: userId,
+              comando: command,
+              metodo: req.method,
+            },
+          });
+        });
+        return next();
+      })
+      .catch(() => res.status(503).json({ error: 'No fue posible validar el usuario.' }));
   });
   let rendering = false;
   router.post('/cobertura/ubicacion', express.json({ limit: '4kb' }), async (req, res) => {

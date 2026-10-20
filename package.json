@@ -16,6 +16,7 @@
     "migrate:user-status": "node scripts/add-user-status.js",
     "migrate:initial-admin": "node scripts/add-initial-admin.js",
     "migrate:must-change-password": "node scripts/add-must-change-password.js",
+    "migrate:telegram-users": "node scripts/add-telegram-user-ids.js",
     "migrate:audit-logs": "node scripts/add-audit-logs.js",
     "migrate:ruta-files": "node scripts/add-ruta-files.js",
     "migrate:ubicaciones": "node scripts/normalize-ubicaciones.js",

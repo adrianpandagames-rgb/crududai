@@ -150,7 +150,14 @@ Antes de ejecutar la aplicación asegúrate de tener instalado:
    npm run migrate:user-status
    npm run migrate:initial-admin
    npm run migrate:must-change-password
+   npm run migrate:telegram-users
    ```
+
+   En Hostinger, ejecuta `npm run migrate:telegram-users` desde la terminal del proyecto después de actualizar el código. También puedes seleccionar la base de datos correcta y ejecutar una sola vez el contenido de `BD/telegram_users.sql` en el cliente MySQL o phpMyAdmin.
+
+   Genera una clave con `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"` y configúrala como `TELEGRAM_ID_ENCRYPTION_KEY` en las variables de entorno de Hostinger. Conserva una copia segura: perder esta clave impide descifrar los IDs. Usa la misma clave en cada instancia conectada a esa base de datos y reinicia Node y el bot después del despliegue.
+
+   En **Administración de usuarios**, captura para cada correo el ID que la persona obtiene con `/miid` y pulsa **Guardar ID**. Puedes modificarlo o borrar el campo para desvincularlo. Los IDs que ya estaban en `TELEGRAM_ALLOWED_USER_IDS` no se pueden asignar automáticamente porque no indican el correo correspondiente; vincúlalos manualmente. La lista deja de controlar el acceso.
 
 ## Configuración por entorno
 
