@@ -84,7 +84,7 @@ export const agregarEstudiante = async ({
 };
 
 // Obtener o crear objetivo y retornar idObjetivo y tipo real
-export const obtenerOCrearObjetivo = async (numObjetivo, nuc, tipo, ano) => {
+export const obtenerOCrearObjetivo = async (numObjetivo, nuc, tipo, ano, delito = '') => {
   try {
     const normalizedTipo = String(tipo || "").trim();
     const isSolucion = normalizedTipo.toLowerCase() === "solución" || normalizedTipo.toLowerCase() === "solucion";
@@ -103,8 +103,8 @@ export const obtenerOCrearObjetivo = async (numObjetivo, nuc, tipo, ano) => {
     }
 
     const [result] = await pool.query(
-      "INSERT INTO objetivo (numObjetivo, nuc, tipo, ano) VALUES (?, ?, ?, ?)",
-      [numObjetivo, nuc, tipoToInsert, ano]
+      "INSERT INTO objetivo (numObjetivo, nuc, tipo, ano, delito) VALUES (?, ?, ?, ?, ?)",
+      [numObjetivo, nuc, tipoToInsert, ano, delito || null]
     );
 
     return { idObjetivo: result.insertId, tipo: tipoToInsert };
@@ -140,13 +140,13 @@ export const obtenerOCrearObjetivoImei = async (numObjetivo, nuc, tipo, ano) => 
 };
 
 // Agregar contacto
-export const registrarLineaSinUtilidad = async (numObjetivo, nuc, tipo, ano) => {
+export const registrarLineaSinUtilidad = async (numObjetivo, nuc, tipo, ano, delito = '') => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
     const [result] = await connection.query(
-      'INSERT INTO objetivo (numObjetivo, nuc, tipo, ano) VALUES (?, ?, ?, ?)',
-      [numObjetivo, nuc, tipo, ano]
+      'INSERT INTO objetivo (numObjetivo, nuc, tipo, ano, delito) VALUES (?, ?, ?, ?, ?)',
+      [numObjetivo, nuc, tipo, ano, delito || null]
     );
     await connection.query(
       'INSERT INTO contactos (contacto, idObjetivo) VALUES (?, ?)',
@@ -299,7 +299,7 @@ export const listarImeis = async (searchTerm = "", page = 1, pageSize = 10) => {
 
 export const obtenerObjetivoPorId = async (idObjetivo) => {
   const [rows] = await pool.query(
-    `SELECT o.idObjetivo, o.numObjetivo, o.nuc, o.tipo, o.ano,
+    `SELECT o.idObjetivo, o.numObjetivo, o.nuc, o.tipo, o.ano, o.delito,
             GROUP_CONCAT(c.contacto ORDER BY c.contacto SEPARATOR ', ') AS contactos
      FROM objetivo o
      LEFT JOIN contactos c ON c.idObjetivo = o.idObjetivo
@@ -310,12 +310,12 @@ export const obtenerObjetivoPorId = async (idObjetivo) => {
   return rows[0] || null;
 };
 
-export const actualizarObjetivo = async (idObjetivo, { numObjetivo, nuc, tipo, ano }) => {
+export const actualizarObjetivo = async (idObjetivo, { numObjetivo, nuc, tipo, ano, delito = '' }) => {
   const [existingRows] = await pool.query('SELECT idObjetivo FROM objetivo WHERE idObjetivo = ?', [idObjetivo]);
   if (existingRows.length !== 1) return false;
   const [result] = await pool.execute(
-    'UPDATE objetivo SET numObjetivo = ?, nuc = ?, tipo = ?, ano = ? WHERE idObjetivo = ?',
-    [numObjetivo, nuc, tipo, ano, idObjetivo],
+    'UPDATE objetivo SET numObjetivo = ?, nuc = ?, tipo = ?, ano = ?, delito = ? WHERE idObjetivo = ?',
+    [numObjetivo, nuc, tipo, ano, delito || null, idObjetivo],
   );
   return result.affectedRows >= 0;
 };
@@ -586,7 +586,7 @@ export const listarEstudiantes = async (searchTerm = "", page = 1, pageSize = 10
       if (colonTerms.length === 2) {
         const [termA, termB] = colonTerms;
         const [rows] = await pool.query(
-          `SELECT objetivo.idObjetivo, objetivo.numObjetivo, contactos.contacto, objetivo.nuc, objetivo.tipo, objetivo.ano
+          `SELECT objetivo.idObjetivo, objetivo.numObjetivo, contactos.contacto, objetivo.nuc, objetivo.tipo, objetivo.ano, objetivo.delito
            FROM objetivo
            INNER JOIN contactos ON objetivo.idObjetivo = contactos.idObjetivo
            WHERE (objetivo.numObjetivo = ? AND contactos.contacto LIKE ?)
@@ -607,18 +607,18 @@ export const listarEstudiantes = async (searchTerm = "", page = 1, pageSize = 10
 
       const term = `%${normalizedSearchTerm}%`;
       const [rows] = await pool.query(
-        "SELECT objetivo.idObjetivo, objetivo.numObjetivo, contactos.contacto, objetivo.nuc, objetivo.tipo, objetivo.ano FROM objetivo INNER JOIN contactos ON objetivo.idObjetivo = contactos.idObjetivo WHERE CONCAT_WS('|', objetivo.numObjetivo, contactos.contacto, objetivo.nuc, objetivo.tipo, objetivo.ano) LIKE ? LIMIT ? OFFSET ?",
+        "SELECT objetivo.idObjetivo, objetivo.numObjetivo, contactos.contacto, objetivo.nuc, objetivo.tipo, objetivo.ano, objetivo.delito FROM objetivo INNER JOIN contactos ON objetivo.idObjetivo = contactos.idObjetivo WHERE CONCAT_WS('|', objetivo.numObjetivo, contactos.contacto, objetivo.nuc, objetivo.tipo, objetivo.ano, objetivo.delito) LIKE ? LIMIT ? OFFSET ?",
         [term, pageSize, offset]
       );
       const [countRows] = await pool.query(
-        "SELECT COUNT(*) AS count FROM objetivo INNER JOIN contactos ON objetivo.idObjetivo = contactos.idObjetivo WHERE CONCAT_WS('|', objetivo.numObjetivo, contactos.contacto, objetivo.nuc, objetivo.tipo, objetivo.ano) LIKE ?",
+        "SELECT COUNT(*) AS count FROM objetivo INNER JOIN contactos ON objetivo.idObjetivo = contactos.idObjetivo WHERE CONCAT_WS('|', objetivo.numObjetivo, contactos.contacto, objetivo.nuc, objetivo.tipo, objetivo.ano, objetivo.delito) LIKE ?",
         [term]
       );
       return { rows, total: countRows[0].count };
     }
 
     const [rows] = await pool.query(
-      'SELECT objetivo.idObjetivo, objetivo.numObjetivo, contactos.contacto, objetivo.nuc, objetivo.tipo, objetivo.ano FROM objetivo INNER JOIN contactos ON objetivo.idObjetivo = contactos.idObjetivo LIMIT ? OFFSET ?',
+      'SELECT objetivo.idObjetivo, objetivo.numObjetivo, contactos.contacto, objetivo.nuc, objetivo.tipo, objetivo.ano, objetivo.delito FROM objetivo INNER JOIN contactos ON objetivo.idObjetivo = contactos.idObjetivo LIMIT ? OFFSET ?',
       [pageSize, offset]
     );
     const [countRows] = await pool.query(

@@ -9,6 +9,7 @@
     "test": "node --test",
     "dev": "nodemon app.js",
     "start": "node app.js",
+    "migrate:lineas-delito": "node scripts/add-lineas-delito.js",
     "migrate:contactos-text": "node scripts/add-contactos-text.js",
     "migrate:passwords": "node scripts/hash-user-passwords.js",
     "migrate:user-roles": "node scripts/add-user-roles.js",

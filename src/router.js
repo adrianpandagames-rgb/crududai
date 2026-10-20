@@ -578,10 +578,11 @@ router.post('/lineas/editar/:id', requireRecordEditor, async (req, res) => {
     idObjetivo,
     numObjetivo: String(req.body.numObjetivo || '').trim(),
     nuc: String(req.body.nuc || '').trim(),
+    delito: String(req.body.delito || '').trim(),
     tipo: String(req.body.tipo || '').trim(),
     ano: String(req.body.ano || '').trim(),
   };
-  if (!Number.isSafeInteger(idObjetivo) || idObjetivo < 1 || !objetivo.numObjetivo || !objetivo.nuc || !objetivo.tipo || !/^\d{4}$/.test(objetivo.ano)) {
+  if (!Number.isSafeInteger(idObjetivo) || idObjetivo < 1 || !objetivo.numObjetivo || !objetivo.nuc || !objetivo.tipo || objetivo.delito.length > 255 || !/^\d{4}$/.test(objetivo.ano)) {
     return res.status(400).render('pages/editar-linea', { objetivo, error: 'Completa todos los campos con valores válidos.' });
   }
   try {
@@ -1275,6 +1276,10 @@ const contactsUpload = (req, res, next) => {
 
 router.post('/Crud/import-csv', requireRecordCreator, contactsUpload, async (req, res) => {
   try {
+    const delito = String(req.body.delito || '').trim();
+    if (delito.length > 255) {
+      return res.status(400).json({ status: 'error', message: 'Delito debe tener como máximo 255 caracteres.' });
+    }
     if (req.body.sinUtilidad === 'true') {
       const { numObjetivo, nucObjetivo, curso_dc, ano } = req.body;
       if (!numObjetivo?.trim() || !nucObjetivo?.trim() || !curso_dc || !ano) {
@@ -1283,7 +1288,7 @@ router.post('/Crud/import-csv', requireRecordCreator, contactsUpload, async (req
       if (req.query.validateOnly === 'true' || req.body.validateOnly === 'true') {
         return res.json({ status: 'ready' });
       }
-      await registrarLineaSinUtilidad(numObjetivo.trim(), nucObjetivo.trim(), curso_dc, ano);
+      await registrarLineaSinUtilidad(numObjetivo.trim(), nucObjetivo.trim(), curso_dc, ano, delito);
       const message = 'Línea registrada con contacto sin utilidad.';
       return res.json({
         status: 'success',
@@ -1400,7 +1405,7 @@ router.post('/Crud/import-csv', requireRecordCreator, contactsUpload, async (req
     }
 
     // Obtener o crear objetivo con el tipo correcto
-    const { idObjetivo, tipo: objetivoTipo } = await obtenerOCrearObjetivo(numObjetivo, nucObjetivo, cursoToUse, ano);
+    const { idObjetivo, tipo: objetivoTipo } = await obtenerOCrearObjetivo(numObjetivo, nucObjetivo, cursoToUse, ano, delito);
 
     let insertCount = 0;
     let exactDuplicateCount = 0;

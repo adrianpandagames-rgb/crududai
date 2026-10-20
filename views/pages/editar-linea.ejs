@@ -21,6 +21,10 @@
                 <input id="nuc" name="nuc" class="form-control" value="<%= objetivo.nuc %>" required>
               </div>
               <div class="mb-3">
+                <label for="delito" class="form-label">Delito</label>
+                <input type="text" id="delito" name="delito" class="form-control" maxlength="255" value="<%= objetivo.delito || '' %>" placeholder="Ingrese el delito (opcional)">
+              </div>
+              <div class="mb-3">
                 <label for="ano" class="form-label">Año</label>
                 <input id="ano" name="ano" type="number" min="1900" max="2200" class="form-control" value="<%= objetivo.ano %>" required>
               </div>

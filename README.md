@@ -1,5 +1,28 @@
 # CRUD UDAI
 
+## Delito en Líneas
+
+El campo opcional Delito se captura al registrar una línea (con CSV o sin
+utilidad), se modifica desde Editar y aparece en la tabla y la búsqueda.
+Cada registro de objetivo conserva su propio delito; no se propaga a otros
+registros con el mismo NUC.
+
+Después de subir el código al VPS, desde la carpeta del proyecto ejecuta:
+
+```sh
+npm run migrate:lineas-delito
+pm2 restart crududai --env production
+```
+
+La migración usa las variables DB_HOST, DB_PORT, DB_USER, DB_PASSWORD y DB_NAME
+del entorno o del archivo .env. La cuenta necesita permiso ALTER sobre objetivo.
+Puede repetirse: si delito ya existe, no modifica la tabla. Los asuntos
+existentes conservan sus datos y quedan sin delito hasta que se editen.
+Ejecuta la migración antes de reiniciar con el código actualizado.
+Como alternativa para una ejecución manual única en MySQL, selecciona la base
+correcta y ejecuta el contenido de BD/lineas_delito.sql; no es necesario usar
+ambos métodos.
+
 Para publicar desde GitHub en GoDaddy, consulta [GODADDY.md](GODADDY.md).
 
 ## Entrecalles en Georreferenciación
