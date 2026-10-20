@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { notifyUser } from './src/userNotifications.js';
+import { restartTelegramBot } from './src/telegramBotRestart.js';
 import crypto from 'crypto';
 import fs from 'fs';
 import https from 'https';
@@ -681,7 +682,18 @@ app.post('/usuarios/:id/rol', requireAdmin, async (req, res, next) => {
 
     const [result] = await pool.execute('UPDATE users SET is_admin = ?, role = ? WHERE id = ?', [isAdmin ? 1 : 0, role, userId]);
     if (result.affectedRows !== 1) return res.status(404).redirect('/usuarios?error=Usuario%20no%20encontrado.');
-    return res.redirect('/usuarios?message=Rol%20actualizado.');
+    try {
+      await restartTelegramBot();
+    } catch (restartError) {
+      console.error('No se pudo reiniciar el bot de Telegram:', restartError.message);
+      return renderUsersPage(res, {
+        message: 'Rol actualizado.',
+        error: 'El rol se guardó, pero no se pudo reiniciar el bot. Revisa el proceso de Telegram en PM2.',
+      });
+    }
+    res.locals.toastMessage = 'Bot actualizado';
+    res.locals.toastTitle = 'Telegram';
+    return renderUsersPage(res, { message: 'Rol actualizado.' });
   } catch (error) {
     return next(error);
   }
