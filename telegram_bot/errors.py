@@ -7,7 +7,7 @@ def api_error_details(error):
         messages = {
             400: 'La API rechazó el formato de la consulta. Revisa /ayuda.',
             401: 'La API rechazó la credencial del bot. Revisa TELEGRAM_API_TOKEN y reinicia Node y el bot.',
-            403: 'La API no autoriza tu ID. Revisa TELEGRAM_ALLOWED_USER_IDS y reinicia Node y el bot.',
+            403: 'La API no autoriza tu ID. Solicita al administrador que lo vincule a tu usuario.',
             404: 'La ruta de consulta no está disponible. Revisa la URL de la API y reinicia Node con la versión actual.',
             503: 'El servicio de consultas no está disponible. Revisa la configuración de la API y la conexión MySQL de Node.',
         }

@@ -30,7 +30,7 @@ Desde la raíz del proyecto, inicia Node con `npm run dev`. En otra terminal:
 Configura el `.env` existente:
 
 - `TELEGRAM_BOT_TOKEN`: token de BotFather.
-- `TELEGRAM_ALLOWED_USER_IDS`: IDs numéricos autorizados separados por comas. Reinicia Python y Node al cambiar la lista; ambos la comprueban. El bot no inicia con la lista vacía.
+- Los permisos se administran en **Administración de usuarios**, vinculando un ID de Telegram a cada cuenta activa. MySQL valida el vínculo en cada consulta.
 - `TELEGRAM_API_TOKEN`: credencial aleatoria de al menos 32 caracteres entre Python y Node, independiente de BotFather. Se ha generado localmente si faltaba; no la publiques.
 - `TELEGRAM_API_BASE_URL`: por defecto `https://localhost:3443`. Con Docker y puerto publicado 3444 usa `https://localhost:3444`.
 - `TELEGRAM_API_CA_CERT`: certificado público de confianza, por ejemplo `certs/runtime-server.crt`; para una CA pública puede quedar vacío. No uses la clave privada. Se verifica TLS y no se siguen redirecciones.
@@ -53,7 +53,7 @@ Cada resultado de `/linea` indica el n?mero consultado, su rol en ese registro (
 
 Las solicitudes llevan `Authorization: Bearer <TELEGRAM_API_TOKEN>` y `X-Telegram-User-Id`. Los parámetros son `q` y `page`. JSON de respuesta: `rows`, `page`, `has_more`. Hay cinco resultados por página; añade `--pagina 2` para continuar. No admite búsquedas vacías ni modificaciones. Los endpoints usan su propia autenticación, sin cambiar la de las vistas web.
 
-Cada ID autorizado puede consultar los registros compartidos del CRUD; la lista es independiente de las cuentas web. Solo admite chats privados. Los resultados se envían a Telegram. `protect_content` limita el reenvío, pero no impide copiar información.
+Cada ID vinculado a una cuenta activa puede consultar los registros compartidos del CRUD. El ID se guarda cifrado con AES-256-GCM y un HMAC permite validarlo sin almacenar el valor en texto claro. Conserva TELEGRAM_ID_ENCRYPTION_KEY y una copia de seguridad: perder la clave impide descifrar los IDs. Solo admite chats privados. Los resultados se envían a Telegram. `protect_content` limita el reenvío, pero no impide copiar información.
 
 Node sigue necesitando una conexión MySQL válida. Si sus credenciales son incorrectas, la API devuelve 503 y hay que corregirlas. Las antiguas variables `TELEGRAM_DB_USER` y `TELEGRAM_DB_PASSWORD` ya no se utilizan.
 

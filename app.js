@@ -24,6 +24,7 @@ import { auditActivity } from './src/auditMiddleware.js';
 import { presentAuditEntry } from './src/auditPresentation.js';
 import { requireSameOrigin } from './src/requestSecurity.js';
 import { createTelegramApiRouter } from './src/telegramApiRouter.js';
+import { decryptTelegramId, encryptTelegramId } from './src/telegramIdCrypto.js';
 import { createPlaneacionRouter } from './src/planeacionRouter.js';
 import { getGoogleGeocodingQuota, resetGoogleGeocodingQuota } from './src/googleGeocodingQuota.js';
 
@@ -457,7 +458,11 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const generateSecurePassword = () => crypto.randomBytes(24).toString('base64url');
 
 const renderUsersPage = async (res, { message = null, error = null } = {}) => {
-  const [users] = await pool.execute('SELECT id, email, is_admin, role, is_active, is_initial_admin FROM users ORDER BY email ASC');
+  const [users] = await pool.execute('SELECT id, email, is_admin, role, is_active, is_initial_admin, telegram_id_encrypted FROM users ORDER BY email ASC');
+  for (const user of users) {
+    user.telegramId = decryptTelegramId(user.telegram_id_encrypted);
+    delete user.telegram_id_encrypted;
+  }
   const googleGeocodingQuota = await getGoogleGeocodingQuota(pool);
   return res.render('pages/usuarios', { users, message, error, googleGeocodingQuota });
 };
@@ -678,6 +683,28 @@ app.post('/usuarios/:id/rol', requireAdmin, async (req, res, next) => {
     if (result.affectedRows !== 1) return res.status(404).redirect('/usuarios?error=Usuario%20no%20encontrado.');
     return res.redirect('/usuarios?message=Rol%20actualizado.');
   } catch (error) {
+    return next(error);
+  }
+});
+
+app.post('/usuarios/:id/telegram', requireAdmin, async (req, res, next) => {
+  const userId = Number.parseInt(req.params.id, 10);
+  const telegramId = String(req.body.telegramId || '').trim();
+  if (!Number.isSafeInteger(userId) || userId < 1) return res.status(400).redirect('/usuarios?error=Usuario%20inv%C3%A1lido.');
+  if (telegramId && !/^[1-9]\d{0,19}$/.test(telegramId)) return res.redirect('/usuarios?error=El%20ID%20de%20Telegram%20debe%20ser%20num%C3%A9rico.');
+
+  try {
+    const [users] = await pool.execute('SELECT id FROM users WHERE id = ?', [userId]);
+    if (users.length !== 1) return res.status(404).redirect('/usuarios?error=Usuario%20no%20encontrado.');
+    if (!telegramId) {
+      await pool.execute('UPDATE users SET telegram_id_encrypted = NULL, telegram_id_hash = NULL WHERE id = ?', [userId]);
+    } else {
+      const { encrypted, hash } = encryptTelegramId(telegramId);
+      await pool.execute('UPDATE users SET telegram_id_encrypted = ?, telegram_id_hash = ? WHERE id = ?', [encrypted, hash, userId]);
+    }
+    return res.redirect(`/usuarios?message=${encodeURIComponent(telegramId ? 'ID de Telegram actualizado.' : 'ID de Telegram desvinculado.')}`);
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') return res.redirect('/usuarios?error=Ese%20ID%20de%20Telegram%20ya%20est%C3%A1%20vinculado%20a%20otro%20usuario.');
     return next(error);
   }
 });

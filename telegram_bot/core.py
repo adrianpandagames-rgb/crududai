@@ -5,7 +5,7 @@ PAGE_SIZE = 5
 
 
 def can_query(chat_type, user_id, allowed_ids):
-    return chat_type == 'private' and user_id in allowed_ids
+    return chat_type == 'private' and (allowed_ids is None or user_id in allowed_ids)
 
 
 def allowed_user_ids(value):
