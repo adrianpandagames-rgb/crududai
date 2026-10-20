@@ -72,6 +72,8 @@ def format_row(command, row):
         role = 'Objetivo y contacto' if objetivo and contacto else 'Objetivo' if objetivo else 'Contacto' if contacto else 'Sin clasificar'
         result = (f"Número consultado: {value('numeroConsultado')}\nRol: {role}\n"
                   f"Línea objetivo: {value('numObjetivo')}\nNUC: {value('nuc')}\nTipo: {value('tipo')}\nAño: {value('ano')}")
+    if command == 'linea':
+        result += f"\nDelito: {value('delito')}"
     if command == 'imei':
         result = f"IMEI: {value('imei')}\nMarca: {value('brand_name')}\nModelo: {value('modelo')}\n" + result
     return result

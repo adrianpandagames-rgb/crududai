@@ -37,6 +37,7 @@ test('queries validate input and bind values rather than interpolating SQL', () 
   const line = buildTelegramQuery('linea', '6621234567', 2);
   assert.deepEqual(line.params, Array(5).fill('6621234567'));
   assert.ok(line.sql.includes('AS numeroConsultado'));
+  assert.ok(line.sql.includes('o.delito'));
   assert.ok(line.sql.includes('AS esObjetivo'));
   assert.ok(line.sql.includes('AS esContacto'));
   assert.ok(!line.sql.includes('LIMIT'));

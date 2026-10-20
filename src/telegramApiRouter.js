@@ -17,7 +17,7 @@ export function buildTelegramQuery(command, term, page) {
   let params;
   if (command === 'linea') {
     if (!/^\+?\d{7,15}$/.test(term)) throw new Error('Número de línea inválido.');
-    sql = `SELECT o.idObjetivo, o.numObjetivo, o.nuc, o.tipo, o.ano,
+    sql = `SELECT o.idObjetivo, o.numObjetivo, o.nuc, o.tipo, o.ano, o.delito,
       ? AS numeroConsultado, (o.numObjetivo = ?) AS esObjetivo,
       EXISTS (SELECT 1 FROM contactos c WHERE c.idObjetivo = o.idObjetivo AND c.contacto = ?) AS esContacto
       FROM objetivo o

@@ -3,6 +3,15 @@ from .core import allowed_user_ids, can_query, format_row, query_for
 
 
 class QueryTests(unittest.TestCase):
+    def test_line_results_include_full_delito_with_or_without_role(self):
+        for role in [{}, {'numeroConsultado': '6621234567', 'esContacto': 1}]:
+            text = format_row('linea', {'numObjetivo': '6627654321', 'delito': 'Robo con violencia', **role})
+            self.assertIn('Delito: Robo con violencia', text)
+
+    def test_line_results_allow_missing_delito(self):
+        for row in [{}, {'delito': None}, {'delito': ''}]:
+            self.assertIn('Delito:', format_row('linea', row))
+
     def test_line_role_describes_the_requested_number_per_record(self):
         for objective, contact, expected in [(1, 0, 'Objetivo'), (0, 1, 'Contacto'), (1, 1, 'Objetivo y contacto')]:
             text = format_row('linea', {'numeroConsultado': '6621234567', 'numObjetivo': '6627654321', 'esObjetivo': objective, 'esContacto': contact})
