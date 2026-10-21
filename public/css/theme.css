@@ -58,11 +58,11 @@ html[data-theme="dark"] .csv-drop-zone.is-dragging {
   background: #243d59;
   border-color: #8dc5ff;
 }
-html[data-theme="dark"] .csv-drop-zone input[type="file"]::file-selector-button {
+html[data-theme="dark"] input[type="file"]::file-selector-button {
   background: #303e51;
   color: var(--dark-text);
 }
-html[data-theme="dark"] .csv-drop-zone input[type="file"]:hover:not(:disabled):not([readonly])::file-selector-button {
+html[data-theme="dark"] input[type="file"]:hover:not(:disabled):not([readonly])::file-selector-button {
   background: #435268;
 }
 html[data-theme="dark"] a:not(.btn):not(.menu-item):not(.logo):not(.page-link) { color: #8dc5ff; }
