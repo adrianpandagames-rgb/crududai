@@ -49,6 +49,22 @@ html[data-theme="dark"] :is(h1, h2, h3, h4, h5, h6, label, .logo-text,
 }
 html[data-theme="dark"] :is(.subtitle, .text-muted, .text-secondary, .form-text) { color: var(--dark-muted) !important; }
 html[data-theme="dark"] .title { color: #8cdb81; }
+html[data-theme="dark"] .csv-drop-zone {
+  background: var(--dark-bg);
+  color: var(--dark-text);
+  border-color: var(--dark-border);
+}
+html[data-theme="dark"] .csv-drop-zone.is-dragging {
+  background: #243d59;
+  border-color: #8dc5ff;
+}
+html[data-theme="dark"] .csv-drop-zone input[type="file"]::file-selector-button {
+  background: #303e51;
+  color: var(--dark-text);
+}
+html[data-theme="dark"] .csv-drop-zone input[type="file"]:hover:not(:disabled):not([readonly])::file-selector-button {
+  background: #435268;
+}
 html[data-theme="dark"] a:not(.btn):not(.menu-item):not(.logo):not(.page-link) { color: #8dc5ff; }
 html[data-theme="dark"] :is(.form-control, .form-select, .input-group input,
   textarea, select, .input-group-text) {
