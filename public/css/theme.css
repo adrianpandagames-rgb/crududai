@@ -1,0 +1,91 @@
+.theme-toggle {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 1040;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid #b8c5d3;
+  border-radius: 24px;
+  background: #fff;
+  color: #243449;
+  box-shadow: 0 4px 16px #0003;
+  font: 600 14px/1.4 system-ui, sans-serif;
+  cursor: pointer;
+}
+.theme-toggle:focus-visible { outline: 3px solid #429dff; outline-offset: 3px; }
+html[data-theme="dark"] {
+  --dark-bg: #111827;
+  --dark-panel: #1f2937;
+  --dark-text: #e5edf6;
+  --dark-muted: #aebed0;
+  --dark-border: #435268;
+}
+html[data-theme="dark"] body {
+  background: var(--dark-bg) !important;
+  color: var(--dark-text);
+}
+html[data-theme="dark"] :is(.metrics-page, .network-page) {
+  --ink: var(--dark-text);
+  --muted: var(--dark-muted);
+  --line: var(--dark-border);
+  --network-ink: var(--dark-text);
+  --network-muted: var(--dark-muted);
+  --network-line: var(--dark-border);
+}
+html[data-theme="dark"] :is(.header, .header ul, form, .card, .card-header, .card-footer,
+  .custom_table, .login-container, .modal-content, dialog, .dropdown-menu,
+  .metric-card, .chart-panel, .network-shell, .network-panel, .network-scroll,
+  .planning-antennas, .planning-antenna, .planning-table thead, .not-found,
+  .list-group-item, .bg-white, .bg-light, .theme-toggle) {
+  background: var(--dark-panel) !important;
+  color: var(--dark-text);
+  border-color: var(--dark-border) !important;
+  box-shadow: none;
+}
+html[data-theme="dark"] :is(h1, h2, h3, h4, h5, h6, label, .logo-text,
+  .header li a, .header summary.menu-item, .remember-group, .planning-antenna) {
+  color: var(--dark-text);
+}
+html[data-theme="dark"] :is(.subtitle, .text-muted, .text-secondary, .form-text) { color: var(--dark-muted) !important; }
+html[data-theme="dark"] .title { color: #8cdb81; }
+html[data-theme="dark"] a:not(.btn):not(.menu-item):not(.logo):not(.page-link) { color: #8dc5ff; }
+html[data-theme="dark"] :is(.form-control, .form-select, .input-group input,
+  textarea, select, .input-group-text) {
+  background-color: #111c2c;
+  color: var(--dark-text);
+  border-color: var(--dark-border);
+}
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder { color: var(--dark-muted); opacity: 1; }
+html[data-theme="dark"] :is(.form-control, .form-select):disabled { background-color: #303c4e; }
+html[data-theme="dark"] .table {
+  --bs-table-bg: var(--dark-panel);
+  --bs-table-color: var(--dark-text);
+  --bs-table-striped-bg: #263447;
+  --bs-table-striped-color: var(--dark-text);
+  --bs-table-hover-bg: #32465e;
+  --bs-table-hover-color: var(--dark-text);
+  --bs-table-active-bg: #32465e;
+  --bs-table-active-color: var(--dark-text);
+  color: var(--dark-text);
+  border-color: var(--dark-border);
+}
+html[data-theme="dark"] .table-light { --bs-table-bg: #303e51; --bs-table-color: var(--dark-text); }
+html[data-theme="dark"] :is(.page-link, .page-item.disabled .page-link) {
+  background-color: var(--dark-panel);
+  border-color: var(--dark-border);
+  color: #8dc5ff;
+}
+html[data-theme="dark"] .page-item.active .page-link { background: #175caa; color: #fff; }
+html[data-theme="dark"] :is(.header li a:hover, .header summary.menu-item:hover,
+  .planning-antenna:hover, .planning-record:hover > td, .planning-record-selected > td) { background: #32465e !important; color: #fff; }
+html[data-theme="dark"] .header .navicon,
+html[data-theme="dark"] .header .navicon::before,
+html[data-theme="dark"] .header .navicon::after { background: var(--dark-text); }
+html[data-theme="dark"] .header .menu-btn:checked ~ .menu-icon .navicon { background: transparent; }
+html[data-theme="dark"] .donut::after { background: var(--dark-panel); }
+html[data-theme="dark"] .bar-track { background: #354258; }
+html[data-theme="dark"] .btn-outline-secondary { color: #c1cfdf; border-color: #8292a7; }
+html[data-theme="dark"] .btn-close { filter: invert(1) grayscale(1) brightness(2); }
+@media print { .theme-toggle { display: none; } }
