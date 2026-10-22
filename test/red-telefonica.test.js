@@ -31,9 +31,27 @@ test('network marks shared contacts, contacts that are objective lines and the f
   assert.ok(!network.nodes.some((node) => node.label === 'sin utilidad'));
   assert.ok(network.links.some((link) => link.kind === 'linea' && link.source === 'objective:1' && link.target === 'phone:526620000001'));
 
-  const crossingsOnly = buildNetwork(rows, { includeSingles: false });
-  assert.ok(!crossingsOnly.nodes.some((node) => node.id === 'phone:6629999999'));
-  assert.ok(crossingsOnly.nodes.some((node) => node.id === 'phone:6625550000'));
+  assert.ok(!byId.has('phone:6629999999'));
+  assert.ok(!network.links.some((link) => link.target === 'phone:6629999999'));
+});
+
+test('lines without crossings only appear when they are the searched number', () => {
+  const rows = [
+    objective(1, '6620000001', '6625550000'),
+    objective(1, '6620000001', '6629999999'),
+    objective(2, '6620000002', '6625550000'),
+    objective(3, '6620000003', '6627777777'),
+  ];
+  const general = buildNetwork(rows);
+  assert.deepEqual(general.nodes.map((node) => node.id).sort(), ['objective:1', 'objective:2', 'phone:6625550000']);
+
+  const searchedContact = buildNetwork(rows, { focus: ['6629999999'] });
+  assert.ok(searchedContact.nodes.some((node) => node.id === 'phone:6629999999' && node.isFocus));
+  assert.ok(searchedContact.links.some((link) => link.target === 'phone:6629999999'));
+
+  const searchedObjective = buildNetwork(rows, { focus: ['6620000003'] });
+  assert.ok(searchedObjective.nodes.some((node) => node.id === 'objective:3' && node.isFocus));
+  assert.ok(!searchedObjective.nodes.some((node) => node.id === 'phone:6627777777'));
 });
 
 test('focus search reports numbers that are not in any objective', async () => {

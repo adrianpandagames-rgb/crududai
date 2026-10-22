@@ -27,14 +27,11 @@
         </div>
         <button id="networkReset" type="button" class="btn btn-outline-secondary">Red general</button>
         <select id="networkLayout" class="form-select network-layout" aria-label="Acomodo de la red">
+          <option value="auto">Automático</option>
           <option value="breadthfirst">Jerárquica</option>
-          <option value="cose">Orgánica</option>
-          <option value="concentric">Concéntrica</option>
+          <option value="concentric">Anillos</option>
+          <option value="cose">Orgánica (redes chicas)</option>
         </select>
-        <label class="form-check network-check">
-          <input id="networkSingles" class="form-check-input" type="checkbox" />
-          <span class="form-check-label">Contactos sin cruce</span>
-        </label>
         <label class="form-check network-check">
           <input id="networkAuto" class="form-check-input" type="checkbox" checked />
           <span class="form-check-label">Actualizar cada minuto</span>

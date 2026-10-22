@@ -11,9 +11,7 @@ export function createRedTelefonicaRouter(pool) {
   router.get('/datos', async (req, res, next) => {
     try {
       const numero = String(req.query.numero || '').trim();
-      return res.json(numero
-        ? await fetchFocusNetwork(pool, numero)
-        : await fetchGeneralNetwork(pool, { includeSingles: req.query.todos === '1' }));
+      return res.json(numero ? await fetchFocusNetwork(pool, numero) : await fetchGeneralNetwork(pool));
     } catch (error) {
       if (error.status === 400) return res.status(400).json({ error: error.message });
       return next(error);

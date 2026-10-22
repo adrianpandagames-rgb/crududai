@@ -10,7 +10,8 @@ export const searchCandidates = (value) => {
   return [...new Set([digits, digits.slice(-10)])];
 };
 
-export function buildNetwork(rows, { totals = new Map(), includeSingles = true, focus = [] } = {}) {
+// Only lines that cross two objectives are kept, plus whatever the analyst searched for.
+export function buildNetwork(rows, { totals = new Map(), focus = [] } = {}) {
   const objectives = new Map();
   const phones = new Map();
   const links = [];
@@ -52,15 +53,19 @@ export function buildNetwork(rows, { totals = new Map(), includeSingles = true, 
   }
 
   const focusSet = new Set(focus);
-  const keptPhones = [...phones.values()].filter((phone) => includeSingles || phone.objectives.size > 1
-    || phone.ownerObjectives.length > 0 || focusSet.has(phone.number) || focusSet.has(phone.number.slice(-10)));
-  const keptIds = new Set([...objectives.keys(), ...keptPhones.map((phone) => phone.id)]);
+  const isFocused = (number) => focusSet.has(number) || focusSet.has(number.slice(-10));
+  const keptPhones = [...phones.values()].filter((phone) => phone.objectives.size > 1
+    || phone.ownerObjectives.length > 0 || isFocused(phone.number));
+  const keptPhoneIds = new Set(keptPhones.map((phone) => phone.id));
+  const linkedObjectives = new Set(links.filter((link) => keptPhoneIds.has(link.target)).map((link) => link.source));
+  const keptObjectives = [...objectives.values()].filter((objective) => linkedObjectives.has(objective.id) || isFocused(objective.number));
+  const keptIds = new Set([...keptObjectives.map((objective) => objective.id), ...keptPhoneIds]);
 
   const phoneNodes = keptPhones.map(({ objectives: linked, ownerObjectives, ...phone }) => ({
     ...phone,
     crossings: linked.size,
     isObjectiveLine: ownerObjectives.length > 0,
-    isFocus: focusSet.has(phone.number) || focusSet.has(phone.number.slice(-10)),
+    isFocus: isFocused(phone.number),
   }));
   const crossingCounts = new Map();
   for (const link of links) {
@@ -68,10 +73,10 @@ export function buildNetwork(rows, { totals = new Map(), includeSingles = true, 
       crossingCounts.set(link.source, (crossingCounts.get(link.source) ?? 0) + 1);
     }
   }
-  const objectiveNodes = [...objectives.values()].map((objective) => ({
+  const objectiveNodes = keptObjectives.map((objective) => ({
     ...objective,
     crossingContacts: crossingCounts.get(objective.id) ?? 0,
-    isFocus: focusSet.has(objective.number) || focusSet.has(objective.number.slice(-10)),
+    isFocus: isFocused(objective.number),
   }));
 
   return {
@@ -98,19 +103,20 @@ const finish = async (pool, rows, options) => {
   return { ...buildNetwork(kept, { ...options, totals }), truncated };
 };
 
-// General view: every objective plus the contacts shared between objectives (or every contact when includeSingles).
-export async function fetchGeneralNetwork(pool, { includeSingles = false } = {}) {
+// General view: the contacts shared between objectives. Every objective comes back so that
+// an objective whose own line appears among another's contacts can still be drawn.
+export async function fetchGeneralNetwork(pool) {
   const [rows] = await pool.query(`
     SELECT ${OBJECTIVE_COLUMNS}, c.contacto
     FROM objetivo o
-    LEFT JOIN contactos c ON c.idObjetivo = o.idObjetivo AND (? OR c.contacto IN (
+    LEFT JOIN contactos c ON c.idObjetivo = o.idObjetivo AND (c.contacto IN (
       SELECT contacto FROM (
         SELECT contacto FROM contactos GROUP BY contacto HAVING COUNT(DISTINCT idObjetivo) > 1
       ) cruzados
     ) OR c.contacto IN (SELECT numObjetivo FROM objetivo))
     ORDER BY o.idObjetivo
-    LIMIT ?`, [includeSingles ? 1 : 0, MAX_NETWORK_ROWS + 1]);
-  return finish(pool, rows, { includeSingles });
+    LIMIT ?`, [MAX_NETWORK_ROWS + 1]);
+  return finish(pool, rows, {});
 }
 
 // Focused view: the objectives that own or contain the number, all of their contacts,
@@ -143,5 +149,5 @@ export async function fetchFocusNetwork(pool, value) {
     WHERE o.numObjetivo IN (?)
        OR o.numObjetivo IN (SELECT contacto FROM contactos WHERE idObjetivo IN (?))
     LIMIT ?`, [seeds, seeds, seeds, candidates, seeds, MAX_NETWORK_ROWS + 1]);
-  return { ...(await finish(pool, rows, { includeSingles: true, focus: candidates })), found: true };
+  return { ...(await finish(pool, rows, { focus: candidates })), found: true };
 }

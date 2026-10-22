@@ -4,7 +4,6 @@
   const numberInput = document.getElementById('networkNumber');
   const resetButton = document.getElementById('networkReset');
   const layoutSelect = document.getElementById('networkLayout');
-  const singlesCheck = document.getElementById('networkSingles');
   const autoCheck = document.getElementById('networkAuto');
   const pngButton = document.getElementById('networkPng');
   const status = document.getElementById('networkStatus');
@@ -20,6 +19,8 @@
 
   const cy = cytoscape({
     container,
+    // Large graphs stay responsive when edges hide while panning.
+    hideEdgesOnViewport: true,
     wheelSensitivity: 0.25,
     minZoom: 0.05,
     maxZoom: 4,
@@ -54,21 +55,43 @@
     ],
   });
 
+  // Labels follow the page theme so they stay readable on the dark canvas too.
+  const applyThemeColors = () => {
+    const styles = getComputedStyle(container);
+    const ink = getComputedStyle(document.querySelector('.network-page')).getPropertyValue('--network-ink').trim() || '#17324d';
+    cy.style().selector('node').style({ color: ink, 'text-outline-color': styles.backgroundColor, 'text-outline-width': 2 }).update();
+  };
+  applyThemeColors();
+  new MutationObserver(applyThemeColors).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
   const setStatus = (message, isError = false) => {
     status.textContent = message;
     status.classList.toggle('error', isError);
   };
 
+  // The hierarchy puts every contact of a level in one row and the organic layout grows quadratically,
+  // so big networks fall back to rings: focus, objectives, crossings and then plain contacts.
+  const MAX_HIERARCHY_NODES = 600;
+  const MAX_ORGANIC_NODES = 500;
+  const ringLevel = (node) => (node.data('isFocus') ? 4 : node.data('type') === 'objective' ? 3
+    : node.data('crossings') > 1 || node.data('isObjectiveLine') ? 2 : 1);
+
   const runLayout = () => {
     if (cy.elements().empty()) return;
-    const name = layoutSelect.value;
+    const size = cy.nodes().length;
+    let name = layoutSelect.value;
+    if (name === 'auto') name = size > MAX_HIERARCHY_NODES ? 'concentric' : 'breadthfirst';
+    if (name === 'cose' && size > MAX_ORGANIC_NODES) {
+      name = 'concentric';
+      setStatus(`El acomodo orgánico solo está disponible hasta ${MAX_ORGANIC_NODES} nodos; se usan anillos.`, true);
+    }
     const roots = cy.nodes('[?isFocus][type = "objective"]').nonempty()
       ? cy.nodes('[?isFocus][type = "objective"]')
       : cy.nodes('[type = "objective"]');
     const options = {
       breadthfirst: { name, roots, spacingFactor: 1.1, avoidOverlap: true, circle: false },
-      cose: { name, animate: false, nodeRepulsion: () => 9000, idealEdgeLength: () => 60, numIter: 1500 },
-      concentric: { name, concentric: (node) => (node.data('isFocus') ? 1000 : 0) + (node.data('type') === 'objective' ? 100 : 0) + node.degree(), levelWidth: () => 2, minNodeSpacing: 6 },
+      cose: { name, animate: false, nodeRepulsion: () => 9000, idealEdgeLength: () => 60, numIter: 1000 },
+      concentric: { name, concentric: ringLevel, levelWidth: () => 1, minNodeSpacing: 4, avoidOverlap: true },
     }[name];
     cy.layout({ ...options, fit: true, padding: 30 }).run();
   };
@@ -86,9 +109,6 @@
       cy.elements().remove();
       cy.add(elements);
     });
-    // Large graphs stay responsive when edges hide while panning.
-    cy.hideEdgesOnViewport(payload.links.length > 3000);
-    cy.textureOnViewport(payload.links.length > 3000);
     runLayout();
     const focus = cy.nodes('[?isFocus]');
     if (focus.nonempty()) {
@@ -112,7 +132,6 @@
   const load = async ({ quiet = false } = {}) => {
     const params = new URLSearchParams();
     if (currentNumber) params.set('numero', currentNumber);
-    else if (singlesCheck.checked) params.set('todos', '1');
     if (!quiet) setStatus('Cargando red…');
     try {
       const response = await fetch(`/red-telefonica/datos?${params}`, { headers: { Accept: 'application/json' }, cache: 'no-store' });
@@ -245,11 +264,10 @@
     load();
   });
   layoutSelect.addEventListener('change', runLayout);
-  singlesCheck.addEventListener('change', () => { if (!currentNumber) load(); });
   pngButton.addEventListener('click', () => {
     if (cy.elements().empty()) return;
     const link = document.createElement('a');
-    link.href = cy.png({ full: true, scale: 2, bg: '#ffffff', maxWidth: 12000, maxHeight: 12000 });
+    link.href = cy.png({ full: true, scale: 2, bg: getComputedStyle(container).backgroundColor, maxWidth: 12000, maxHeight: 12000 });
     link.download = `red-${currentNumber || 'general'}.png`;
     link.click();
   });
