@@ -6,6 +6,7 @@ import { forwardAsyncErrors } from './errorHandling.js';
 import { listarUbicacionesParaRuta } from "./estudianteController.js";
 import { createRutaCsv, createRutaXlsx, getRutaXlsxMetadata, processRutaCsv, processRutaXlsx } from "./rutaService.js";
 import pool from "./db.js";
+import { fileGroupOf, visibleFiles } from './fileGroups.js';
 
 const RUTA_MAX_FILE_SIZE = 20 * 1024 * 1024;
 const uploadStorage = multer.memoryStorage();
@@ -24,6 +25,8 @@ const rutaStorageReady = pool.query(`
     source_file LONGBLOB NULL,
     row_count INT UNSIGNED NOT NULL DEFAULT 0,
     error_message VARCHAR(500) NULL,
+    user_id BIGINT NULL,
+    owner_group VARCHAR(10) NOT NULL DEFAULT 'general',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     expires_at DATETIME NOT NULL,
     INDEX ruta_archivos_expires_at_index (expires_at)
@@ -36,6 +39,17 @@ const rutaStorageReady = pool.query(`
   }
   try {
     await pool.query('ALTER TABLE ruta_archivos ADD COLUMN source_file LONGBLOB NULL');
+  } catch (error) {
+    if (!/duplicate column/i.test(error.message || '')) throw error;
+  }
+  // Files uploaded before groups existed have no uploader, so they stay in the general group.
+  try {
+    await pool.query('ALTER TABLE ruta_archivos ADD COLUMN user_id BIGINT NULL');
+  } catch (error) {
+    if (!/duplicate column/i.test(error.message || '')) throw error;
+  }
+  try {
+    await pool.query("ALTER TABLE ruta_archivos ADD COLUMN owner_group VARCHAR(10) NOT NULL DEFAULT 'general'");
   } catch (error) {
     if (!/duplicate column/i.test(error.message || '')) throw error;
   }
@@ -121,11 +135,15 @@ router.get('/ruta', (req, res, next) => {
   Promise.resolve()
     .then(() => cleanExpiredRutaFiles())
     .then(async () => {
+      const scope = visibleFiles(req.session, 'r');
       const [files] = await pool.query(
-        `SELECT file_uuid AS id, line_number AS lineNumber, original_name AS name,
-                status, row_count AS \`rows\`, error_message AS error
-         FROM ruta_archivos
-          ORDER BY created_at DESC, id DESC`,
+        `SELECT r.file_uuid AS id, r.line_number AS lineNumber, r.original_name AS name,
+                r.status, r.row_count AS \`rows\`, r.error_message AS error, u.email AS uploadedBy
+         FROM ruta_archivos r
+         LEFT JOIN users u ON u.id = r.user_id
+         WHERE ${scope.where}
+         ORDER BY r.created_at DESC, r.id DESC`,
+        scope.values,
       );
       res.render('pages/ruta', {
         files,
@@ -153,9 +171,10 @@ router.post('/ruta/importar', rutaUpload, async (req, res) => {
   await cleanExpiredRutaFiles();
   await pool.execute(
     `INSERT INTO ruta_archivos
-       (file_uuid, line_number, original_name, source_metadata, source_file, status, expires_at)
-     VALUES (?, ?, ?, ?, ?, 'pendiente', DATE_ADD(NOW(), INTERVAL 2 DAY))`,
-    [id, lineNumber, req.file.originalname, sourceMetadata ? JSON.stringify(sourceMetadata) : null, req.file.buffer],
+       (file_uuid, line_number, original_name, source_metadata, source_file, status, user_id, owner_group, expires_at)
+     VALUES (?, ?, ?, ?, ?, 'pendiente', ?, ?, DATE_ADD(NOW(), INTERVAL 2 DAY))`,
+    [id, lineNumber, req.file.originalname, sourceMetadata ? JSON.stringify(sourceMetadata) : null, req.file.buffer,
+      req.session?.userId ?? null, fileGroupOf(req.session)],
   );
   const job = { id };
   const notification = {
@@ -170,9 +189,10 @@ router.post('/ruta/importar', rutaUpload, async (req, res) => {
 router.post('/ruta/eliminar/:id', async (req, res) => {
   try {
     await cleanExpiredRutaFiles();
+    const scope = visibleFiles(req.session, 'r');
     const [result] = await pool.execute(
-      'DELETE FROM ruta_archivos WHERE file_uuid = ?',
-      [req.params.id],
+      `DELETE r FROM ruta_archivos r WHERE r.file_uuid = ? AND ${scope.where}`,
+      [req.params.id, ...scope.values],
     );
     const message = result.affectedRows === 1
       ? 'Archivo eliminado correctamente.'
@@ -187,12 +207,13 @@ router.post('/ruta/eliminar/:id', async (req, res) => {
 router.get('/ruta/exportar/:id', async (req, res) => {
   try {
     await cleanExpiredRutaFiles();
+    const scope = visibleFiles(req.session, 'r');
     const [files] = await pool.execute(
-      `SELECT line_number, status, result_csv, source_metadata
-       FROM ruta_archivos
-       WHERE file_uuid = ? AND expires_at > NOW()
+      `SELECT r.line_number, r.status, r.result_csv, r.source_metadata
+       FROM ruta_archivos r
+       WHERE r.file_uuid = ? AND ${scope.where} AND r.expires_at > NOW()
        LIMIT 1`,
-      [req.params.id],
+      [req.params.id, ...scope.values],
     );
     const file = files[0];
     if (!file || file.status !== 'listo' || !file.result_csv) return res.status(404).send('El archivo todavía no está listo.');
@@ -208,12 +229,13 @@ router.get('/ruta/exportar/:id', async (req, res) => {
 router.get('/ruta/exportar-xlsx/:id', async (req, res) => {
   try {
     await cleanExpiredRutaFiles();
+    const scope = visibleFiles(req.session, 'r');
     const [files] = await pool.execute(
-      `SELECT line_number, status, result_csv, source_metadata
-       FROM ruta_archivos
-       WHERE file_uuid = ? AND expires_at > NOW()
+      `SELECT r.line_number, r.status, r.result_csv, r.source_metadata
+       FROM ruta_archivos r
+       WHERE r.file_uuid = ? AND ${scope.where} AND r.expires_at > NOW()
        LIMIT 1`,
-      [req.params.id],
+      [req.params.id, ...scope.values],
     );
     const file = files[0];
     if (!file || file.status !== 'listo' || !file.result_csv) return res.status(404).send('El archivo todavía no está listo.');

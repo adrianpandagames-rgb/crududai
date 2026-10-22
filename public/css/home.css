@@ -88,8 +88,8 @@ form {
   word-break: normal;
 }
 
-.custom_table .ruta-files-table th:nth-child(3),
-.custom_table .ruta-files-table td:nth-child(3) {
+.custom_table .ruta-files-table th:nth-child(4),
+.custom_table .ruta-files-table td:nth-child(4) {
   width: 105px;
   padding-left: 8px;
   padding-right: 8px;

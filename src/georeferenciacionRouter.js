@@ -7,6 +7,9 @@ import { initializeGeocodingLocations, saveGeocodingLocation, listGeocodingLocat
 import { createRutaCsv, createRutaXlsx, getRutaXlsxMetadata } from './rutaService.js';
 import { getGeocodingKey, readGeocodingFile, processGeocodingFile, reverseGeocode } from './georeferenciacionService.js';
 import { getGoogleGeocodingQuota, reserveGoogleGeocodingRequest } from './googleGeocodingQuota.js';
+import { fileGroupOf, visibleFiles as visibleFilesFor } from './fileGroups.js';
+
+const visibleFiles = (session) => visibleFilesFor(session, 'g');
 
 export function createGeoreferenciacionRouter(pool) {
   const router = express.Router();
@@ -31,10 +34,19 @@ export function createGeoreferenciacionRouter(pool) {
         row_count INT UNSIGNED NOT NULL DEFAULT 0,
         processed_rows INT UNSIGNED NOT NULL DEFAULT 0,
         error_message VARCHAR(500) NULL,
+        owner_group VARCHAR(10) NOT NULL DEFAULT 'general',
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         expires_at DATETIME NOT NULL,
         INDEX geo_user_expiry (user_id, expires_at)
       )`);
+      try {
+        await pool.query("ALTER TABLE georeferenciacion_archivos ADD COLUMN owner_group VARCHAR(10) NOT NULL DEFAULT 'general'");
+        // Existing files take the group their uploader belongs to today.
+        await pool.query(`UPDATE georeferenciacion_archivos g INNER JOIN users u ON u.id = g.user_id
+          SET g.owner_group = 'uecs' WHERE u.role = 'uecs' AND COALESCE(u.is_admin, 0) <> 1`);
+      } catch (error) {
+        if (!/duplicate column/i.test(error.message || '')) throw error;
+      }
       await pool.query(`UPDATE georeferenciacion_archivos SET status = 'error',
         error_message = 'El servidor se reinició. Importa nuevamente el archivo para continuar.'
         WHERE status = 'pendiente'`);
@@ -58,10 +70,12 @@ export function createGeoreferenciacionRouter(pool) {
   });
   router.get('/', async (req, res) => {
     try {
-      const [files] = await pool.execute(`SELECT file_uuid AS id, line_number AS lineNumber,
-        original_name AS name, status, error_message AS error, row_count AS total,
-        processed_rows AS processed FROM georeferenciacion_archivos
-        WHERE user_id = ? AND expires_at > NOW() ORDER BY id DESC`, [req.session.userId]);
+      const scope = visibleFiles(req.session);
+      const [files] = await pool.execute(`SELECT g.file_uuid AS id, g.line_number AS lineNumber,
+        g.original_name AS name, g.status, g.error_message AS error, g.row_count AS total,
+        g.processed_rows AS processed, u.email AS uploadedBy FROM georeferenciacion_archivos g
+        LEFT JOIN users u ON u.id = g.user_id
+        WHERE ${scope.where} AND g.expires_at > NOW() ORDER BY g.id DESC`, scope.values);
       res.render('pages/georeferenciacion', {
         ...await listGeocodingLocations(pool, req.query),
         googleGeocodingQuota: await getGoogleGeocodingQuota(pool),
@@ -103,9 +117,10 @@ export function createGeoreferenciacionRouter(pool) {
     const controller = new AbortController();
     try {
       await pool.execute(`INSERT INTO georeferenciacion_archivos
-        (file_uuid, user_id, line_number, original_name, source_metadata, status, row_count, expires_at)
-        VALUES (?, ?, ?, ?, ?, 'pendiente', ?, DATE_ADD(NOW(), INTERVAL 2 DAY))`,
-      [id, req.session.userId, line, req.file.originalname.slice(0, 255), JSON.stringify(metadata), input.rows.length - 1]);
+        (file_uuid, user_id, line_number, original_name, source_metadata, status, row_count, owner_group, expires_at)
+        VALUES (?, ?, ?, ?, ?, 'pendiente', ?, ?, DATE_ADD(NOW(), INTERVAL 2 DAY))`,
+      [id, req.session.userId, line, req.file.originalname.slice(0, 255), JSON.stringify(metadata), input.rows.length - 1,
+        fileGroupOf(req.session)]);
     } catch {
       return redirect(res, 'No fue posible guardar el archivo.');
     }
@@ -143,9 +158,10 @@ export function createGeoreferenciacionRouter(pool) {
   });
   router.post('/eliminar/:id', async (req, res) => {
     try {
-      const job = jobs.get(req.params.id);
-      if (job?.userId === req.session.userId) job.controller.abort();
-      const [result] = await pool.execute('DELETE FROM georeferenciacion_archivos WHERE file_uuid = ? AND user_id = ?', [req.params.id, req.session.userId]);
+      const scope = visibleFiles(req.session);
+      const [result] = await pool.execute(`DELETE g FROM georeferenciacion_archivos g WHERE g.file_uuid = ? AND ${scope.where}`,
+        [req.params.id, ...scope.values]);
+      if (result.affectedRows) jobs.get(req.params.id)?.controller.abort();
       return redirect(res, result.affectedRows ? 'Archivo eliminado.' : 'Archivo no encontrado.', result.affectedRows ? 'success' : 'error');
     } catch {
       return redirect(res, 'No fue posible eliminar el archivo.');
@@ -154,9 +170,10 @@ export function createGeoreferenciacionRouter(pool) {
   for (const format of ['csv', 'xlsx']) {
     router.get(`/${format === 'csv' ? 'exportar' : 'exportar-xlsx'}/:id`, async (req, res) => {
       try {
-        const [files] = await pool.execute(`SELECT line_number, result_csv, source_metadata
-          FROM georeferenciacion_archivos WHERE file_uuid = ? AND user_id = ?
-          AND status = 'listo' AND expires_at > NOW()`, [req.params.id, req.session.userId]);
+        const scope = visibleFiles(req.session);
+        const [files] = await pool.execute(`SELECT g.line_number, g.result_csv, g.source_metadata
+          FROM georeferenciacion_archivos g WHERE g.file_uuid = ? AND ${scope.where}
+          AND g.status = 'listo' AND g.expires_at > NOW()`, [req.params.id, ...scope.values]);
         const file = files[0];
         if (!file) return res.status(404).send('Archivo no encontrado o todavía no disponible.');
         const metadata = typeof file.source_metadata === 'string' ? JSON.parse(file.source_metadata) : file.source_metadata || {};

@@ -112,19 +112,23 @@ test('page renders configuration, progress, errors and download actions safely',
   assert.ok(html.includes('disabled>Importar y geocodificar'));
 });
 
-test('routes require a session and scope exports and deletes to the owner', async () => {
+test('routes require a session; admins reach every file and UECS only files uploaded by UECS', async () => {
   const queries = [];
   const pool = {
     query: async () => [[]],
     execute: async (sql, parameters) => {
       if (sql.startsWith('INSERT IGNORE')) return [{ affectedRows: 1 }];
       if (sql.startsWith('SELECT request_count')) return [[{ requestCount: 0, isBlocked: 0 }]];
-      if (sql.includes('user_id = ?')) queries.push({ sql, parameters });
+      if (sql.includes('g.file_uuid = ?')) queries.push({ sql, parameters });
       return sql.startsWith('DELETE') ? [{ affectedRows: 0 }] : [[]];
     },
   };
   const app = express();
-  app.use((req, res, next) => { if (req.headers['x-test-session']) req.session = { userId: 7, isAdmin: req.headers['x-test-session'] === 'admin' }; next(); });
+  app.use((req, res, next) => {
+    const kind = req.headers['x-test-session'];
+    if (kind) req.session = { userId: 7, isAdmin: kind === 'admin', role: kind === 'admin' ? 'admin' : kind };
+    next();
+  });
   app.use('/georeferenciacion', createGeoreferenciacionRouter(pool));
   const server = app.listen(0, '127.0.0.1');
   await new Promise((resolve) => server.once('listening', resolve));
@@ -137,13 +141,19 @@ test('routes require a session and scope exports and deletes to the owner', asyn
       assert.equal((await fetch(base + path, { method, headers: { 'x-test-session': 'user' } })).status, 403);
     }
     assert.equal(queries.length, 0);
-    const headers = { 'x-test-session': 'admin' };
-    assert.equal((await fetch(`${base}/exportar-xlsx/foreign`, { headers })).status, 404);
-    await fetch(`${base}/eliminar/foreign`, { method: 'POST', headers, redirect: 'manual' });
-    assert.equal(queries.length, 2);
-    for (const { sql, parameters } of queries) {
-      assert.ok(sql.includes('user_id = ?'));
-      assert.deepEqual(parameters, ['foreign', 7]);
+    for (const session of ['admin', 'uecs']) {
+      const headers = { 'x-test-session': session };
+      assert.equal((await fetch(`${base}/exportar-xlsx/foreign`, { headers })).status, 404);
+      await fetch(`${base}/eliminar/foreign`, { method: 'POST', headers, redirect: 'manual' });
+    }
+    assert.equal(queries.length, 4);
+    for (const { sql, parameters } of queries.slice(0, 2)) {
+      assert.ok(!sql.includes('owner_group') && !sql.includes('user_id'));
+      assert.deepEqual(parameters, ['foreign']);
+    }
+    for (const { sql, parameters } of queries.slice(2)) {
+      assert.ok(sql.includes('g.owner_group = ?'));
+      assert.deepEqual(parameters, ['foreign', 'uecs']);
     }
   } finally {
     await new Promise((resolve) => server.close(resolve));
@@ -224,4 +234,15 @@ test('a failed database lookup stops processing instead of making external reque
     findLocation: async () => { throw new Error('Database unavailable'); },
     geocode: async () => assert.fail('Must not fall back to billable requests'),
   }), /Database unavailable/);
+});
+
+test('UECS and regular users only see their group while administrators see every file', async () => {
+  const { fileGroupOf, visibleFiles } = await import('../src/fileGroups.js');
+  assert.equal(fileGroupOf({ role: 'uecs' }), 'uecs');
+  for (const role of ['admin', 'semiadmin', 'usuario', undefined]) assert.equal(fileGroupOf({ role }), 'general');
+  assert.deepEqual(visibleFiles({ role: 'uecs', isAdmin: false }, 'r'), { where: 'r.owner_group = ?', values: ['uecs'] });
+  for (const role of ['usuario', 'semiadmin']) {
+    assert.deepEqual(visibleFiles({ role, isAdmin: false }, 'r'), { where: 'r.owner_group = ?', values: ['general'] });
+  }
+  assert.deepEqual(visibleFiles({ role: 'admin', isAdmin: true }, 'r'), { where: 'TRUE', values: [] });
 });
