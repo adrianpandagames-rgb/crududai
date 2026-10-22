@@ -28,6 +28,7 @@ import { createTelegramApiRouter } from './src/telegramApiRouter.js';
 import { decryptTelegramId, encryptTelegramId } from './src/telegramIdCrypto.js';
 import { createPlaneacionRouter } from './src/planeacionRouter.js';
 import { getGoogleGeocodingQuota, resetGoogleGeocodingQuota } from './src/googleGeocodingQuota.js';
+import { createLoginRateLimiter, LOGIN_WINDOW_MS } from './src/loginRateLimit.js';
 
 
 const app = express();
@@ -66,6 +67,8 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 const sessions = new Map();
 const pendingRouteToasts = new Map();
 const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+const loginRateLimiter = createLoginRateLimiter();
+setInterval(() => loginRateLimiter.prune(), LOGIN_WINDOW_MS).unref();
 
 const writeAuditLog = ({ userId = null, userEmail = '', action, requestPath, statusCode, ipAddress, details = null }) => {
   pool.execute(
@@ -194,92 +197,6 @@ app.use('/planeacion-geografica', requireAuth, createPlaneacionRouter(pool));
 
 
 
-/**
- * @openapi
- * /api/login:
- *   post:
- *     summary: Login de usuario
- *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *               - password
- *             properties:
- *               email:
- *                 type: string
- *                 example: admin@crududai.com
- *               password:
- *                 type: string
- *                 example: secret123
- *     responses:
- *       200:
- *         description: Login exitoso
- *       400:
- *         description: Faltan credenciales
- *       401:
- *         description: Credenciales inválidas
- *       500:
- *         description: Error del servidor
- */
-app.post('/api/login', async (req, res) => {
-    const { email, password } = req.body;
-    const normalizedEmail = String(email || '').trim().toLowerCase();
-
-    // 1. Basic validation
-    if (!email || !password) {
-        writeAuditLog({ userEmail: normalizedEmail, action: 'LOGIN_FAILED', requestPath: '/api/login', statusCode: 400, ipAddress: req.ip });
-        return res.status(400).json({ message: 'Email and password are required.' });
-    }
-
-    try {
-        // 2. Safely query the user using prepared statements to avoid SQL Injection
-        const [rows] = await pool.execute('SELECT * FROM users WHERE email = ? AND is_active = 1', [email]);
-        
-        if (rows.length === 0) {
-            writeAuditLog({ userEmail: normalizedEmail, action: 'LOGIN_FAILED', requestPath: '/api/login', statusCode: 401, ipAddress: req.ip });
-            return res.status(401).json({ message: 'Invalid email credentials.' });
-        }
-
-        const user = rows[0];
-
-        // Passwords must have been migrated to bcrypt before they can be used.
-        const isMatch = await verifyPassword(password, user.password);
-
-        if (!isMatch) {
-            writeAuditLog({ userId: user.id, userEmail: user.email, action: 'LOGIN_FAILED', requestPath: '/api/login', statusCode: 401, ipAddress: req.ip });
-            return res.status(401).json({ message: 'Invalid password credentials.' });
-        }
-
-        // 4. Success handling (Here, you would typically issue a session or JWT)
-        writeAuditLog({ userId: user.id, userEmail: user.email, action: 'LOGIN', requestPath: '/api/login', statusCode: 200, ipAddress: req.ip });
-        return res.status(200).json({
-            message: 'Login successful!',
-          user: { id: user.id, email: user.email },
-          mustChangePassword: Number(user.must_change_password) === 1,
-            
-        });
-
-} catch (error) {
-        // This prints the exact file, line number, and error cause to your Node terminal
-        console.error('--- CRITICAL ERROR DIAGNOSTIC ---');
-        console.error(error.stack || error);
-        console.error('---------------------------------');
-        writeAuditLog({ userEmail: normalizedEmail, action: 'LOGIN_FAILED', requestPath: '/api/login', statusCode: 500, ipAddress: req.ip });
-        
-        // This sends the exact problem straight back to your Postman screen
-        return res.status(500).json({ 
-            message: 'An internal server error occurred.',
-            errorType: error.name,
-            errorMessage: error.message 
-        });
-    }
-});
-
 //Establece el motor de plantillas
 app.set("view engine", "ejs");
 app.set("views", "./views");
@@ -287,6 +204,14 @@ app.set("views", "./views");
 app.post('/login', requireSameOrigin, async (req, res) => {
   const { email, password } = req.body;
     const normalizedEmail = String(email || '').trim().toLowerCase();
+
+    const retryAfterMs = loginRateLimiter.retryAfterMs(req.ip, normalizedEmail);
+    if (retryAfterMs > 0) {
+        const minutes = Math.ceil(retryAfterMs / 60000);
+        writeAuditLog({ userEmail: normalizedEmail, action: 'LOGIN_FAILED', requestPath: '/login', statusCode: 429, ipAddress: req.ip });
+        res.setHeader('Retry-After', String(Math.ceil(retryAfterMs / 1000)));
+        return res.status(429).render('index', { error: `Demasiados intentos fallidos. Intenta de nuevo en ${minutes} minuto(s).`, success: null });
+    }
 
     if (!email || !password) {
         writeAuditLog({ userEmail: normalizedEmail, action: 'LOGIN_FAILED', requestPath: '/login', statusCode: 400, ipAddress: req.ip });
@@ -296,6 +221,7 @@ app.post('/login', requireSameOrigin, async (req, res) => {
     try {
         const [rows] = await pool.execute('SELECT * FROM users WHERE email = ? AND is_active = 1', [email]);
         if (rows.length === 0) {
+            loginRateLimiter.recordFailure(req.ip, normalizedEmail);
             writeAuditLog({ userEmail: normalizedEmail, action: 'LOGIN_FAILED', requestPath: '/login', statusCode: 401, ipAddress: req.ip });
             return res.render('index', { error: 'Invalid credentials.', success: null });
         }
@@ -304,9 +230,12 @@ app.post('/login', requireSameOrigin, async (req, res) => {
         const isMatch = await verifyPassword(password, user.password);
 
         if (!isMatch) {
+            loginRateLimiter.recordFailure(req.ip, normalizedEmail);
             writeAuditLog({ userId: user.id, userEmail: user.email, action: 'LOGIN_FAILED', requestPath: '/login', statusCode: 401, ipAddress: req.ip });
             return res.render('index', { error: 'Invalid credentials.', success: null });
         }
+
+        loginRateLimiter.recordSuccess(normalizedEmail);
 
         const authToken = crypto.randomBytes(24).toString('hex');
         const shouldRemember = false;
