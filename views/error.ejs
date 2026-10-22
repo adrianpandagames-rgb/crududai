@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title><%= status %> - Error</title>
+    <%- include('includes/theme') %>
+    <link rel="stylesheet" href="/public/css/bootstrap.min.css" />
+    <style>
+      body {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        margin: 0;
+        padding: 1.5rem;
+        background: linear-gradient(145deg, #eef7f6, #f5f2ff);
+        color: #18324b;
+        font-family: system-ui, sans-serif;
+      }
+      .error-page {
+        width: min(100%, 560px);
+        padding: clamp(2rem, 7vw, 4rem);
+        border: 1px solid #dce7ed;
+        border-radius: 1.5rem;
+        background: #fff;
+        box-shadow: 0 1rem 3rem rgba(24, 50, 75, .12);
+        text-align: center;
+      }
+      .error-code {
+        margin: 0;
+        color: #087f8c;
+        font-size: clamp(4rem, 15vw, 6rem);
+        font-weight: 800;
+        line-height: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="error-page">
+      <p class="error-code"><%= status %></p>
+      <h1 class="h4 mt-3"><%= message %></h1>
+      <a class="btn btn-primary mt-3" href="/">Volver al inicio</a>
+    </main>
+  </body>
+</html>

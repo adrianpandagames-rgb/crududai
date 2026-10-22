@@ -28,9 +28,10 @@ import { decryptTelegramId, encryptTelegramId } from './src/telegramIdCrypto.js'
 import { createPlaneacionRouter } from './src/planeacionRouter.js';
 import { getGoogleGeocodingQuota, resetGoogleGeocodingQuota } from './src/googleGeocodingQuota.js';
 import { createLoginRateLimiter, LOGIN_WINDOW_MS } from './src/loginRateLimit.js';
+import { forwardAsyncErrors, handleErrors } from './src/errorHandling.js';
 
 
-const app = express();
+const app = forwardAsyncErrors(express());
 // Trust only hosting proxies that replace forwarded headers.
 if (process.env.TRUST_PROXY) {
   app.set('trust proxy', process.env.TRUST_PROXY.split(',').map(value => value.trim()).filter(Boolean));
@@ -322,7 +323,6 @@ app.get('/health/ready', async (_req, res) => {
       status: 'not-ready',
       timestamp: new Date().toISOString(),
       database: 'error',
-      error: error.message || 'Database check failed',
     });
   }
 });
@@ -675,6 +675,8 @@ app.use((req, res) => {
   }
   return res.status(404).render('404');
 });
+
+app.use(handleErrors);
 
 const CERT_DIR = path.resolve('./certs');
 const hasConfiguredTls = Boolean(process.env.TLS_KEY_PATH || process.env.TLS_CERT_PATH);

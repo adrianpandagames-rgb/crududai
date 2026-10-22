@@ -18,6 +18,7 @@ import { camposDatosConservados, validarDatosConservados, guardarDatosConservado
 import { validarPeriodo, validarFiltrosMetricas, obtenerMetricas, fuentesMetricas } from './metricasService.js';
 import { validarIdentificacion, guardarIdentificacion } from './identificacionesService.js';
 import { readFileSync } from 'node:fs';
+import { forwardAsyncErrors } from './errorHandling.js';
 
 import {
   agregarEstudiante,
@@ -56,7 +57,7 @@ const CONTACTS_MAX_ROWS = 10000;
 const uploadStorage = multer.memoryStorage();
 const upload = multer({ storage: uploadStorage, limits: { fileSize: CONTACTS_MAX_FILE_SIZE, files: 1, fields: 10, parts: 11, fieldSize: 4096 } });
 const rutaUploadParser = multer({ storage: uploadStorage, limits: { fileSize: RUTA_MAX_FILE_SIZE } });
-const router = express.Router();
+const router = forwardAsyncErrors(express.Router());
 const normalizarLocalidad = (value) => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
 const cabecerasSonora = new Set(JSON.parse(readFileSync(new URL('./cabecerasSonora.json', import.meta.url), 'utf8')).cabeceras.map(normalizarLocalidad));
 const MAX_REDIRECT_ITEMS = 20;
@@ -820,7 +821,7 @@ router.post('/metricas/identificaciones', async (req, res) => {
   }
 });
 
-router.get("/Crud", async (req, res) => {
+router.get("/Crud", async (req, res, next) => {
   try {
     const searchTerm = req.query.numObjetivo || req.query.search || "";
     const page = Number.isInteger(parseInt(req.query.page, 10)) ? Math.max(parseInt(req.query.page, 10), 1) : 1;
@@ -860,8 +861,7 @@ router.get("/Crud", async (req, res) => {
       pageSize,
     });
   } catch (error) {
-    const { status, message } = error;
-    res.status(status || 500).json({ error: message });
+    return next(error);
   }
 });
 
@@ -906,7 +906,7 @@ router.post('/api/telefono/validar', async (req, res) => {
   }
 });
 
-router.get("/imei", async (req, res) => {
+router.get("/imei", async (req, res, next) => {
   try {
     const searchTerm = req.query.search || "";
     const page = Number.isInteger(parseInt(req.query.page, 10)) ? Math.max(parseInt(req.query.page, 10), 1) : 1;
@@ -938,14 +938,13 @@ router.get("/imei", async (req, res) => {
       pageSize,
     });
   } catch (error) {
-    const { status, message } = error;
-    res.status(status || 500).json({ error: message });
+    return next(error);
   }
 });
 
 export { fetchImeiMetadata };
 
-router.get("/ubicaciones", async (req, res) => {
+router.get("/ubicaciones", async (req, res, next) => {
   try {
     const searchTerm = req.query.search || "";
     const page = Number.isInteger(parseInt(req.query.page, 10)) ? Math.max(parseInt(req.query.page, 10), 1) : 1;
@@ -978,8 +977,7 @@ router.get("/ubicaciones", async (req, res) => {
       googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY ,
     });
   } catch (error) {
-    const { status, message } = error;
-    res.status(status || 500).json({ error: message });
+    return next(error);
   }
 });
 
@@ -1039,7 +1037,7 @@ router.post('/ubicaciones/register', requireRecordCreator, async (req, res) => {
   }
 });
 
-router.get('/ruta', (req, res) => {
+router.get('/ruta', (req, res, next) => {
   Promise.resolve()
     .then(() => cleanExpiredRutaFiles())
     .then(async () => {
@@ -1056,7 +1054,7 @@ router.get('/ruta', (req, res) => {
         highlightId: req.query.highlight || null,
       });
     })
-    .catch((error) => res.status(500).json({ error: error.message }));
+    .catch(next);
 });
 
 router.post('/ruta/importar', rutaUpload, async (req, res) => {
@@ -1467,21 +1465,19 @@ router.post('/Crud/import-csv', requireRecordCreator, contactsUpload, async (req
     return res.json({
       status: 'error',
       message: req.body.sinUtilidad === 'true' ? 'No se pudo registrar la línea sin utilidad.' : 'CSV import failed.',
-      error: error.message
     });
   }
 });
 
 // Registrar un nuevo estudiante
-router.post("/estudiantes", requireRecordCreator, async (req, res) => {
+router.post("/estudiantes", requireRecordCreator, async (req, res, next) => {
   const { nombre_alumno, email_alumno, curso_alumno } = req.body;
 
   try {
     await agregarEstudiante({ nombre_alumno, email_alumno, curso_alumno });
     res.redirect("/Crud");
   } catch (error) {
-    const { status, message } = error;
-    res.status(status || 500).json({ error: message });
+    return next(error);
   }
 });
 
