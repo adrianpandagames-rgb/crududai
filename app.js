@@ -574,9 +574,15 @@ app.post('/usuarios/:id/rol', requireAdmin, async (req, res, next) => {
   if (userId === req.session.userId && !isAdmin) return res.redirect('/usuarios?error=No%20puedes%20quitarte%20tu%20propio%20acceso%20de%20administrador.');
 
   try {
+    // Only demoting the last administrator is blocked; other users can move between non-admin roles freely.
     if (!isAdmin) {
-      const [[{ adminCount }]] = await pool.execute('SELECT COUNT(*) AS adminCount FROM users WHERE is_admin = 1');
-      if (Number(adminCount) <= 1) return res.redirect('/usuarios?error=Debe%20existir%20al%20menos%20un%20administrador.');
+      const [[{ adminCount, targetIsAdmin }]] = await pool.execute(
+        `SELECT SUM(is_admin = 1 OR role = 'admin') AS adminCount,
+                MAX(id = ? AND (is_admin = 1 OR role = 'admin')) AS targetIsAdmin
+         FROM users`,
+        [userId],
+      );
+      if (Number(targetIsAdmin) === 1 && Number(adminCount) <= 1) return res.redirect('/usuarios?error=Debe%20existir%20al%20menos%20un%20administrador.');
     }
 
     const [result] = await pool.execute('UPDATE users SET is_admin = ?, role = ? WHERE id = ?', [isAdmin ? 1 : 0, role, userId]);
