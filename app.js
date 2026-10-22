@@ -10,7 +10,6 @@ import { fileURLToPath } from 'node:url';
 import selfsigned from 'selfsigned';
 import mysql from 'mysql2/promise';
 import express from "express";
-import cors from "cors";
 import swaggerJsdoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
 import router from "./src/router.js"; // Importa el enrutador
@@ -54,7 +53,6 @@ const swaggerOptions = {
 
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
 
-app.use(cors());
 app.use((req, res, next) => {
   res.setHeader('Referrer-Policy', 'no-referrer');
   next();
@@ -62,7 +60,6 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb', parameterLimit: 50000 }));
 app.use("/public", express.static(fileURLToPath(new URL('./public/', import.meta.url))));
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 const sessions = new Map();
 const pendingRouteToasts = new Map();
@@ -180,6 +177,9 @@ const requireAdmin = async (req, res, next) => {
     }
   });
 };
+
+// The API documentation lists every route, so only administrators may read it.
+app.use('/api-docs', requireAdmin, swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 const requireNonUecs = (req, res, next) => {
   if (req.session.role === 'uecs') {
