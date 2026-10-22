@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'assert';
-import { fetchImeiMetadata } from '../src/router.js';
+import { fetchImeiMetadata } from '../src/imeiApiClient.js';
 import pool from '../src/db.js';
 import https from 'https';
 

@@ -49,7 +49,7 @@ const swaggerOptions = {
       { url: '/' },
     ],
   },
-  apis: ['./app.js', './src/router.js'],
+  apis: ['./app.js', './src/*Routes.js'],
 };
 
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
@@ -292,6 +292,16 @@ app.get('/api/route-toast', async (req, res) => {
   });
 });
 
+/**
+ * @openapi
+ * /health:
+ *   get:
+ *     summary: Health check básico
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: La aplicación está funcionando
+ */
 app.get('/health', (_req, res) => {
   res.status(200).json({
     status: 'ok',
@@ -300,6 +310,18 @@ app.get('/health', (_req, res) => {
   });
 });
 
+/**
+ * @openapi
+ * /health/ready:
+ *   get:
+ *     summary: Verificación de disponibilidad de la base de datos
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: La aplicación y la base de datos están listas
+ *       503:
+ *         description: La aplicación no está lista
+ */
 app.get('/health/ready', async (_req, res) => {
   try {
     const [rows] = await pool.query('SELECT 1 AS ok');
