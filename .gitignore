@@ -180,3 +180,6 @@ docker/init/*.partial
 __pycache__/
 *.py[cod]
 .npm-cache/
+
+# Maigret site database cache (the app user home is the project folder)
+.maigret/
