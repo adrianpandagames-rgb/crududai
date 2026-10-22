@@ -1,0 +1,13 @@
+.maigret-badge { display: inline-block; padding: .2rem .55rem; border-radius: 999px; font-size: .8rem; font-weight: 600; white-space: nowrap; }
+.maigret-badge.ready { background: #d1f2df; color: #0f5132; }
+.maigret-badge.pending { background: #fff3cd; color: #664d03; }
+.maigret-badge.error { background: #f8d7da; color: #842029; cursor: help; }
+.maigret-badge.similar { background: #e2e3e5; color: #41464b; margin-top: .25rem; }
+.maigret-badge.alias { background: #cfe2ff; color: #084298; margin-left: .5rem; font-size: .75rem; vertical-align: middle; }
+.maigret-tags { display: flex; flex-wrap: wrap; gap: .25rem; margin-top: .35rem; }
+.maigret-tags span { font-size: .72rem; padding: .05rem .4rem; border-radius: 4px; background: #e7f3f4; color: #075d67; }
+.maigret-url { word-break: break-all; }
+.maigret-fields { display: grid; grid-template-columns: max-content 1fr; gap: .15rem .75rem; margin: 0; font-size: .85rem; }
+.maigret-fields dt { font-weight: 600; opacity: .75; }
+.maigret-fields dd { margin: 0; word-break: break-word; white-space: pre-line; }
+@media (max-width: 576px) { .maigret-fields { grid-template-columns: 1fr; } .maigret-fields dd { margin-bottom: .35rem; } }

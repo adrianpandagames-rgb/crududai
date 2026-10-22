@@ -7,6 +7,7 @@ export const auditResources = {
   ESTUDIANTE: 'Estudiante', OTRO: 'Otro',
   GEOREFERENCIACION: 'Georreferenciación', PLANEACION: 'Planeación geográfica',
   TELEFONO: 'Teléfono', RED: 'Red telefónica', AUDITORIA: 'Auditoría', METRICAS: 'Métricas',
+  MAIGRET: 'Maigret',
 };
 
 const metricTypes = {
@@ -43,6 +44,7 @@ export const auditResourceSql = `CASE
   WHEN LOWER(request_path) REGEXP '^/planeacion-geografica(/|$)' THEN 'PLANEACION'
   WHEN LOWER(request_path) REGEXP '^/(api/)?telefono(/|$)' THEN 'TELEFONO'
   WHEN LOWER(request_path) REGEXP '^/red-telefonica(/|$)' THEN 'RED'
+  WHEN LOWER(request_path) REGEXP '^/maigret(/|$)' THEN 'MAIGRET'
   WHEN LOWER(request_path) REGEXP '^/auditoria(/|$)' THEN 'AUDITORIA'
   WHEN LOWER(request_path) REGEXP '^/ubicaciones(/|$)' THEN 'UBICACION'
   WHEN LOWER(request_path) REGEXP '^/ruta(/|$)' THEN 'RUTA'

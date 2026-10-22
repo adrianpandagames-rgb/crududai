@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <%- include('../includes/head') %>
+    <link rel="stylesheet" href="/public/css/maigret.css" />
+  </head>
+  <body>
+    <%- include('../includes/header') %>
+
+    <main class="container page-offset">
+      <div class="row justify-content-md-center mb-4">
+        <div class="col-md-12 mt-5">
+          <h2 class="text-center title">MAIGRET · @<%= search.username %> <hr /></h2>
+        </div>
+      </div>
+
+      <div class="maigret-summary card p-3 mb-4">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+          <div>
+            <div><strong>Profundidad:</strong> <%= modes[search.mode]?.label || search.mode %><%= search.recursiveSearch ? ' · con alias' : '' %></div>
+            <div><strong>Solicitó:</strong> <%= search.requestedBy || '—' %> · <%= search.createdAt %><%= search.finishedAt ? ` · terminó ${search.finishedAt}` : '' %></div>
+            <% if (search.status === 'listo') { %>
+              <div><strong>Cuentas encontradas:</strong> <%= search.accounts %></div>
+            <% } %>
+          </div>
+          <div class="d-flex gap-2 flex-wrap">
+            <a class="btn btn-outline-secondary" href="/maigret">Volver</a>
+            <% if (search.hasReport) { %>
+              <a class="btn btn-outline-primary" href="/maigret/<%= search.id %>/reporte"><i class="bi bi-download"></i> Reporte HTML</a>
+            <% } %>
+          </div>
+        </div>
+      </div>
+
+      <% if (search.status === 'pendiente' || search.status === 'procesando') { %>
+        <div class="alert alert-info">La búsqueda sigue en proceso. Esta página se actualizará sola.</div>
+        <script>setTimeout(() => window.location.reload(), 10000);</script>
+      <% } else if (search.status === 'error') { %>
+        <div class="alert alert-danger"><%= search.error || 'La búsqueda no pudo completarse.' %></div>
+      <% } else { %>
+        <% if (search.error) { %><div class="alert alert-warning"><%= search.error %></div><% } %>
+        <% if (groups.length === 0) { %>
+          <div class="alert alert-secondary">No se encontraron cuentas con ese nombre de usuario.</div>
+        <% } %>
+        <% groups.forEach((group, index) => { %>
+          <section class="custom_table mb-4">
+            <h3 class="h5 mb-3">
+              @<%= group.username %>
+              <% if (index > 0) { %><span class="maigret-badge alias">alias encontrado en otro perfil</span><% } %>
+            </h3>
+            <div class="table-responsive">
+              <table class="table w-100 maigret-table table-stack">
+                <thead><tr><th>Sitio</th><th>Perfil</th><th>Datos extraídos</th></tr></thead>
+                <tbody>
+                  <% group.accounts.forEach((account) => { %>
+                    <tr>
+                      <td data-label="Sitio">
+                        <div class="fw-semibold"><%= account.site %></div>
+                        <% if (account.similar) { %><span class="maigret-badge similar" title="El sitio devolvió coincidencias parecidas, no exactas">aproximada</span><% } %>
+                        <div class="maigret-tags"><% account.tags.forEach((tag) => { %><span><%= tag %></span><% }) %></div>
+                      </td>
+                      <td data-label="Perfil" class="maigret-url">
+                        <% if (account.url) { %>
+                          <a href="<%= account.url %>" target="_blank" rel="noopener noreferrer"><%= account.url %></a>
+                        <% } else { %>—<% } %>
+                      </td>
+                      <td data-label="Datos extraídos">
+                        <% if (account.fields.length === 0) { %>
+                          <span class="text-muted">—</span>
+                        <% } else { %>
+                          <dl class="maigret-fields">
+                            <% account.fields.forEach((field) => { %>
+                              <dt><%= field.key %></dt>
+                              <dd><% if (field.isLink) { %><a href="<%= field.value %>" target="_blank" rel="noopener noreferrer"><%= field.value %></a><% } else { %><%= field.value %><% } %></dd>
+                            <% }) %>
+                          </dl>
+                        <% } %>
+                      </td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        <% }) %>
+        <p class="small text-muted">Verifica cada perfil antes de usarlo: un nombre de usuario igual no confirma que se trate de la misma persona.</p>
+      <% } %>
+    </main>
+    <%- include('../includes/scripts') %>
+  </body>
+</html>

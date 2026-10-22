@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <%- include('../includes/head') %>
+    <link rel="stylesheet" href="/public/css/maigret.css" />
+  </head>
+  <body>
+    <%- include('../includes/header') %>
+
+    <main class="container page-offset">
+      <div class="row justify-content-md-center mb-5">
+        <div class="col-md-12 mt-5">
+          <h2 class="text-center title">MAIGRET <hr /></h2>
+        </div>
+      </div>
+
+      <% if (message) { %>
+        <div class="alert <%= messageType === 'error' ? 'alert-danger' : 'alert-success' %>"><%= message %></div>
+      <% } %>
+
+      <div class="row justify-content-md-center mb-4">
+        <div class="col-md-5 mb-4">
+          <div class="card p-4">
+            <h3 class="text-center mb-4">Buscar nombre de usuario</h3>
+            <form action="/maigret/buscar" method="POST" autocomplete="off">
+              <div class="mb-3">
+                <label for="usuario" class="form-label">Nombre de usuario</label>
+                <input type="text" id="usuario" name="usuario" class="form-control" maxlength="65" required
+                  pattern="@?[A-Za-z0-9_][A-Za-z0-9._\-]{0,63}" placeholder="ej. guero_hmo" aria-describedby="usuarioAyuda" />
+                <div id="usuarioAyuda" class="form-text">Letras, números, punto, guion o guion bajo, sin espacios. Puedes incluir la @.</div>
+              </div>
+              <div class="mb-3">
+                <label for="modo" class="form-label">Profundidad</label>
+                <select id="modo" name="modo" class="form-select">
+                  <% Object.entries(modes).forEach(([value, mode]) => { %>
+                    <option value="<%= value %>"><%= mode.label %></option>
+                  <% }) %>
+                </select>
+                <div class="form-text">La rápida tarda de 1 a 3 minutos; la completa puede tardar más de media hora.</div>
+              </div>
+              <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="recursivo" name="recursivo" value="1" checked />
+                <label class="form-check-label" for="recursivo">Buscar también los alias que encuentre en los perfiles</label>
+              </div>
+              <button type="submit" class="btn btn-primary w-100">Iniciar búsqueda</button>
+            </form>
+            <p class="small text-muted mt-3 mb-0">
+              Maigret solo consulta perfiles públicos. Que exista una cuenta con el mismo nombre no confirma que sea la misma persona: verifica cada resultado.
+            </p>
+          </div>
+        </div>
+
+        <div class="col-md-7 py-3 custom_table">
+          <h3 class="text-center">Búsquedas</h3>
+          <hr />
+          <div class="table-responsive">
+            <table class="table w-100 maigret-table table-stack">
+              <thead>
+                <tr>
+                  <th>Usuario</th>
+                  <th>Profundidad</th>
+                  <th>Solicitó</th>
+                  <th>Estado</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% if (searches.length === 0) { %>
+                  <tr><td colspan="5" class="text-center">No hay búsquedas</td></tr>
+                <% } else { %>
+                  <% searches.forEach((search) => { %>
+                    <tr>
+                      <td data-label="Usuario">
+                        <div class="fw-semibold">@<%= search.username %></div>
+                        <div class="small text-muted"><%= search.createdAt %></div>
+                      </td>
+                      <td data-label="Profundidad"><%= modes[search.mode]?.label || search.mode %><%= search.recursiveSearch ? ' · con alias' : '' %></td>
+                      <td data-label="Solicitó"><%= search.requestedBy || '—' %></td>
+                      <td data-label="Estado">
+                        <% if (search.status === 'listo') { %>
+                          <span class="maigret-badge ready"><%= search.accounts %> cuenta(s)</span>
+                        <% } else if (search.status === 'error') { %>
+                          <span class="maigret-badge error" title="<%= search.error %>">Error</span>
+                        <% } else if (search.status === 'procesando') { %>
+                          <span class="maigret-badge pending">Buscando…</span>
+                        <% } else { %>
+                          <span class="maigret-badge pending">En cola</span>
+                        <% } %>
+                      </td>
+                      <td data-label="Acción">
+                        <div class="d-flex align-items-center gap-2 flex-nowrap">
+                          <a class="btn btn-sm btn-outline-primary" href="/maigret/<%= search.id %>">Ver</a>
+                          <form action="/maigret/eliminar/<%= search.id %>" method="POST" class="m-0"
+                            onsubmit="return confirm('¿Eliminar la búsqueda de @<%= search.username %>?');">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" aria-label="Eliminar búsqueda" title="Eliminar búsqueda">
+                              <i class="bi bi-trash3" aria-hidden="true"></i>
+                            </button>
+                          </form>
+                        </div>
+                      </td>
+                    </tr>
+                  <% }) %>
+                <% } %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <% if (searches.some((search) => search.status === 'pendiente' || search.status === 'procesando')) { %>
+      <script>
+        // Reload while searches run, unless the analyst is typing a new one.
+        setInterval(() => {
+          if (!document.getElementById('usuario').value) window.location.reload();
+        }, 10000);
+      </script>
+    <% } %>
+    <%- include('../includes/scripts') %>
+  </body>
+</html>
