@@ -25,8 +25,12 @@
             <form action="/imagenes/subir" method="POST" enctype="multipart/form-data">
               <div class="mb-3">
                 <label for="imagen" class="form-label">Imagen (JPG, PNG, GIF, WebP o HEIC, hasta <%= maxMegabytes %> MB)</label>
-                <input type="file" id="imagen" name="imagen" class="form-control" required
-                  accept="image/jpeg,image/png,image/gif,image/webp,image/heic,.heic,.jpg,.jpeg,.png,.gif,.webp" />
+                <div id="imagenDropZone" class="csv-drop-zone">
+                  <p id="imagenDropHint" class="small text-muted mb-2">Arrastra y suelta la imagen aquí o selecciónala.</p>
+                  <input type="file" id="imagen" name="imagen" class="form-control" required aria-describedby="imagenDropHint imagenDropStatus"
+                    accept="image/jpeg,image/png,image/gif,image/webp,image/heic,.heic,.jpg,.jpeg,.png,.gif,.webp" />
+                  <p id="imagenDropStatus" class="small mb-0 mt-2" role="status" aria-live="polite"></p>
+                </div>
               </div>
               <button type="submit" class="btn btn-primary w-100">Subir y analizar</button>
             </form>
@@ -77,6 +81,7 @@
         </div>
       </div>
     </main>
+    <script src="/public/js/imagenes-upload.js"></script>
     <%- include('../includes/scripts') %>
   </body>
 </html>
