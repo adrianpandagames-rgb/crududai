@@ -14,6 +14,7 @@
   cursor: pointer;
 }
 .theme-toggle:focus-visible { outline: 3px solid #429dff; outline-offset: 3px; }
+@media (max-width: 576px) { .theme-toggle { right: max(10px, env(safe-area-inset-right)); bottom: max(10px, env(safe-area-inset-bottom)); min-height: 36px; padding: 6px 12px; font-size: 12px; opacity: .92; } }
 html[data-theme="dark"] {
   --dark-bg: #111827;
   --dark-panel: #1f2937;

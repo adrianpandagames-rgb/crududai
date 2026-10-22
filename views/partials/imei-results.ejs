@@ -1,5 +1,5 @@
 <div class="table-responsive">
-  <table class="table w-100 imei-results-table">
+  <table class="table w-100 imei-results-table table-stack">
     <thead>
       <tr>
         <th style="width: 4%;">#</th>
@@ -22,15 +22,15 @@
       <% } else { %>
         <% imeis.forEach(function(item, index) { %>
         <tr data-imei-row>
-          <th scope="row"><%= startPos + index %></th>
-          <td><%= item.imei %></td>
-          <td><%= item.numObjetivo %></td>
-          <td><%= item.nuc %></td>
-          <td><%= item.ano %></td>
-          <td><%= item.tipo %></td>
-          <td><%= item.brand_name || '—' %></td>
-          <td><%= item.modelo || '—' %></td>
-          <td>
+          <th scope="row" data-label="#"><%= startPos + index %></th>
+          <td data-label="IMEI"><%= item.imei %></td>
+          <td data-label="Objetivo"><%= item.numObjetivo %></td>
+          <td data-label="NUC"><%= item.nuc %></td>
+          <td data-label="Año"><%= item.ano %></td>
+          <td data-label="Tipo"><%= item.tipo %></td>
+          <td data-label="Marca"><%= item.brand_name || '—' %></td>
+          <td data-label="Modelo"><%= item.modelo || '—' %></td>
+          <td data-label="Acción">
             <button type="button" class="btn btn-sm btn-outline-primary imei-action-btn copy-imei-btn"
               data-imei="<%= item.imei %>"
               data-brand="<%= item.brand_name || '' %>"

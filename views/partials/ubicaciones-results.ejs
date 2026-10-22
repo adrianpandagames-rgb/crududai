@@ -1,5 +1,5 @@
 <div class="table-responsive">
-  <table class="table w-100 ubicaciones-results-table">
+  <table class="table w-100 ubicaciones-results-table table-stack">
     <thead>
       <tr>
         <th style="width: 5%;">#</th>
@@ -19,12 +19,12 @@
       <% } else { %>
         <% ubicaciones.forEach(function(item, index) { %>
         <tr class="location-row" data-latitude="<%= item.latitude %>" data-longitude="<%= item.longitude %>" data-ubicacion="<%= item.ubicacion %>" data-lugar="<%= item.lugar %>" tabindex="0" role="button" style="cursor: pointer;">
-          <th scope="row"><%= startPos + index %></th>
-          <td><%= item.latitude %></td>
-          <td><%= item.longitude %></td>
-          <td><%= item.ubicacion %></td>
-          <td><%= item.lugar %></td>
-          <td>
+          <th scope="row" data-label="#"><%= startPos + index %></th>
+          <td data-label="Latitud"><%= item.latitude %></td>
+          <td data-label="Longitud"><%= item.longitude %></td>
+          <td data-label="Ubicación"><%= item.ubicacion %></td>
+          <td data-label="Lugar"><%= item.lugar %></td>
+          <td data-label="Acción">
             <div class="d-flex align-items-center gap-2 flex-nowrap ubicaciones-actions">
             <% if (typeof currentUser !== 'undefined' && currentUser.isAdmin === true) { %>
             <button type="button" class="btn btn-sm btn-outline-secondary edit-location-btn" data-id="<%= item.idUbicacion %>" data-latitude="<%= item.latitude %>" data-longitude="<%= item.longitude %>" data-ubicacion="<%= item.ubicacion %>" data-lugar="<%= item.lugar %>">Modificar</button>

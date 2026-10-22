@@ -1,16 +1,16 @@
 <div class="table-responsive">
-  <table class="table w-100 contactos-results-table">
+  <table class="table w-100 contactos-results-table table-stack">
     <thead>
       <tr>
         <th style="width: 5%;">#</th>
-        <th style="width: 18%;">Objetivo</th>
-        <th style="width: 20%;">Contactos</th>
+        <th style="width: 15%;">Objetivo</th>
+        <th style="width: 16%;">Contactos</th>
         <th style="width: 9%;">NUC</th>
-        <th style="width: 20%;">Delito</th>
-        <th style="width: 8%;">Año</th>
-        <th style="width: 12%;">Tipo</th>
+        <th style="width: 19%;">Delito</th>
+        <th style="width: 7%;">Año</th>
+        <th style="width: 15%;">Tipo</th>
         <% if (typeof currentUser !== 'undefined' && currentUser.canEditRecords) { %>
-          <th>Acción</th>
+          <th style="width: 88px;">Acción</th>
         <% } %>
       </tr>
     </thead>
@@ -23,11 +23,11 @@
       <% } else { %>
         <% objetivos.forEach(function(objetivo, index) { %>
         <tr>
-          <th scope="row"><%= startPos + index %></th>
-          <td><%= objetivo.numObjetivo %></td>
-          <td><%= objetivo.contacto %></td>
-          <td><%= objetivo.nuc %></td>
-          <td>
+          <th scope="row" data-label="#"><%= startPos + index %></th>
+          <td data-label="Objetivo"><%= objetivo.numObjetivo %></td>
+          <td data-label="Contacto"><%= objetivo.contacto %></td>
+          <td data-label="NUC"><%= objetivo.nuc %></td>
+          <td data-label="Delito">
             <% const delito = String(objetivo.delito || '').trim(); %>
             <% if (delito) { %>
               <details class="delito-details">
@@ -38,10 +38,10 @@
               —
             <% } %>
           </td>
-          <td><%= objetivo.ano %></td>
-          <td><%= objetivo.tipo %></td>
+          <td data-label="Año"><%= objetivo.ano %></td>
+          <td data-label="Tipo"><%= objetivo.tipo %></td>
           <% if (typeof currentUser !== 'undefined' && currentUser.canEditRecords) { %>
-            <td><a class="btn btn-sm btn-outline-primary" href="/lineas/editar/<%= objetivo.idObjetivo %>">Editar</a></td>
+            <td data-label="Acción"><a class="btn btn-sm btn-outline-primary" href="/lineas/editar/<%= objetivo.idObjetivo %>">Editar</a></td>
           <% } %>
         </tr>
         <% }); %>

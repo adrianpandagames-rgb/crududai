@@ -44,7 +44,7 @@
           <h3 class="text-center">Archivos de Ruta</h3>
           <hr />
           <div class="table-responsive">
-            <table class="table w-100 ruta-files-table">
+            <table class="table w-100 ruta-files-table table-stack">
               <thead>
                 <tr>
                   <th>Archivo</th>
@@ -59,9 +59,9 @@
                 <% } else { %>
                   <% files.forEach((file) => { %>
                     <tr id="ruta-file-<%= file.id %>">
-                      <td><%= file.name %></td>
-                      <td><%= file.lineNumber %></td>
-                      <td>
+                      <td data-label="Archivo"><%= file.name %></td>
+                      <td data-label="Línea"><%= file.lineNumber %></td>
+                      <td data-label="Estado">
                         <% if (file.status === 'listo') { %>
                           <span class="ruta-status-dot ruta-status-ready" title="Listo" aria-label="Listo"></span>
                         <% } else if (file.status === 'error') { %>
@@ -70,7 +70,7 @@
                           <span class="ruta-status-dot ruta-status-pending" title="En proceso" aria-label="En proceso"></span>
                         <% } %>
                       </td>
-                      <td class="ruta-actions">
+                      <td class="ruta-actions" data-label="Acción">
                         <div class="d-flex align-items-center gap-2 flex-nowrap">
                         <% if (file.status === 'listo') { %>
                           <a class="btn btn-sm btn-outline-primary" href="/ruta/exportar-xlsx/<%= file.id %>">Exportar XLSX</a>

@@ -200,10 +200,6 @@ form {
 }
 
 @media (max-width: 768px) {
-  .container {
-    padding: 0 10px;
-  }
-
   form {
     padding: 10px;
   }
@@ -235,10 +231,6 @@ form {
 }
 
 @media (max-width: 576px) {
-  .container {
-    padding: 0 8px;
-  }
-
   .title {
     margin-top: 1rem;
   }

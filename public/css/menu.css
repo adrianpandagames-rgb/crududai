@@ -80,13 +80,22 @@ a {
   letter-spacing: 0.03em;
 }
 
-/* menu */
+/* menu: a dropdown panel below the header until every link fits on one row */
 
 .header .menu {
-  clear: both;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
   max-height: 0;
   overflow: hidden;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
   transition: max-height 0.2s ease-out;
+}
+
+.header details[open] > .admin-submenu {
+  display: block;
+  padding: 0 0 0 16px;
 }
 
 /* menu icon */
@@ -135,7 +144,8 @@ a {
 }
 
 .header .menu-btn:checked ~ .menu {
-  max-height: 240px;
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
 }
 
 .header .menu-btn:checked ~ .menu-icon .navicon {
@@ -155,21 +165,23 @@ a {
   top: 0;
 }
 
-/* 48em = 768px */
+/* 75em = 1200px: below this the ten admin links do not fit on one row */
 
-@media (min-width: 48em) {
+@media (min-width: 75em) {
   .header li {
     float: left;
   }
   .header li a,
   .header summary.menu-item {
-    padding: 20px 30px;
+    padding: 12px 11px;
+    font-size: 0.95rem;
+    white-space: nowrap;
   }
   .header .menu {
-    clear: none;
-    float: right;
+    position: static;
     max-height: none;
     overflow: visible;
+    box-shadow: none;
   }
   .header .menu-icon {
     display: none;
@@ -200,38 +212,22 @@ a {
   }
 }
 
+/* The logo text competes with the links for space on smaller desktops. */
+@media (min-width: 75em) and (max-width: 87.5em) {
+  .logo-text {
+    display: none;
+  }
+}
+
 @media (max-width: 576px) {
   .header {
     padding: 0 12px;
     min-height: 64px;
   }
 
-  .header .menu {
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 64px;
-    background: #fff;
-    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
-  }
-
   .header li a,
   .header summary.menu-item {
     padding: 14px 16px;
-  }
-
-  .header details[open] > .admin-submenu {
-    display: block;
-    position: static;
-    min-width: 0;
-    padding: 0 0 0 16px;
-    border: 0;
-    border-radius: 0;
-    box-shadow: none;
-  }
-
-  .header .admin-submenu li a {
-    padding: 12px 16px;
   }
 
   .logo img {
