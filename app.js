@@ -26,6 +26,7 @@ import { requireSameOrigin } from './src/requestSecurity.js';
 import { createTelegramApiRouter } from './src/telegramApiRouter.js';
 import { decryptTelegramId, encryptTelegramId } from './src/telegramIdCrypto.js';
 import { createPlaneacionRouter } from './src/planeacionRouter.js';
+import { createRedTelefonicaRouter } from './src/redTelefonicaRouter.js';
 import { getGoogleGeocodingQuota, resetGoogleGeocodingQuota } from './src/googleGeocodingQuota.js';
 import { createLoginRateLimiter, LOGIN_WINDOW_MS } from './src/loginRateLimit.js';
 import { forwardAsyncErrors, handleErrors } from './src/errorHandling.js';
@@ -468,60 +469,7 @@ app.get('/auditoria', requireAdmin, async (req, res, next) => {
   }
 });
 
-app.get('/red-telefonica', requireAdmin, async (req, res, next) => {
-  try {
-    const [crossings] = await pool.execute(`
-      SELECT c.contacto, o.idObjetivo, o.numObjetivo, o.nuc, o.tipo, o.ano
-      FROM contactos c
-      INNER JOIN objetivo o ON o.idObjetivo = c.idObjetivo
-      INNER JOIN (
-        SELECT contacto
-        FROM contactos
-        WHERE CHAR_LENGTH(CAST(contacto AS CHAR)) >= 10
-        GROUP BY contacto
-        HAVING COUNT(DISTINCT idObjetivo) > 1
-        ORDER BY COUNT(DISTINCT idObjetivo) DESC, contacto ASC
-        LIMIT 100
-      ) cruzados ON cruzados.contacto = c.contacto
-      WHERE CHAR_LENGTH(CAST(c.contacto AS CHAR)) >= 10
-      ORDER BY c.contacto, o.numObjetivo
-    `);
-
-    const nodes = new Map();
-    const links = [];
-    const crossingDetails = new Map();
-
-    for (const row of crossings) {
-      const phone = String(row.contacto);
-      const phoneId = `phone:${phone}`;
-      const objectiveId = `objective:${row.idObjetivo}`;
-      if (!nodes.has(phoneId)) nodes.set(phoneId, { id: phoneId, label: phone, type: 'phone' });
-      if (!nodes.has(objectiveId)) {
-        nodes.set(objectiveId, {
-          id: objectiveId,
-          label: String(row.numObjetivo),
-          type: 'objective',
-          detail: `${row.nuc} · ${row.tipo} · ${row.ano}`,
-        });
-      }
-      links.push({ source: phoneId, target: objectiveId });
-      if (!crossingDetails.has(phone)) crossingDetails.set(phone, []);
-      crossingDetails.get(phone).push({
-        objetivo: row.numObjetivo,
-        nuc: row.nuc,
-        tipo: row.tipo,
-        ano: row.ano,
-      });
-    }
-
-    return res.render('pages/red-telefonica', {
-      graph: { nodes: [...nodes.values()], links },
-      crossingDetails: [...crossingDetails].map(([contacto, objetivos]) => ({ contacto, objetivos })),
-    });
-  } catch (error) {
-    return next(error);
-  }
-});
+app.use('/red-telefonica', requireAdmin, createRedTelefonicaRouter(pool));
 
 app.get('/medidores', requireAdmin, async (req, res, next) => {
   try {
