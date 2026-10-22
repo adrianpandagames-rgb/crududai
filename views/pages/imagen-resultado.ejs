@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <%- include('../includes/head') %>
+    <link rel="stylesheet" href="/public/css/imagenes.css" />
+    <% if (metadata.gps) { %>
+      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <% } %>
+  </head>
+  <body>
+    <%- include('../includes/header') %>
+
+    <main class="container page-offset">
+      <div class="row justify-content-md-center mb-4">
+        <div class="col-md-12 mt-5">
+          <h2 class="text-center title">BÚSQUEDA POR IMAGEN <hr /></h2>
+        </div>
+      </div>
+
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <div class="imagen-name fw-semibold"><%= image.name %></div>
+        <a class="btn btn-outline-secondary" href="/imagenes">Volver</a>
+      </div>
+
+      <div class="row g-4 mb-4">
+        <div class="col-lg-5">
+          <div class="card p-3 h-100">
+            <img class="imagen-preview" src="/imagenes/<%= image.id %>/archivo" alt="Imagen analizada" />
+            <dl class="imagen-facts mt-3 mb-0">
+              <dt>Subida por</dt><dd><%= image.uploadedBy || '—' %> · <%= image.createdAt %></dd>
+              <dt>Tamaño</dt><dd><%= (image.size / 1024).toFixed(1) %> KB · <%= image.type.toUpperCase() %></dd>
+              <dt>SHA-256</dt><dd class="imagen-hash"><%= image.sha256 %></dd>
+              <dt>MD5</dt><dd class="imagen-hash"><%= image.md5 %></dd>
+              <dt>Se borra</dt><dd><%= image.expiresAt %></dd>
+            </dl>
+          </div>
+        </div>
+
+        <div class="col-lg-7">
+          <div class="card p-3 mb-4">
+            <h3 class="h5">Búsqueda inversa</h3>
+            <% if (!searchable) { %>
+              <div class="alert alert-warning mb-0">Los buscadores no aceptan imágenes HEIC (formato de iPhone). Ábrela en el equipo, guárdala como JPG y súbela de nuevo para buscarla.</div>
+            <% } else if (publicUrl) { %>
+              <p class="small mb-2">Cada botón abre el buscador en otra pestaña con esta imagen. Revisa los resultados en cada uno.</p>
+              <div class="d-flex flex-wrap gap-2 mb-3">
+                <% links.forEach((link) => { %>
+                  <a class="btn btn-primary" href="<%= link.href %>" target="_blank" rel="noopener noreferrer"><i class="bi bi-search"></i> <%= link.name %></a>
+                <% }) %>
+              </div>
+              <p class="small text-muted mb-2">
+                Enlace público activo hasta las <%= image.linkExpiresAt %>.
+                <%= image.stripped ? 'Se publica sin metadatos.' : 'Este formato se publica tal cual, con sus metadatos.' %>
+                Descargas del enlace: <%= image.hits %><%= image.lastAccess ? ` (última ${image.lastAccess})` : '' %>.
+              </p>
+              <form action="/imagenes/<%= image.id %>/revocar" method="POST" class="m-0">
+                <button type="submit" class="btn btn-sm btn-outline-danger">Desactivar enlace público</button>
+              </form>
+            <% } else { %>
+              <p class="small mb-2">El enlace público está desactivado o venció. Actívalo para buscar la imagen; dura <%= linkMinutes %> minutos.</p>
+              <form action="/imagenes/<%= image.id %>/enlace" method="POST" class="m-0">
+                <button type="submit" class="btn btn-primary">Activar enlace por <%= linkMinutes %> minutos</button>
+              </form>
+            <% } %>
+          </div>
+
+          <div class="card p-3">
+            <h3 class="h5">Metadatos</h3>
+            <% if (metadata.summary.length === 0 && !metadata.gps) { %>
+              <p class="text-muted mb-0">La imagen no trae metadatos. Es común en fotos descargadas de redes sociales o enviadas por mensajería, que los eliminan.</p>
+            <% } else { %>
+              <% if (metadata.gps) { %>
+                <div class="alert alert-info py-2">
+                  <i class="bi bi-geo-alt-fill"></i>
+                  <strong>Ubicación GPS:</strong> <span class="imagen-hash"><%= metadata.gps.latitude %>, <%= metadata.gps.longitude %></span>
+                  · <a href="https://www.google.com/maps?q=<%= metadata.gps.latitude %>,<%= metadata.gps.longitude %>" target="_blank" rel="noopener noreferrer">Abrir en Google Maps</a>
+                </div>
+                <div id="imagenMap" class="imagen-map mb-3" data-lat="<%= metadata.gps.latitude %>" data-lng="<%= metadata.gps.longitude %>"></div>
+              <% } %>
+              <dl class="imagen-facts mb-0">
+                <% metadata.summary.forEach((field) => { %>
+                  <dt><%= field.label %></dt><dd><%= field.value %></dd>
+                <% }) %>
+              </dl>
+              <% if (metadata.all.length > 0) { %>
+                <details class="mt-3">
+                  <summary>Todos los metadatos (<%= metadata.all.length %>)</summary>
+                  <div class="table-responsive mt-2">
+                    <table class="table table-sm imagen-all">
+                      <tbody>
+                        <% metadata.all.forEach((field) => { %>
+                          <tr><th><%= field.key %></th><td><%= field.value %></td></tr>
+                        <% }) %>
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+              <% } %>
+              <p class="small text-muted mt-3 mb-0">Las fechas se muestran tal como las registró el equipo. Los metadatos se pueden editar, así que confírmalos con otras fuentes.</p>
+            <% } %>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <% if (metadata.gps) { %>
+      <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+      <script>
+        (() => {
+          const element = document.getElementById('imagenMap');
+          if (!element || typeof L === 'undefined') return;
+          const point = [Number(element.dataset.lat), Number(element.dataset.lng)];
+          const map = L.map(element).setView(point, 15);
+          L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19, attribution: '&copy; OpenStreetMap',
+          }).addTo(map);
+          L.marker(point).addTo(map);
+        })();
+      </script>
+    <% } %>
+    <%- include('../includes/scripts') %>
+  </body>
+</html>

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <%- include('../includes/head') %>
+    <link rel="stylesheet" href="/public/css/imagenes.css" />
+  </head>
+  <body>
+    <%- include('../includes/header') %>
+
+    <main class="container page-offset">
+      <div class="row justify-content-md-center mb-5">
+        <div class="col-md-12 mt-5">
+          <h2 class="text-center title">BÚSQUEDA POR IMAGEN <hr /></h2>
+        </div>
+      </div>
+
+      <% if (message) { %>
+        <div class="alert <%= messageType === 'error' ? 'alert-danger' : 'alert-success' %>"><%= message %></div>
+      <% } %>
+
+      <div class="row justify-content-md-center mb-4">
+        <div class="col-md-5 mb-4">
+          <div class="card p-4">
+            <h3 class="text-center mb-4">Analizar imagen</h3>
+            <form action="/imagenes/subir" method="POST" enctype="multipart/form-data">
+              <div class="mb-3">
+                <label for="imagen" class="form-label">Imagen (JPG, PNG, GIF, WebP o HEIC, hasta <%= maxMegabytes %> MB)</label>
+                <input type="file" id="imagen" name="imagen" class="form-control" required
+                  accept="image/jpeg,image/png,image/gif,image/webp,image/heic,.heic,.jpg,.jpeg,.png,.gif,.webp" />
+              </div>
+              <button type="submit" class="btn btn-primary w-100">Subir y analizar</button>
+            </form>
+            <ul class="small text-muted mt-3 mb-0 ps-3">
+              <li>Los metadatos (GPS, fecha, equipo) se leen en este servidor, sin enviar la imagen a nadie.</li>
+              <li>Para la búsqueda inversa, la imagen se publica <strong>sin metadatos</strong> en un enlace temporal de 1 hora y se envía al buscador que elijas.</li>
+              <li>No uses la búsqueda inversa con imágenes de víctimas o de menores.</li>
+              <li>Las imágenes se borran solas a los <%= retentionDays %> días.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="col-md-7 py-3 custom_table">
+          <h3 class="text-center">Imágenes analizadas</h3>
+          <hr />
+          <div class="table-responsive">
+            <table class="table w-100 imagenes-table table-stack">
+              <thead><tr><th>Imagen</th><th>Archivo</th><th>Subido por</th><th>Acción</th></tr></thead>
+              <tbody>
+                <% if (images.length === 0) { %>
+                  <tr><td colspan="4" class="text-center">No hay imágenes</td></tr>
+                <% } else { %>
+                  <% images.forEach((image) => { %>
+                    <tr>
+                      <td data-label="Imagen"><img class="imagen-thumb" src="/imagenes/<%= image.id %>/archivo" alt="" loading="lazy" /></td>
+                      <td data-label="Archivo">
+                        <div class="fw-semibold imagen-name"><%= image.name %></div>
+                        <div class="small text-muted"><%= image.createdAt %></div>
+                        <% if (image.hasGps) { %><span class="imagen-badge gps"><i class="bi bi-geo-alt-fill"></i> Con GPS</span><% } %>
+                      </td>
+                      <td data-label="Subido por"><%= image.uploadedBy || '—' %></td>
+                      <td data-label="Acción">
+                        <div class="d-flex align-items-center gap-2 flex-nowrap">
+                          <a class="btn btn-sm btn-outline-primary" href="/imagenes/<%= image.id %>">Ver</a>
+                          <form action="/imagenes/eliminar/<%= image.id %>" method="POST" class="m-0" onsubmit="return confirm('¿Eliminar esta imagen?');">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" aria-label="Eliminar imagen" title="Eliminar imagen">
+                              <i class="bi bi-trash3" aria-hidden="true"></i>
+                            </button>
+                          </form>
+                        </div>
+                      </td>
+                    </tr>
+                  <% }) %>
+                <% } %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+    <%- include('../includes/scripts') %>
+  </body>
+</html>

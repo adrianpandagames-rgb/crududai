@@ -28,6 +28,7 @@ import { decryptTelegramId, encryptTelegramId } from './src/telegramIdCrypto.js'
 import { createPlaneacionRouter } from './src/planeacionRouter.js';
 import { createRedTelefonicaRouter } from './src/redTelefonicaRouter.js';
 import { createMaigretRouter } from './src/maigretRouter.js';
+import { createImagenesRouter, createPublicImageRouter } from './src/imagenesRouter.js';
 import { getGoogleGeocodingQuota, resetGoogleGeocodingQuota } from './src/googleGeocodingQuota.js';
 import { createLoginRateLimiter, LOGIN_WINDOW_MS } from './src/loginRateLimit.js';
 import { forwardAsyncErrors, handleErrors } from './src/errorHandling.js';
@@ -196,6 +197,9 @@ app.use('/metricas', requireNonUecs);
 app.use('/api/bot', createTelegramApiRouter(pool));
 app.use('/planeacion-geografica', requireAuth, createPlaneacionRouter(pool));
 app.use('/maigret', requireAuth, createMaigretRouter(pool));
+app.use('/imagenes', requireAuth, createImagenesRouter(pool));
+// Reverse image search engines download the image without a session, through an expiring token.
+app.use('/imagen-publica', createPublicImageRouter(pool));
 
 
 
