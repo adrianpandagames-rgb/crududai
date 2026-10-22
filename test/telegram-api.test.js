@@ -2,13 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
 import { createTelegramApiRouter, buildTelegramQuery } from '../src/telegramApiRouter.js';
+import { telegramTestConfig, withLinkedTelegramUsers } from './support/telegram-auth.js';
 
 test('bot API requires its own token and an authorized Telegram user before querying', async t => {
   const calls = [];
   const pool = { async query(sql, params) { calls.push({ sql, params }); return [Array.from({ length: 6 }, (_, id) => ({ id }))]; } };
   const token = 'a'.repeat(64);
   const app = express();
-  app.use('/api/bot', createTelegramApiRouter(pool, { TELEGRAM_API_TOKEN: token, TELEGRAM_ALLOWED_USER_IDS: '123' }));
+  const config = telegramTestConfig(token);
+  app.use('/api/bot', createTelegramApiRouter(withLinkedTelegramUsers(pool, config, ['123']), config));
   const server = app.listen(0, '127.0.0.1');
   t.after(() => new Promise(resolve => server.close(resolve)));
   await new Promise(resolve => server.once('listening', resolve));
@@ -50,11 +52,25 @@ test('queries validate input and bind values rather than interpolating SQL', () 
 test('database failures produce a generic 503 and no credentials', async t => {
   const app = express();
   const token = 'a'.repeat(64);
-  app.use('/api/bot', createTelegramApiRouter({ query: async () => { throw { code: 'TEST_FAILURE' }; } }, { TELEGRAM_API_TOKEN: token, TELEGRAM_ALLOWED_USER_IDS: '123' }));
+  const config = telegramTestConfig(token);
+  const pool = withLinkedTelegramUsers({ query: async () => { throw { code: 'TEST_FAILURE' }; } }, config, ['123']);
+  app.use('/api/bot', createTelegramApiRouter(pool, config));
   const server = app.listen(0, '127.0.0.1');
   t.after(() => new Promise(resolve => server.close(resolve)));
   await new Promise(resolve => server.once('listening', resolve));
   const response = await fetch(`http://127.0.0.1:${server.address().port}/api/bot/linea?q=6621234567`, { headers: { Authorization: `Bearer ${token}`, 'X-Telegram-User-Id': '123' } });
   assert.equal(response.status, 503);
   assert.deepEqual(await response.json(), { error: 'No fue posible consultar los registros.' });
+});
+
+test('a missing Telegram ID encryption key reports the API as unconfigured', async t => {
+  const app = express();
+  const token = 'a'.repeat(64);
+  app.use('/api/bot', createTelegramApiRouter({ execute: async () => { throw new Error('Unexpected DB query'); } }, { TELEGRAM_API_TOKEN: token }));
+  const server = app.listen(0, '127.0.0.1');
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  await new Promise(resolve => server.once('listening', resolve));
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/api/bot/linea?q=6621234567`, { headers: { Authorization: `Bearer ${token}`, 'X-Telegram-User-Id': '123' } });
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: 'API del bot no configurada.' });
 });

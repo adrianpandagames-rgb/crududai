@@ -45,7 +45,6 @@
     "xlsx": "file:xlsx-0.18.5.tgz"
   },
   "devDependencies": {
-    "mocha": "^11.7.6",
     "nodemon": "^3.1.14",
     "pkg": "^5.8.1"
   },

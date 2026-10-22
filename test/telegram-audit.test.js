@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
 import { createTelegramApiRouter } from '../src/telegramApiRouter.js';
+import { telegramTestConfig, withLinkedTelegramUsers } from './support/telegram-auth.js';
 import { auditActivity } from '../src/auditMiddleware.js';
 import { presentAuditEntry } from '../src/auditPresentation.js';
 
@@ -15,8 +16,8 @@ test('Telegram audit identifies authorized users and records queries, maps, geoc
     if (params[0] === 'fallo') throw new Error('Database unavailable');
     return [[]];
   } };
-  app.use('/api/bot', createTelegramApiRouter(pool,
-    { TELEGRAM_API_TOKEN: token, TELEGRAM_ALLOWED_USER_IDS: '1234567890123' },
+  const config = telegramTestConfig(token);
+  app.use('/api/bot', createTelegramApiRouter(withLinkedTelegramUsers(pool, config, ['1234567890123']), config,
     async () => Buffer.from('png'), async () => ({ ubicacion: 'Centro' })));
   const server = app.listen(0, '127.0.0.1');
   await new Promise((resolve) => server.once('listening', resolve));

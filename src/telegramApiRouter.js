@@ -60,7 +60,10 @@ export function createTelegramApiRouter(pool, config = process.env, mapRenderer 
     if (!crypto.timingSafeEqual(digest(provided), digest(expected))) return res.status(401).json({ error: 'Credencial inválida.' });
     const userId = req.get('X-Telegram-User-Id');
     if (!userId || !/^[1-9]\d{0,19}$/.test(userId)) return res.status(403).json({ error: 'Usuario no autorizado.' });
-    pool.execute('SELECT id FROM users WHERE telegram_id_hash = ? AND is_active = 1 LIMIT 1', [telegramIdHash(userId, config)])
+    let userHash;
+    try { userHash = telegramIdHash(userId, config); }
+    catch { return res.status(503).json({ error: 'API del bot no configurada.' }); }
+    pool.execute('SELECT id FROM users WHERE telegram_id_hash = ? AND is_active = 1 LIMIT 1', [userHash])
       .then(([rows]) => {
         if (rows.length !== 1) return res.status(403).json({ error: 'Usuario no autorizado.' });
         // Only attribute activity after validating both the bot credential and linked active user.

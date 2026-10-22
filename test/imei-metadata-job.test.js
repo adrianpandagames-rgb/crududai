@@ -19,6 +19,5 @@ test('getNextNoonRunDelay schedules the next run for the next day when the curre
   const now = new Date('2026-07-17T13:30:00');
   const delay = getNextNoonRunDelay(now);
 
-  assert.ok(delay > 0);
-  assert.ok(delay >= 23 * 60 * 60 * 1000);
+  assert.equal(delay, new Date('2026-07-18T12:00:00') - now);
 });

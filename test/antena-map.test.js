@@ -4,6 +4,7 @@ import sharp from 'sharp';
 import express from 'express';
 import { generateAntennaMap, validateAntennaMap } from '../src/antenaMapService.js';
 import { createTelegramApiRouter } from '../src/telegramApiRouter.js';
+import { telegramTestConfig, withLinkedTelegramUsers } from './support/telegram-auth.js';
 
 test('coverage inputs validate required fields, radius and finite coordinates', () => {
   assert.deepEqual(validateAntennaMap({ lat: '29.0729', lng: '-110.9559', azimuth: '50' }),
@@ -39,10 +40,12 @@ test('one-antenna PNG renders a sector over only the requested map viewport', as
 });
 
 test('coverage API requires bot credentials and user authorization, and never queries the database', async (t) => {
-  const config = { TELEGRAM_API_TOKEN: 'x'.repeat(32), TELEGRAM_ALLOWED_USER_IDS: '123' };
+  const config = telegramTestConfig('x'.repeat(32));
   let calls = 0;
   const app = express();
-  app.use('/api/bot', createTelegramApiRouter({ query: () => { throw new Error('Unexpected DB query'); } }, config,
+  // Only the user authorization lookup may touch the database.
+  const pool = withLinkedTelegramUsers({ query: () => { throw new Error('Unexpected DB query'); } }, config, ['123']);
+  app.use('/api/bot', createTelegramApiRouter(pool, config,
     async (params) => { calls++; assert.equal(params.azimuth, 50); return Buffer.from('PNG test'); }));
   const server = app.listen(0, '127.0.0.1');
   await new Promise((resolve) => server.once('listening', resolve));

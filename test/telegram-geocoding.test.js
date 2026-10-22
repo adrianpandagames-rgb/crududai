@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createCoverageGeocoder } from '../src/telegramGeocodingService.js';
 import express from 'express';
 import { createTelegramApiRouter } from '../src/telegramApiRouter.js';
+import { telegramTestConfig, withLinkedTelegramUsers } from './support/telegram-auth.js';
 
 test('registered antennas never initialize geocoding or call Google', async () => {
   const registered = [{ idUbicacion: 1, latitude: 29, longitude: -110 }];
@@ -51,10 +52,10 @@ test('zero results are not saved and database failure does not trigger Google re
 });
 
 test('geocoding persistence endpoint requires authorized bot identity and validates coordinates', async (t) => {
-  const config = { TELEGRAM_API_TOKEN: 'x'.repeat(32), TELEGRAM_ALLOWED_USER_IDS: '123' };
+  const config = telegramTestConfig('x'.repeat(32));
   let calls = 0;
   const app = express();
-  app.use('/api/bot', createTelegramApiRouter({}, config, undefined, async (lat, lng) => {
+  app.use('/api/bot', createTelegramApiRouter(withLinkedTelegramUsers({}, config, ['123']), config, undefined, async (lat, lng) => {
     calls++; assert.equal(lat, 29); assert.equal(lng, -110);
     return { rows: [{ ubicacion: 'Calle Uno' }], status: 'OK' };
   }));

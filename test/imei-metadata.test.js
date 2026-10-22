@@ -1,3 +1,4 @@
+import { describe, it } from 'node:test';
 import assert from 'assert';
 import { fetchImeiMetadata } from '../src/router.js';
 import pool from '../src/db.js';
@@ -79,6 +80,8 @@ describe('fetchImeiMetadata', () => {
   it('checks the account endpoint first and retries once on timeout', async () => {
     const originalRequest = https.request;
     const originalQuery = pool.query;
+    const originalApiKey = process.env.IMEI_API_KEY;
+    process.env.IMEI_API_KEY = 'test-key';
     let attempts = 0;
 
     pool.query = async (sql) => {
@@ -114,6 +117,8 @@ describe('fetchImeiMetadata', () => {
     } finally {
       pool.query = originalQuery;
       https.request = originalRequest;
+      if (originalApiKey === undefined) delete process.env.IMEI_API_KEY;
+      else process.env.IMEI_API_KEY = originalApiKey;
     }
   });
 });
