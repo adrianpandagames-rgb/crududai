@@ -9,6 +9,7 @@ def api_error_details(error):
             401: 'La API rechazó la credencial del bot. Revisa TELEGRAM_API_TOKEN y reinicia Node y el bot.',
             403: 'La API no autoriza tu ID. Solicita al administrador que lo vincule a tu usuario.',
             404: 'La ruta de consulta no está disponible. Revisa la URL de la API y reinicia Node con la versión actual.',
+            429: 'Hay demasiadas búsquedas en cola. Espera a que terminen algunas e intenta de nuevo.',
             503: 'El servicio de consultas no está disponible. Revisa la configuración de la API y la conexión MySQL de Node.',
         }
         return f'HTTP_{status}', messages.get(status, 'La API del sistema devolvió un error. Intenta más tarde.')

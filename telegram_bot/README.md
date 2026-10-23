@@ -28,6 +28,15 @@ configura `PM2_EXECUTABLE` con la ruta absoluta que devuelve `command -v pm2`.
 Después de cambiar estas variables, reinicia Node con
 `pm2 restart crududai --update-env`. El reinicio automático se aplica a **Guardar rol**.
 
+### Búsqueda de nombres de usuario con Maigret
+
+```text
+/maigret guero_hmo
+/maigret guero_hmo --normal
+```
+
+Busca el nombre de usuario en 100 sitios públicos (o 500 con `--normal`) y sigue los alias que encuentre. La búsqueda entra en la misma cola que la pestaña Maigret del sistema, a nombre del usuario vinculado y con sus mismas reglas de grupo, así que también aparece en la web. El bot avisa que quedó en cola y, al terminar, envía las cuentas encontradas, el reporte HTML y la liga al detalle (usa `PUBLIC_BASE_URL`). Cada usuario puede tener dos búsquedas en curso. Si el bot se reinicia mientras espera, el resultado sigue disponible en la web.
+
 ### Imagen de cobertura de una antena
 
 ```text

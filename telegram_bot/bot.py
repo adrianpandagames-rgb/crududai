@@ -3,12 +3,15 @@ import os
 import time
 from pathlib import Path
 
-from .api import create_client, search_api
+from .api import create_client, maigret_report, maigret_status, search_api, start_maigret
 from .line_results import send_line_results
 from .errors import api_error_details
 from .command_aliases import line_alias_handler
 from .core import PAGE_SIZE, can_query, format_row, query_for
 from .coverage import coverage_parameters, coverage_image, send_coverage, coverage_geocoding
+from .maigret import MODES as MAIGRET_MODES, follow_search, maigret_arguments
+
+MAX_ACTIVE_MAIGRET_PER_USER = 2
 
 HELP = ('Consultas disponibles:\n'
         '/cobertura 29.0729 -110.9559 — solo antena, sin azimut\n'
@@ -25,13 +28,15 @@ HELP = ('Consultas disponibles:\n'
         '/antena 29.072 -110.956 — decimal separado por espacio\n'
         '/antena 29°4\u002719.2\u0022N, 110°57\u002721.6\u0022W — coordenadas DMS\n'
         'En IMEI y antenas, para más resultados añade: --pagina 2\n'
+        '/maigret guero_hmo — buscar un nombre de usuario en 100 sitios públicos\n'
+        '/maigret guero_hmo --normal — buscar en 500 sitios (tarda más)\n'
         '/miid — ver tu ID de Telegram')
 logger = logging.getLogger(__name__)
 
 
 def main():
     from dotenv import load_dotenv
-    from telegram import BotCommand
+    from telegram import BotCommand, LinkPreviewOptions
     from telegram.ext import Application, CommandHandler
     from telegram.request import HTTPXRequest
 
@@ -148,12 +153,66 @@ def main():
             logger.error('Mapa fallido: usuario=%s etapa=%s codigo=%s', user_id, stage, code)
             await update.effective_message.reply_text(message)
 
+    active_maigret = {}
+
+    async def maigret_command(update, context):
+        if not await authorized(update):
+            return
+        user_id = update.effective_user.id
+        message = update.effective_message
+        now = time.monotonic()
+        if now - last_query.get(user_id, float('-inf')) < 2:
+            await message.reply_text('Espera dos segundos entre consultas.')
+            return
+        try:
+            username, mode = maigret_arguments(context.args)
+        except ValueError as error:
+            await message.reply_text(str(error))
+            return
+        if active_maigret.get(user_id, 0) >= MAX_ACTIVE_MAIGRET_PER_USER:
+            await message.reply_text('Ya tienes dos búsquedas de Maigret en curso. Espera a que termine alguna.')
+            return
+        last_query[user_id] = now
+        try:
+            started = await start_maigret(api_client, username, mode, user_id)
+        except Exception as error:
+            code, error_message = api_error_details(error)
+            logger.error('Maigret fallido: usuario=%s codigo=%s', user_id, code)
+            await message.reply_text(error_message)
+            return
+        await message.reply_text(f'Búsqueda de @{username} en cola ({MAIGRET_MODES[mode]}). '
+                                 'Te aviso aquí cuando termine; puede tardar varios minutos.')
+
+        async def send_text(text):
+            await message.reply_text(text, protect_content=True, link_preview_options=LinkPreviewOptions(is_disabled=True))
+
+        async def send_report(search_id, name):
+            try:
+                report = await maigret_report(api_client, search_id, user_id)
+                await message.reply_document(document=report, filename=f'Maigret-{name}.html', protect_content=True)
+            except Exception as error:
+                logger.error('Reporte Maigret fallido: usuario=%s codigo=%s', user_id, api_error_details(error)[0])
+
+        async def follow():
+            try:
+                await follow_search(started['id'], mode, lambda search_id: maigret_status(api_client, search_id, user_id),
+                                    send_text, send_report)
+            except Exception as error:
+                logger.error('Seguimiento Maigret fallido: usuario=%s error=%s', user_id, type(error).__name__)
+            finally:
+                active_maigret[user_id] -= 1
+
+        # Following runs in the background so the bot keeps answering other commands meanwhile.
+        active_maigret[user_id] = active_maigret.get(user_id, 0) + 1
+        context.application.create_task(follow())
+
     async def post_init(application):
         await application.bot.set_my_commands([
             BotCommand('linea', 'Consultar una línea'),
             BotCommand('imei', 'Consultar un IMEI'),
             BotCommand('antena', 'Consultar ubicacion de antena'),
             BotCommand('cobertura', 'Mapa de antena: latitud longitud azimut'),
+            BotCommand('maigret', 'Buscar un nombre de usuario en sitios públicos'),
             BotCommand('ayuda', 'Ver comandos y ejemplos'),
             BotCommand('miid', 'Ver tu ID de Telegram'),
         ])
@@ -180,6 +239,7 @@ def main():
     application.add_handler(CommandHandler(['start', 'ayuda', 'help'], help_command))
     application.add_handler(CommandHandler('miid', my_id))
     application.add_handler(CommandHandler('cobertura', coverage_command))
+    application.add_handler(CommandHandler('maigret', maigret_command))
     for command in ('linea', 'imei', 'antena'):
         application.add_handler(CommandHandler(command, search_handler(command)))
     application.add_handler(line_alias_handler(search_handler('linea')))

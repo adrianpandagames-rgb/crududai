@@ -39,6 +39,32 @@ async def api_get(client, path, **kwargs):
             await asyncio.sleep(0.3)
 
 
+async def start_maigret(client, username, mode, user_id):
+    # Starting a search is not idempotent, so it is never retried.
+    response = await client.post('api/bot/maigret', json={'usuario': username, 'modo': mode},
+                                 headers={'X-Telegram-User-Id': str(user_id)})
+    response.raise_for_status()
+    data = response.json()
+    if not isinstance(data, dict) or not isinstance(data.get('id'), str):
+        raise ValueError('Respuesta de API inválida.')
+    return data
+
+
+async def maigret_status(client, search_id, user_id):
+    response = await api_get(client, f'api/bot/maigret/{search_id}', headers={'X-Telegram-User-Id': str(user_id)})
+    response.raise_for_status()
+    data = response.json()
+    if not isinstance(data, dict) or not isinstance(data.get('status'), str) or not isinstance(data.get('accounts'), list):
+        raise ValueError('Respuesta de API inválida.')
+    return data
+
+
+async def maigret_report(client, search_id, user_id):
+    response = await api_get(client, f'api/bot/maigret/{search_id}/reporte', headers={'X-Telegram-User-Id': str(user_id)})
+    response.raise_for_status()
+    return response.content
+
+
 async def search_api(client, command, term, page, user_id):
     if command not in ('linea', 'imei', 'antena'):
         raise ValueError('Comando desconocido.')

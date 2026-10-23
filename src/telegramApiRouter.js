@@ -5,8 +5,11 @@ import { generateAntennaMap, validateAntennaMap } from './antenaMapService.js';
 import { createCoverageGeocoder } from './telegramGeocodingService.js';
 import { buildAuditDetails } from './auditDetails.js';
 import { telegramIdHash } from './telegramIdCrypto.js';
+import { MaigretQueueFullError } from './maigretRouter.js';
+import { isValidUsername, normalizeUsername } from './maigretService.js';
 
 const PAGE_SIZE = 5;
+const MAX_BOT_MAIGRET_ACCOUNTS = 100;
 
 export function buildTelegramQuery(command, term, page) {
   if (typeof term !== 'string' || !term.trim() || term.length > 120 || !Number.isInteger(page) || page < 1 || page > 100) {
@@ -48,7 +51,7 @@ export function buildTelegramQuery(command, term, page) {
   return { sql, params: command === 'linea' ? params : [...params, PAGE_SIZE + 1, (page - 1) * PAGE_SIZE] };
 }
 
-export function createTelegramApiRouter(pool, config = process.env, mapRenderer = generateAntennaMap, geocodingLookup = createCoverageGeocoder(pool)) {
+export function createTelegramApiRouter(pool, config = process.env, mapRenderer = generateAntennaMap, geocodingLookup = createCoverageGeocoder(pool), maigretSearches = null) {
   const router = express.Router();
   router.use((req, res, next) => {
     res.set('Cache-Control', 'no-store');
@@ -63,9 +66,12 @@ export function createTelegramApiRouter(pool, config = process.env, mapRenderer 
     let userHash;
     try { userHash = telegramIdHash(userId, config); }
     catch { return res.status(503).json({ error: 'API del bot no configurada.' }); }
-    pool.execute('SELECT id FROM users WHERE telegram_id_hash = ? AND is_active = 1 LIMIT 1', [userHash])
+    pool.execute('SELECT id, role, is_admin FROM users WHERE telegram_id_hash = ? AND is_active = 1 LIMIT 1', [userHash])
       .then(([rows]) => {
         if (rows.length !== 1) return res.status(403).json({ error: 'Usuario no autorizado.' });
+        // Same role rules as a web session, so bot searches respect the UECS/general file groups.
+        const isAdmin = Number(rows[0].is_admin) === 1 || rows[0].role === 'admin';
+        req.botUser = { userId: rows[0].id, isAdmin, role: isAdmin ? 'admin' : (rows[0].role || 'usuario') };
         // Only attribute activity after validating both the bot credential and linked active user.
         req.auditTelegram = true;
         const requestPath = `${req.baseUrl}${req.path}`;
@@ -114,6 +120,60 @@ export function createTelegramApiRouter(pool, config = process.env, mapRenderer 
     } catch {
       return res.status(503).json({ error: 'No fue posible cargar el mapa de fondo. Intenta nuevamente más tarde.' });
     } finally { rendering = false; }
+  });
+  const requireMaigret = async (req, res, next) => {
+    if (!maigretSearches) return res.status(503).json({ error: 'Maigret no está disponible.' });
+    try {
+      await maigretSearches.initialize();
+      return next();
+    } catch {
+      return res.status(503).json({ error: 'No fue posible acceder a las búsquedas de Maigret.' });
+    }
+  };
+  // The bot offers the quick and normal depths; a full search takes too long for a chat.
+  router.post('/maigret', express.json({ limit: '2kb' }), requireMaigret, async (req, res) => {
+    const username = normalizeUsername(req.body?.usuario);
+    const mode = req.body?.modo === 'normal' ? 'normal' : 'rapida';
+    if (!isValidUsername(username)) return res.status(400).json({ error: 'Nombre de usuario inválido.' });
+    try {
+      const id = await maigretSearches.enqueue(req.botUser, { username, mode, recursive: true });
+      return res.status(202).json({ id, username, mode });
+    } catch (error) {
+      if (error instanceof MaigretQueueFullError) return res.status(429).json({ error: error.message });
+      return res.status(503).json({ error: 'No fue posible iniciar la búsqueda.' });
+    }
+  });
+  router.get('/maigret/:id', requireMaigret, async (req, res) => {
+    try {
+      const search = await maigretSearches.find(req.botUser, req.params.id,
+        'm.search_uuid AS id, m.username, m.mode, m.status, m.accounts_found AS total, m.results, m.error_message AS error, m.report_html IS NOT NULL AS hasReport');
+      if (!search) return res.status(404).json({ error: 'Búsqueda no encontrada.' });
+      const results = search.results ? JSON.parse(search.results) : { accounts: [] };
+      const baseUrl = (config.PUBLIC_BASE_URL || '').replace(/\/+$/, '');
+      return res.json({
+        id: search.id,
+        username: search.username,
+        mode: search.mode,
+        status: search.status,
+        total: Number(search.total),
+        error: search.error,
+        has_report: Boolean(search.hasReport),
+        web_url: baseUrl ? `${baseUrl}/maigret/${search.id}` : null,
+        accounts: results.accounts.slice(0, MAX_BOT_MAIGRET_ACCOUNTS)
+          .map(({ username, site, url, similar }) => ({ username, site, url, similar })),
+      });
+    } catch {
+      return res.status(503).json({ error: 'No fue posible consultar la búsqueda.' });
+    }
+  });
+  router.get('/maigret/:id/reporte', requireMaigret, async (req, res) => {
+    try {
+      const search = await maigretSearches.find(req.botUser, req.params.id, 'm.report_html');
+      if (!search?.report_html) return res.status(404).json({ error: 'Reporte no disponible.' });
+      return res.type('text/html; charset=utf-8').send(search.report_html);
+    } catch {
+      return res.status(503).json({ error: 'No fue posible obtener el reporte.' });
+    }
   });
   for (const command of ['linea', 'imei', 'antena']) {
     router.get(`/${command}`, async (req, res) => {
