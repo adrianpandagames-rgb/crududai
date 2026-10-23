@@ -2,6 +2,7 @@ import express from 'express';
 import crypto from 'node:crypto';
 import { fileGroupOf, visibleFiles } from './fileGroups.js';
 import { MAIGRET_MODES, isValidUsername, normalizeUsername, runMaigret } from './maigretService.js';
+import { createMaigretPdf } from './maigretPdf.js';
 
 const MAX_QUEUED_SEARCHES = 10;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -165,11 +166,42 @@ export function createMaigretRouter(pool, { runSearch, searches = createMaigretS
       if (!search?.report_html) return res.status(404).send('Reporte no encontrado o todavía no disponible.');
       res.type('text/html; charset=utf-8');
       res.setHeader('X-Content-Type-Options', 'nosniff');
-      // The report repeats text from third-party profiles, so it never runs scripts or shares the session.
-      res.setHeader('Content-Security-Policy', "sandbox allow-popups allow-popups-to-escape-sandbox; default-src 'none'; style-src https: 'unsafe-inline'; img-src https: data:; font-src https:");
-      if (req.query.ver === '1') res.setHeader('Content-Disposition', 'inline');
-      else res.attachment(`Maigret-${search.username}.html`);
+      if (req.query.ver === '1') {
+        // The report repeats text from third-party profiles, so the view never runs scripts or shares the session.
+        // Only the view is sandboxed: Chrome refuses downloads served from a sandboxed response.
+        res.setHeader('Content-Security-Policy', "sandbox allow-popups allow-popups-to-escape-sandbox; default-src 'none'; style-src https: 'unsafe-inline'; img-src https: data:; font-src https:");
+        res.setHeader('Content-Disposition', 'inline');
+      } else {
+        res.attachment(`Maigret-${search.username}.html`);
+      }
       return res.send(search.report_html);
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  const loadDetail = async (session, id) => {
+    const search = await searches.find(session, id, `m.search_uuid AS id, m.username, m.mode,
+      m.recursive_search AS recursiveSearch, m.status, m.accounts_found AS accounts, m.results, m.error_message AS error,
+      m.report_html IS NOT NULL AS hasReport, u.email AS requestedBy,
+      DATE_FORMAT(m.created_at, '%Y-%m-%d %H:%i') AS createdAt, DATE_FORMAT(m.finished_at, '%Y-%m-%d %H:%i') AS finishedAt`);
+    if (!search) return null;
+    const results = search.results ? JSON.parse(search.results) : { accounts: [], usernames: [] };
+    const groups = results.usernames.map((name) => ({
+      username: name,
+      accounts: results.accounts.filter((account) => account.username === name),
+    })).filter((group) => group.accounts.length > 0);
+    return { search, groups };
+  };
+
+  router.get('/:id/pdf', async (req, res, next) => {
+    try {
+      const detail = await loadDetail(req.session, req.params.id);
+      if (!detail || detail.search.status !== 'listo') return res.status(404).send('Reporte no encontrado o todavía no disponible.');
+      const pdf = await createMaigretPdf({ ...detail, modeLabel: MAIGRET_MODES[detail.search.mode]?.label || detail.search.mode });
+      res.type('application/pdf');
+      res.attachment(`Maigret-${detail.search.username}.pdf`);
+      return res.send(pdf);
     } catch (error) {
       return next(error);
     }
@@ -177,17 +209,9 @@ export function createMaigretRouter(pool, { runSearch, searches = createMaigretS
 
   router.get('/:id', async (req, res, next) => {
     try {
-      const search = await searches.find(req.session, req.params.id, `m.search_uuid AS id, m.username, m.mode,
-        m.recursive_search AS recursiveSearch, m.status, m.accounts_found AS accounts, m.results, m.error_message AS error,
-        m.report_html IS NOT NULL AS hasReport, u.email AS requestedBy,
-        DATE_FORMAT(m.created_at, '%Y-%m-%d %H:%i') AS createdAt, DATE_FORMAT(m.finished_at, '%Y-%m-%d %H:%i') AS finishedAt`);
-      if (!search) return res.status(404).send('Búsqueda no encontrada.');
-      const results = search.results ? JSON.parse(search.results) : { accounts: [], usernames: [] };
-      const groups = results.usernames.map((name) => ({
-        username: name,
-        accounts: results.accounts.filter((account) => account.username === name),
-      })).filter((group) => group.accounts.length > 0);
-      return res.render('pages/maigret-resultado', { search, groups, modes: MAIGRET_MODES });
+      const detail = await loadDetail(req.session, req.params.id);
+      if (!detail) return res.status(404).send('Búsqueda no encontrada.');
+      return res.render('pages/maigret-resultado', { ...detail, modes: MAIGRET_MODES });
     } catch (error) {
       return next(error);
     }

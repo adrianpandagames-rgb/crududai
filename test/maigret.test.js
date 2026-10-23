@@ -129,7 +129,7 @@ test('the restart cleanup runs before the first search is queued, so it never ma
   assert.equal(statements.filter(isCleanup).length, 1);
 });
 
-test('the report opens sandboxed in the browser or downloads as a file', async (t) => {
+test('the report opens sandboxed in the browser and downloads without the sandbox', async (t) => {
   const { createMaigretRouter } = await import('../src/maigretRouter.js');
   const id = '0f8fad5b-d9cb-469f-a165-70867728950e';
   const searches = {
@@ -152,5 +152,41 @@ test('the report opens sandboxed in the browser or downloads as a file', async (
 
   const download = await fetch(base);
   assert.equal(download.headers.get('content-disposition'), 'attachment; filename="Maigret-soxoj.html"');
-  assert.match(download.headers.get('content-security-policy'), /^sandbox/);
+  // Chrome refuses downloads served from a sandboxed response, leaving only a .tmp file.
+  assert.equal(download.headers.get('content-security-policy'), null);
+});
+
+test('the PDF report lists the accounts and keeps only characters the PDF fonts can draw', async (t) => {
+  const { pdfSafeText, createMaigretPdf } = await import('../src/maigretPdf.js');
+  assert.equal(pdfSafeText('José Ñúñez – “bio”'), 'José Ñúñez – “bio”');
+  assert.equal(pdfSafeText('Иван 李'), '???? ?');
+
+  const pdf = await createMaigretPdf({
+    search: { username: 'soxoj', requestedBy: 'a@b.mx', createdAt: '2026-10-22 20:00', finishedAt: '2026-10-22 20:01', recursiveSearch: 1, accounts: 1, error: null },
+    groups: [{ username: 'soxoj', accounts: [{ site: 'GitHub', url: 'https://github.com/soxoj', similar: false, tags: ['coding'], fields: [{ key: 'fullname', value: 'Soxoj' }] }] }],
+    modeLabel: 'Rápida (100 sitios)',
+  });
+  assert.equal(pdf.subarray(0, 5).toString(), '%PDF-');
+
+  const { createMaigretRouter } = await import('../src/maigretRouter.js');
+  const id = '0f8fad5b-d9cb-469f-a165-70867728950e';
+  const searches = {
+    initialize: async () => {},
+    find: async (session, searchId) => (searchId === id ? {
+      id, username: 'soxoj', mode: 'rapida', recursiveSearch: 1, status: 'listo', accounts: 1, error: null, hasReport: 1,
+      requestedBy: 'a@b.mx', createdAt: '2026-10-22 20:00', finishedAt: '2026-10-22 20:01',
+      results: JSON.stringify({ usernames: ['soxoj'], accounts: [{ username: 'soxoj', site: 'GitHub', url: 'https://github.com/soxoj', similar: false, tags: [], fields: [] }] }),
+    } : null),
+  };
+  const app = express();
+  app.use((req, res, next) => { req.session = { userId: 1, role: 'usuario', isAdmin: false }; next(); });
+  app.use('/maigret', createMaigretRouter({}, { searches }));
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise((resolve) => server.once('listening', resolve));
+  t.after(() => { server.closeAllConnections(); server.close(); });
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/maigret/${id}/pdf`);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('content-type'), 'application/pdf');
+  assert.equal(response.headers.get('content-disposition'), 'attachment; filename="Maigret-soxoj.pdf"');
+  assert.equal(Buffer.from(await response.arrayBuffer()).subarray(0, 5).toString(), '%PDF-');
 });
