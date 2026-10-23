@@ -6,6 +6,8 @@ import {
   preparedSearches, searchNameIndex, usernameVariants, withinOneEdit,
 } from '../src/nameSearchService.js';
 import { createNombresRouter } from '../src/nombresRouter.js';
+import zlib from 'node:zlib';
+import { createDenueDirectory, csvRows, fulltextQuery, stateCodeFor, toBusiness, zipEntryStream } from '../src/denueService.js';
 import { MaigretQueueFullError } from '../src/maigretRouter.js';
 
 const SDN = [
@@ -115,7 +117,21 @@ test('the tab searches the lists without saving a history and sends variants to 
     res.locals.currentUser = req.session ? { ...req.session } : undefined;
     next();
   });
-  app.use('/nombres', createNombresRouter(pool, { lists, maigretSearches }));
+  const denueCalls = [];
+  let denueRefreshes = 0;
+  const denue = {
+    initialize: async () => {},
+    refreshStale: async () => {},
+    refresh: async () => { denueRefreshes++; },
+    status: async () => ({ label: 'DENUE', updatedAt: '2026-10-23 10:00', entries: 6000000, error: null, refreshing: false, progress: null }),
+    search: async (name, city) => {
+      denueCalls.push([name, city]);
+      if (name === 'Luis Ramirez') throw new Error('timeout');
+      return [{ nombre: 'TACOS JOAQUIN', razonSocial: 'JOAQUIN GUZMAN', actividad: 'Restaurantes', direccion: 'CALLE 5 #10',
+        colonia: 'CENTRO', cp: '80000', ubicacion: 'CULIACAN, Culiacán, SINALOA', latitud: '24.8', longitud: '-107.4', inPlace: true }];
+    },
+  };
+  app.use('/nombres', createNombresRouter(pool, { lists, maigretSearches, denue }));
   const server = app.listen(0, '127.0.0.1');
   await new Promise((resolve) => server.once('listening', resolve));
   t.after(() => { server.closeAllConnections(); server.close(); });
@@ -128,12 +144,26 @@ test('the tab searches the lists without saving a history and sends variants to 
   assert.ok(page.includes('aproximada'));
   assert.ok(page.includes('site%3Afacebook.com'));
   assert.ok(!page.includes('Búsquedas recientes'));
+  assert.ok(page.includes('TACOS JOAQUIN'));
+  assert.ok(page.includes('Razón social: <strong>JOAQUIN GUZMAN</strong>'));
+  assert.ok(page.includes('24.8%2C-107.4'));
+  assert.deepEqual(denueCalls, [['Joakin Gusman', 'Culiacan']]);
+
+  const failed = await (await fetch(`${base}?q=Luis+Ramirez`, { headers: { 'x-role': 'uecs' } })).text();
+  assert.ok(failed.includes('No se pudo consultar DENUE'));
+  assert.ok(failed.includes('RAMÍREZ GÓMEZ LUIS'));
+
+  await fetch(`${base}?q=AAA080808HL8`, { headers: { 'x-role': 'uecs' } });
+  assert.equal(denueCalls.length, 2);
   assert.deepEqual(executed, []);
 
   const short = await (await fetch(`${base}?q=Joaquin`, { headers: { 'x-role': 'usuario' } })).text();
   assert.ok(short.includes('Escribe al menos nombre y apellido'));
 
   assert.equal((await fetch(`${base}/actualizar`, { method: 'POST', headers: { 'x-role': 'usuario' } })).status, 403);
+  assert.equal((await fetch(`${base}/actualizar-denue`, { method: 'POST', headers: { 'x-role': 'usuario' } })).status, 403);
+  await fetch(`${base}/actualizar-denue`, { method: 'POST', redirect: 'manual', headers: { 'x-role': 'admin' } });
+  assert.equal(denueRefreshes, 1);
 
   const sent = await fetch(`${base}/maigret`, { method: 'POST', redirect: 'manual', headers: { 'x-role': 'uecs', 'content-type': 'application/x-www-form-urlencoded' }, body: 'nombre=Luis+Ram%C3%ADrez+G%C3%B3mez' });
   assert.match(new URL(sent.headers.get('location'), base).searchParams.get('message'), /Se enviaron 5/);
@@ -144,4 +174,117 @@ test('the tab searches the lists without saving a history and sends variants to 
   capacity = 7;
   const partial = await fetch(`${base}/maigret`, { method: 'POST', redirect: 'manual', headers: { 'x-role': 'uecs', 'content-type': 'application/x-www-form-urlencoded' }, body: 'nombre=Luis+Ramirez' });
   assert.match(new URL(partial.headers.get('location'), base).searchParams.get('message'), /se enviaron 2 de 5/);
+});
+
+// Builds a ZIP like INEGI's: each entry deflated, followed by the central directory.
+const zipOf = (entries) => {
+  const locals = [];
+  const central = [];
+  let offset = 0;
+  for (const [name, text] of entries) {
+    const data = zlib.deflateRawSync(Buffer.from(text, 'latin1'));
+    const fileName = Buffer.from(name);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(8, 8); local.writeUInt32LE(data.length, 18); local.writeUInt16LE(fileName.length, 26);
+    const header = Buffer.alloc(46);
+    header.writeUInt32LE(0x02014b50, 0); header.writeUInt16LE(8, 10); header.writeUInt32LE(data.length, 20);
+    header.writeUInt16LE(fileName.length, 28); header.writeUInt32LE(offset, 42);
+    locals.push(local, fileName, data);
+    central.push(header, fileName);
+    offset += 30 + fileName.length + data.length;
+  }
+  const directory = Buffer.concat(central);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(entries.length, 10); end.writeUInt32LE(directory.length, 12); end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...locals, directory, end]);
+};
+
+const DENUE_CSV = [
+  '"id","nom_estab","raz_social","nombre_act","per_ocu","tipo_vial","nom_vial","numero_ext","letra_ext","numero_int","letra_int","tipo_asent","nomb_asent","cod_postal","cve_ent","entidad","municipio","localidad","telefono","correoelec","www","latitud","longitud"',
+  '"1","HOME CEL","OSCR GARCIA NAVARRETE","Comercio de teléfonos","0 a 5 personas","CALLE","REFORMA","120","A",,,"COLONIA","CENTRO","83000","26","Sonora","Hermosillo","Hermosillo   ","6621234567",,,"29.0729","-110.9559"',
+  '"2","PINTURAS ""LA ÑAPA""",,"Comercio de pintura","6 a 10 personas","AVENIDA","SERDAN\r\nNORTE",,,,,,,"83000","26","Sonora","Hermosillo","Hermosillo",,,,"",""',
+  '"3",,,"Sin nombre","0 a 5 personas",,,,,,,,,,"26","Sonora","Hermosillo","Hermosillo",,,,,',
+].join('\r\n');
+
+test('DENUE rows come out of the ZIP in Latin-1, including quoted fields across lines', async () => {
+  const zip = zipOf([['diccionario_de_datos/denue_diccionario_de_datos.csv', 'x'], ['conjunto_de_datos/denue_inegi_26_.csv', DENUE_CSV]]);
+  const rows = [];
+  for await (const row of csvRows(zipEntryStream(zip, /conjunto_de_datos\/.*\.csv$/))) rows.push(row);
+  assert.equal(rows.length, 4);
+  const header = rows[0];
+  const first = toBusiness(header, rows[1]);
+  assert.deepEqual(first.slice(0, 8), [1, 'HOME CEL', 'OSCR GARCIA NAVARRETE', 'Comercio de teléfonos', '0 a 5 personas', 'CALLE REFORMA #120A', 'COLONIA CENTRO', '83000']);
+  assert.deepEqual(first.slice(-3), [29.0729, -110.9559, 'home cel oscr garcia navarrete']);
+  const second = toBusiness(header, rows[2]);
+  assert.equal(second[1], 'PINTURAS "LA ÑAPA"');
+  assert.equal(second[5], 'AVENIDA SERDAN\nNORTE');
+  assert.deepEqual(second.slice(-3), [null, null, 'pinturas la napa']);
+  assert.equal(toBusiness(header, rows[3]), null);
+  assert.throws(() => zipEntryStream(Buffer.from('<!DOCTYPE html><html><body>no encontrado</body></html>'), /csv$/), /no es un ZIP/);
+});
+
+test('DENUE full-text query requires every indexable word and the state written in the place', () => {
+  assert.equal(fulltextQuery(['oscar', 'de', 'la', 'garcia', 'j']), '+oscar +garcia');
+  assert.equal(fulltextQuery(['de', 'la']), '');
+  assert.equal(stateCodeFor('Hermosillo, Sonora'), '26');
+  assert.equal(stateCodeFor('La Paz, Baja California Sur'), '03');
+  assert.equal(stateCodeFor('Hermosillo'), '00');
+});
+
+test('DENUE loads every file into a new table, swaps it in and searches by every word', async () => {
+  const queries = [];
+  const status = [];
+  const connection = {
+    query: async (sql, values) => { queries.push({ sql: sql.replace(/\s+/g, ' ').trim(), values }); return [[]]; },
+    release: () => {},
+  };
+  const pool = {
+    getConnection: async () => connection,
+    query: async (sql, values) => {
+      status.push({ sql: sql.replace(/\s+/g, ' ').trim(), values });
+      if (!sql.includes('MATCH')) return [[]];
+      return [[
+        { id: 7, nombre: 'PINTURAS GARCIA', razon_social: '', localidad: 'Nogales', municipio: 'Nogales', entidad: 'Sonora',
+          busqueda: 'pinturas garcia', latitud: null, longitud: null },
+        { id: 1, nombre: 'HOME CEL', razon_social: 'OSCR GARCIA NAVARRETE', localidad: 'Hermosillo', municipio: 'Hermosillo', entidad: 'Sonora',
+          busqueda: 'home cel oscr garcia navarrete', latitud: '29.0729000', longitud: '-110.9559000' },
+      ]];
+    },
+  };
+  let attempts = 0;
+  const fetchImpl = async (url) => {
+    attempts++;
+    if (url.endsWith('denue_15_1_csv.zip') && attempts === 1) throw new Error('timeout');
+    return new Response(zipOf([['conjunto_de_datos/denue.csv', DENUE_CSV]]));
+  };
+  const directory = createDenueDirectory(pool, { fetchImpl, files: ['15_1', '26'], minimumPerFile: 1 });
+  await directory.refresh();
+  assert.equal(attempts, 3);
+  const inserts = queries.filter((query) => query.sql.startsWith('INSERT'));
+  assert.equal(inserts.length, 2);
+  assert.ok(inserts.every((query) => query.sql.includes('denue_negocios_nuevo') && query.values[0].length === 2));
+  assert.ok(queries.some((query) => query.sql === 'ALTER TABLE denue_negocios_nuevo ADD FULLTEXT INDEX denue_busqueda (busqueda)'));
+  assert.ok(queries.some((query) => query.sql === 'RENAME TABLE denue_negocios TO denue_negocios_anterior, denue_negocios_nuevo TO denue_negocios'));
+  assert.deepEqual(status.find((query) => query.sql.startsWith('UPDATE')).values, [4, 'denue']);
+
+  const results = await directory.search('Oscr García', 'Hermosillo, Sonora');
+  const match = status.find((query) => query.sql.includes('MATCH'));
+  assert.deepEqual(match.values, ['+oscr +garcia', '26', 'hermosillo', 'hermosillo']);
+  assert.match(match.sql, /AND cve_ent = \? ORDER BY \(municipio = \? OR localidad = \?\) DESC LIMIT 500/);
+  assert.deepEqual(results.map((result) => [result.id, result.ubicacion, result.inPlace]), [['1', 'Hermosillo, Sonora', true]]);
+  assert.equal(results[0].latitud, '29.0729000');
+  assert.deepEqual(await directory.search('de la'), []);
+});
+
+test('a DENUE load that fails keeps the previous table and records the error', async () => {
+  const queries = [];
+  const pool = {
+    getConnection: async () => ({ query: async (sql) => { queries.push(sql); return [[]]; }, release: () => {} }),
+    query: async (sql, values) => { queries.push(sql + JSON.stringify(values ?? [])); return [[]]; },
+  };
+  const fetchImpl = async () => new Response('<!DOCTYPE html><html></html>');
+  await assert.rejects(createDenueDirectory(pool, { fetchImpl, files: ['15'] }).refresh(), /no llegó como ZIP/);
+  assert.ok(queries.includes('DROP TABLE IF EXISTS denue_negocios_nuevo'));
+  assert.ok(!queries.some((sql) => sql.startsWith('RENAME')));
+  assert.ok(queries.some((sql) => sql.includes('error_message = ?') && sql.includes('no llegó como ZIP')));
 });

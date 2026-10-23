@@ -30,7 +30,7 @@
               <div class="mb-3">
                 <label for="ciudad" class="form-label">Ciudad o estado (opcional)</label>
                 <input type="text" id="ciudad" name="ciudad" class="form-control" maxlength="100" value="<%= city %>" placeholder="ej. Hermosillo" />
-                <div class="form-text">Solo se usa para acotar las búsquedas en Google.</div>
+                <div class="form-text">Acota las búsquedas en Google y en DENUE; si incluye el estado, DENUE busca solo ahí.</div>
               </div>
               <button type="submit" class="btn btn-primary w-100"><i class="bi bi-search"></i> Buscar</button>
             </form>
@@ -54,6 +54,21 @@
                 <button type="submit" class="btn btn-sm btn-outline-secondary">Actualizar listas ahora</button>
               </form>
             <% } %>
+            <div class="mt-3">
+              <div class="fw-semibold"><%= denueStatus.label %></div>
+              <div class="small text-muted">
+                <% if (denueStatus.progress?.indexing) { %>Preparando la búsqueda de <%= denueStatus.progress.entries.toLocaleString('es-MX') %> negocios…
+                <% } else if (denueStatus.progress) { %>Descargando archivo <%= denueStatus.progress.file %> de <%= denueStatus.progress.files %> · <%= denueStatus.progress.entries.toLocaleString('es-MX') %> negocios cargados
+                <% } else if (denueStatus.updatedAt) { %><%= denueStatus.entries.toLocaleString('es-MX') %> negocios · actualizado <%= denueStatus.updatedAt %>
+                <% } else { %>Todavía no se descarga.<% } %>
+              </div>
+              <% if (denueStatus.error) { %><div class="small text-danger">Último intento falló: <%= denueStatus.error %></div><% } %>
+              <% if (canRefresh && !denueStatus.refreshing) { %>
+                <form action="/nombres/actualizar-denue" method="POST" class="mt-2">
+                  <button type="submit" class="btn btn-sm btn-outline-secondary">Actualizar DENUE ahora</button>
+                </form>
+              <% } %>
+            </div>
           </div>
         </div>
 
@@ -62,7 +77,7 @@
             <div class="alert alert-warning"><%= error %></div>
           <% } else if (!search) { %>
             <div class="card p-4 text-muted">
-              Escribe un nombre completo para buscarlo en listas oficiales y obtener búsquedas preparadas en Google y redes sociales.
+              Escribe un nombre completo para buscarlo en listas oficiales y en el directorio de negocios DENUE, y obtener búsquedas preparadas en Google y redes sociales.
               También puedes buscar un RFC o CURP en las listas.
             </div>
           <% } else { %>
@@ -107,6 +122,52 @@
               <% } %>
             </section>
 
+            <% if (search.denue) { %>
+              <section class="card p-3 mb-4">
+                <h3 class="h5">Negocios en DENUE (INEGI) <span class="text-muted fw-normal">· <%= search.denue.results.length %> coincidencia(s)</span></h3>
+                <% if (search.denue.error) { %>
+                  <div class="alert alert-warning mb-0"><%= search.denue.error %></div>
+                <% } else if (!denueStatus.updatedAt) { %>
+                  <div class="alert alert-info mb-0">El DENUE se está descargando por primera vez; tarda entre 20 y 60 minutos. Vuelve a buscar después.</div>
+                <% } else if (search.denue.results.length === 0) { %>
+                  <p class="text-muted mb-0">No aparece como nombre ni razón social de ningún negocio registrado. DENUE solo incluye establecimientos, no personas.</p>
+                <% } else { %>
+                  <div class="table-responsive">
+                    <table class="table nombres-table table-stack mb-2">
+                      <thead><tr><th>Negocio</th><th>Dirección</th><th>Contacto</th></tr></thead>
+                      <tbody>
+                        <% search.denue.results.forEach((result) => { %>
+                          <tr>
+                            <td data-label="Negocio">
+                              <div class="fw-semibold"><%= result.nombre %></div>
+                              <% if (result.razonSocial && result.razonSocial !== result.nombre) { %><div class="small">Razón social: <strong><%= result.razonSocial %></strong></div><% } %>
+                              <div class="small text-muted"><%= result.actividad %><% if (result.personal) { %> · <%= result.personal %><% } %></div>
+                              <% if (result.inPlace) { %><span class="nombres-badge denue"><%= search.city %></span><% } %>
+                            </td>
+                            <td data-label="Dirección" class="nombres-details">
+                              <div><%= result.direccion || '—' %></div>
+                              <div><%= [result.colonia, result.cp && `C.P. ${result.cp}`].filter(Boolean).join(', ') %></div>
+                              <div class="text-muted"><%= result.ubicacion %></div>
+                              <% if (result.latitud && result.longitud) { %>
+                                <a href="https://www.google.com/maps?q=<%= encodeURIComponent(`${result.latitud},${result.longitud}`) %>" target="_blank" rel="noopener noreferrer">Ver en mapa</a>
+                              <% } %>
+                            </td>
+                            <td data-label="Contacto" class="nombres-details">
+                              <% if (result.telefono) { %><div><strong>Tel.:</strong> <%= result.telefono %></div><% } %>
+                              <% if (result.correo) { %><div><strong>Correo:</strong> <%= result.correo %></div><% } %>
+                              <% if (result.sitio) { %><div><strong>Web:</strong> <%= result.sitio %></div><% } %>
+                              <% if (!result.telefono && !result.correo && !result.sitio) { %><span class="text-muted">—</span><% } %>
+                            </td>
+                          </tr>
+                        <% }) %>
+                      </tbody>
+                    </table>
+                  </div>
+                  <p class="small text-muted mb-0">Que un negocio lleve el mismo nombre no confirma que sea la misma persona.</p>
+                <% } %>
+              </section>
+            <% } %>
+
             <% if (search.links.length > 0) { %>
               <section class="card p-3 mb-4">
                 <h3 class="h5">Búsquedas preparadas</h3>
@@ -142,7 +203,7 @@
         </div>
       </div>
     </main>
-    <% if (listStatus.some((list) => list.refreshing) && !search) { %>
+    <% if ((listStatus.some((list) => list.refreshing) || denueStatus.refreshing) && !search) { %>
       <script>setTimeout(() => { if (!document.getElementById('q').value) window.location.reload(); }, 15000);</script>
     <% } %>
     <%- include('../includes/scripts') %>

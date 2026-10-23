@@ -1,4 +1,5 @@
 import express from 'express';
+import { createDenueDirectory } from './denueService.js';
 import { MaigretQueueFullError } from './maigretRouter.js';
 import {
   LIST_SOURCES, buildNameIndex, isIdentifierQuery, normalizeName, parseOfac, parseSat69b,
@@ -132,7 +133,7 @@ export function createNameLists(pool, { fetchImpl = fetch } = {}) {
   return { initialize, getIndex, refresh, status, refreshStale };
 }
 
-export function createNombresRouter(pool, { lists = createNameLists(pool), maigretSearches = null } = {}) {
+export function createNombresRouter(pool, { lists = createNameLists(pool), maigretSearches = null, denue = createDenueDirectory(pool) } = {}) {
   const router = express.Router();
   const redirect = (res, message, type = 'error', query = {}) => res.redirect('/nombres?' + new URLSearchParams({ ...query, message, type }));
 
@@ -141,6 +142,7 @@ export function createNombresRouter(pool, { lists = createNameLists(pool), maigr
     res.setHeader('Cache-Control', 'no-store');
     try {
       await lists.initialize();
+      await denue.initialize();
       next();
     } catch {
       res.status(503).send('No fue posible acceder a RastroX.');
@@ -150,6 +152,7 @@ export function createNombresRouter(pool, { lists = createNameLists(pool), maigr
   router.get('/', async (req, res, next) => {
     try {
       await lists.refreshStale();
+      await denue.refreshStale();
       const name = typeof req.query.q === 'string' ? req.query.q.trim().replace(/\s+/g, ' ') : '';
       const city = typeof req.query.ciudad === 'string' ? req.query.ciudad.trim().replace(/\s+/g, ' ').slice(0, 100) : '';
       let search = null;
@@ -159,9 +162,15 @@ export function createNombresRouter(pool, { lists = createNameLists(pool), maigr
         if (name.length > 120) error = 'El nombre debe tener hasta 120 caracteres.';
         else if (!identifier && normalizeName(name).split(' ').filter(Boolean).length < 2) error = 'Escribe al menos nombre y apellido, o un RFC o CURP completo.';
         else {
+          // If DENUE fails, the rest of the search is still shown.
+          const lookupDenue = identifier ? null : denue.search(name, city).then((results) => ({ results }), (lookupError) => {
+            console.error('No se pudo consultar DENUE:', lookupError.message);
+            return { results: [], error: 'No se pudo consultar DENUE en este momento.' };
+          });
           const results = searchNameIndex(await lists.getIndex(), name);
           search = {
             name, city, identifier, results,
+            denue: await lookupDenue,
             links: identifier ? [] : preparedSearches(name, city),
             variants: identifier ? [] : usernameVariants(name),
           };
@@ -173,6 +182,7 @@ export function createNombresRouter(pool, { lists = createNameLists(pool), maigr
         sources: LIST_SOURCES,
         canRefresh: req.session.isAdmin === true,
         maigretAvailable: Boolean(maigretSearches),
+        denueStatus: await denue.status(),
         message: typeof req.query.message === 'string' ? req.query.message : '',
         messageType: req.query.type,
       });
@@ -187,6 +197,12 @@ export function createNombresRouter(pool, { lists = createNameLists(pool), maigr
       lists.refresh(source).catch((error) => console.error(`No se pudo actualizar la lista ${source}:`, error.message));
     }
     return redirect(res, 'Actualizando las listas oficiales. Tarda alrededor de un minuto.', 'success');
+  });
+
+  router.post('/actualizar-denue', (req, res) => {
+    if (req.session.isAdmin !== true) return res.status(403).send('Solo un administrador puede actualizar el DENUE.');
+    denue.refresh().catch((error) => console.error('No se pudo actualizar el DENUE:', error.message));
+    return redirect(res, 'Descargando el DENUE de todo México (unos 575 MB). Puede tardar entre 20 y 60 minutos.', 'success');
   });
 
   router.post('/maigret', async (req, res, next) => {
