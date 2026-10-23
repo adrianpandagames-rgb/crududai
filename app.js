@@ -29,6 +29,7 @@ import { createPlaneacionRouter } from './src/planeacionRouter.js';
 import { createRedTelefonicaRouter } from './src/redTelefonicaRouter.js';
 import { createMaigretRouter, createMaigretSearches } from './src/maigretRouter.js';
 import { createImagenesRouter, createPublicImageRouter } from './src/imagenesRouter.js';
+import { createNombresRouter } from './src/nombresRouter.js';
 import { getGoogleGeocodingQuota, resetGoogleGeocodingQuota } from './src/googleGeocodingQuota.js';
 import { createLoginRateLimiter, LOGIN_WINDOW_MS } from './src/loginRateLimit.js';
 import { forwardAsyncErrors, handleErrors } from './src/errorHandling.js';
@@ -200,6 +201,7 @@ app.use('/api/bot', createTelegramApiRouter(pool, process.env, undefined, undefi
 app.use('/planeacion-geografica', requireAuth, createPlaneacionRouter(pool));
 app.use('/maigret', requireAuth, createMaigretRouter(pool, { searches: maigretSearches }));
 app.use('/imagenes', requireAuth, createImagenesRouter(pool));
+app.use('/nombres', requireAuth, createNombresRouter(pool, { maigretSearches }));
 // Reverse image search engines download the image without a session, through an expiring token.
 app.use('/imagen-publica', createPublicImageRouter(pool));
 

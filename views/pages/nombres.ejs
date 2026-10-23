@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <%- include('../includes/head') %>
+    <link rel="stylesheet" href="/public/css/nombres.css" />
+  </head>
+  <body>
+    <%- include('../includes/header') %>
+
+    <main class="container page-offset">
+      <div class="row justify-content-md-center mb-4">
+        <div class="col-md-12 mt-5">
+          <h2 class="text-center title">BÚSQUEDA POR NOMBRE <hr /></h2>
+        </div>
+      </div>
+
+      <% if (message) { %>
+        <div class="alert <%= messageType === 'error' ? 'alert-danger' : 'alert-success' %>"><%= message %></div>
+      <% } %>
+
+      <div class="row g-4 mb-4">
+        <div class="col-lg-4">
+          <div class="card p-4 mb-4">
+            <form action="/nombres" method="GET" autocomplete="off">
+              <div class="mb-3">
+                <label for="q" class="form-label">Nombre completo, RFC o CURP</label>
+                <input type="text" id="q" name="q" class="form-control" maxlength="120" required value="<%= name %>" placeholder="ej. Luis Ramírez Gómez" />
+              </div>
+              <div class="mb-3">
+                <label for="ciudad" class="form-label">Ciudad o estado (opcional)</label>
+                <input type="text" id="ciudad" name="ciudad" class="form-control" maxlength="100" value="<%= city %>" placeholder="ej. Hermosillo" />
+                <div class="form-text">Solo se usa para acotar las búsquedas en Google.</div>
+              </div>
+              <button type="submit" class="btn btn-primary w-100"><i class="bi bi-search"></i> Buscar</button>
+            </form>
+          </div>
+
+          <div class="card p-3 mb-4 nombres-status">
+            <h3 class="h6">Listas oficiales</h3>
+            <% listStatus.forEach((list) => { %>
+              <div class="mb-2">
+                <div class="fw-semibold"><%= list.label %></div>
+                <div class="small text-muted">
+                  <% if (list.refreshing) { %>Actualizando…<% } else if (list.updatedAt) { %>
+                    <%= list.entries.toLocaleString('es-MX') %> nombres · actualizada <%= list.updatedAt %>
+                  <% } else { %>Todavía no se descarga.<% } %>
+                </div>
+                <% if (list.error) { %><div class="small text-danger">Último intento falló: <%= list.error %></div><% } %>
+              </div>
+            <% }) %>
+            <% if (canRefresh) { %>
+              <form action="/nombres/actualizar" method="POST" class="mt-2">
+                <button type="submit" class="btn btn-sm btn-outline-secondary">Actualizar listas ahora</button>
+              </form>
+            <% } %>
+          </div>
+
+          <div class="card p-3 nombres-history">
+            <h3 class="h6">Búsquedas recientes</h3>
+            <% if (history.length === 0) { %>
+              <p class="small text-muted mb-0">Sin búsquedas todavía.</p>
+            <% } %>
+            <ul class="list-unstyled mb-0">
+              <% history.forEach((item) => { %>
+                <li>
+                  <a href="/nombres?<%= new URLSearchParams({ q: item.query, ciudad: item.city }) %>"><%= item.query %><%= item.city ? ` · ${item.city}` : '' %></a>
+                  <div class="small text-muted"><%= item.requestedBy || '—' %> · <%= item.createdAt %> · <%= item.results %> en listas</div>
+                </li>
+              <% }) %>
+            </ul>
+          </div>
+        </div>
+
+        <div class="col-lg-8">
+          <% if (error) { %>
+            <div class="alert alert-warning"><%= error %></div>
+          <% } else if (!search) { %>
+            <div class="card p-4 text-muted">
+              Escribe un nombre completo para buscarlo en listas oficiales y obtener búsquedas preparadas en Google y redes sociales.
+              También puedes buscar un RFC o CURP en las listas.
+            </div>
+          <% } else { %>
+            <section class="card p-3 mb-4">
+              <h3 class="h5">Listas oficiales <span class="text-muted fw-normal">· <%= search.results.length %> coincidencia(s)</span></h3>
+              <% if (listStatus.every((list) => !list.updatedAt)) { %>
+                <div class="alert alert-info mb-0">Las listas se están descargando por primera vez. Vuelve a buscar en un minuto.</div>
+              <% } else if (search.results.length === 0) { %>
+                <p class="text-muted mb-0">No aparece en OFAC ni en SAT 69-B. Que no aparezca no descarta nada: estas listas solo incluyen a sancionados y empresas fantasma.</p>
+              <% } else { %>
+                <div class="table-responsive">
+                  <table class="table nombres-table table-stack mb-2">
+                    <thead><tr><th>Lista</th><th>Nombre registrado</th><th>Datos</th></tr></thead>
+                    <tbody>
+                      <% search.results.forEach((result) => { %>
+                        <tr>
+                          <td data-label="Lista">
+                            <span class="nombres-badge <%= result.source %>"><%= result.source === 'ofac' ? 'OFAC' : 'SAT 69-B' %></span>
+                            <% if (!result.exact) { %><div><span class="nombres-badge approx" title="Coincide por parecido en escritura o sonido, no letra por letra">aproximada</span></div><% } %>
+                          </td>
+                          <td data-label="Nombre registrado">
+                            <div class="fw-semibold"><%= result.name %></div>
+                            <% if (result.details.aliasDe) { %><div class="small">Alias de <strong><%= result.details.aliasDe %></strong></div><% } %>
+                            <div class="small text-muted"><%= result.details.tipo %></div>
+                          </td>
+                          <td data-label="Datos" class="nombres-details">
+                            <% if (result.source === 'ofac') { %>
+                              <% if (result.details.programa) { %><div><strong>Programa:</strong> <%= result.details.programa %></div><% } %>
+                              <% if (result.details.cargo) { %><div><strong>Cargo:</strong> <%= result.details.cargo %></div><% } %>
+                              <% if (result.details.notas) { %><div><%= result.details.notas %></div><% } %>
+                            <% } else { %>
+                              <div><strong>RFC:</strong> <%= result.details.rfc %></div>
+                              <div><strong>Situación:</strong> <%= result.details.situacion || '—' %></div>
+                            <% } %>
+                          </td>
+                        </tr>
+                      <% }) %>
+                    </tbody>
+                  </table>
+                </div>
+                <p class="small text-muted mb-0">Una coincidencia de nombre no confirma identidad: compara fecha de nacimiento, CURP o RFC antes de usarla.</p>
+              <% } %>
+            </section>
+
+            <% if (search.links.length > 0) { %>
+              <section class="card p-3 mb-4">
+                <h3 class="h5">Búsquedas preparadas</h3>
+                <p class="small text-muted">Se abren en otra pestaña con tu propia sesión de cada sitio.</p>
+                <% search.links.forEach((group) => { %>
+                  <div class="mb-3">
+                    <div class="small fw-semibold mb-1"><%= group.group %></div>
+                    <div class="d-flex flex-wrap gap-2">
+                      <% group.links.forEach((link) => { %>
+                        <a class="btn btn-sm btn-outline-primary" href="<%= link.href %>" target="_blank" rel="noopener noreferrer"><%= link.name %></a>
+                      <% }) %>
+                    </div>
+                  </div>
+                <% }) %>
+              </section>
+            <% } %>
+
+            <% if (search.variants.length > 0 && maigretAvailable) { %>
+              <section class="card p-3">
+                <h3 class="h5">Probar usuarios probables en Maigret</h3>
+                <p class="small mb-2">
+                  Usuarios que suelen formarse con este nombre:
+                  <% search.variants.forEach((variant) => { %><code class="me-2"><%= variant %></code><% }) %>
+                </p>
+                <p class="small text-muted">Útil con nombres poco comunes. Con nombres comunes encontrará cuentas de muchas personas distintas. Se usa la búsqueda rápida sin seguir alias.</p>
+                <form action="/nombres/maigret" method="POST" class="m-0">
+                  <input type="hidden" name="nombre" value="<%= search.name %>" />
+                  <button type="submit" class="btn btn-outline-primary">Enviar <%= search.variants.length %> usuarios a Maigret</button>
+                </form>
+              </section>
+            <% } %>
+          <% } %>
+        </div>
+      </div>
+    </main>
+    <% if (listStatus.some((list) => list.refreshing) && !search) { %>
+      <script>setTimeout(() => { if (!document.getElementById('q').value) window.location.reload(); }, 15000);</script>
+    <% } %>
+    <%- include('../includes/scripts') %>
+  </body>
+</html>
