@@ -110,3 +110,21 @@ test('searches are queued per group and each group only sees its own searches', 
 
   assert.equal((await fetch(`${base}/no-es-un-id`, { headers: { 'x-role': 'usuario' } })).status, 404);
 });
+
+test('the restart cleanup runs before the first search is queued, so it never marks new searches', async () => {
+  const { createMaigretSearches } = await import('../src/maigretRouter.js');
+  const statements = [];
+  const pool = {
+    query: async (sql) => { statements.push(sql); return [[]]; },
+    execute: async (sql) => { statements.push(sql); return [{ affectedRows: 1 }]; },
+  };
+  const searches = createMaigretSearches(pool, { runSearch: () => new Promise(() => {}) });
+  // The name search tab queues directly, without opening the Maigret tab first.
+  await searches.enqueue({ userId: 1, role: 'usuario' }, { username: 'luisramirez', mode: 'rapida', recursive: false });
+  await searches.initialize();
+  const isCleanup = (sql) => sql.includes("status IN ('pendiente', 'procesando')");
+  const cleanup = statements.findIndex(isCleanup);
+  const insert = statements.findIndex((sql) => sql.startsWith('INSERT INTO maigret_busquedas'));
+  assert.ok(cleanup !== -1 && cleanup < insert);
+  assert.equal(statements.filter(isCleanup).length, 1);
+});

@@ -45,7 +45,10 @@ export function createMaigretSearches(pool, { runSearch = runMaigret } = {}) {
     return storage;
   };
 
+  // Every entry point initializes first: the startup cleanup would otherwise mark searches queued
+  // before it ran (from the name search tab or the bot) as interrupted by a restart.
   const find = async (session, id, columns) => {
+    await initialize();
     if (!UUID_PATTERN.test(id)) return null;
     const scope = visibleFiles(session, 'm');
     const [rows] = await pool.execute(`SELECT ${columns} FROM maigret_busquedas m
@@ -55,6 +58,7 @@ export function createMaigretSearches(pool, { runSearch = runMaigret } = {}) {
   };
 
   const enqueue = async (session, { username, mode, recursive }) => {
+    await initialize();
     if (jobs.size >= MAX_QUEUED_SEARCHES) throw new MaigretQueueFullError();
     const id = crypto.randomUUID();
     await pool.execute(`INSERT INTO maigret_busquedas (search_uuid, user_id, owner_group, username, mode, recursive_search, status)
@@ -85,6 +89,7 @@ export function createMaigretSearches(pool, { runSearch = runMaigret } = {}) {
   };
 
   const remove = async (session, id) => {
+    await initialize();
     if (!UUID_PATTERN.test(id)) return false;
     const scope = visibleFiles(session, 'm');
     const [result] = await pool.execute(`DELETE m FROM maigret_busquedas m WHERE m.search_uuid = ? AND ${scope.where}`,
