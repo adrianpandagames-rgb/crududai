@@ -41,8 +41,15 @@ export async function reverseGeocode(latitude, longitude, { apiKey = getGeocodin
     };
     throw new Error(messages[data.status] || 'Google Geocoding no pudo completar la consulta. Intenta nuevamente más tarde.');
   }
-  const result = data.results?.[0];
-  if (!result?.formatted_address) throw new Error('Google devolvió una respuesta sin dirección.');
+  // Google occasionally ranks a vandalized street (e.g. Vietnamese names in Hermosillo) first;
+  // trust the country most results agree on and skip results from any other country.
+  const results = (data.results || []).filter((item) => item?.formatted_address);
+  const countryOf = (item) => item.address_components?.find((part) => part.types?.includes('country'))?.short_name || '';
+  const votes = new Map();
+  for (const item of results) if (countryOf(item)) votes.set(countryOf(item), (votes.get(countryOf(item)) || 0) + 1);
+  const country = [...votes].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const result = results.find((item) => !country || countryOf(item) === country);
+  if (!result) throw new Error('Google devolvió una respuesta sin dirección.');
   const components = result.address_components || [];
   const component = (type) => components.find((item) => item.types?.includes(type))?.long_name;
   const addressDetails = {

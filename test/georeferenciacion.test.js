@@ -54,6 +54,17 @@ test('Google request uses latlng and Spanish; address components are selected by
     addressDetails: { street: '', neighborhood: '', postalCode: '', city: 'Hermosillo', state: 'Sonora', originalAddress: 'Dirección' } });
 });
 
+test('Google results from a country that disagrees with the rest are skipped', async () => {
+  const mx = { long_name: 'México', short_name: 'MX', types: ['country'] };
+  const result = await reverseGeocode(29.010222222, -110.930166667, { apiKey: 'test-key', fetchImpl: async () => ({ ok: true, json: async () => ({ status: 'OK', results: [
+    { formatted_address: 'Đường Vân Nội, xóm Thố, Hà Nội, Việt Nam', address_components: [{ long_name: 'Đường Vân Nội', types: ['route'] }, { long_name: 'Hà Nội', types: ['locality'] }, { long_name: 'Việt Nam', short_name: 'VN', types: ['country'] }] },
+    { formatted_address: 'Calle Real, Hermosillo, Son., México', address_components: [{ long_name: 'Calle Real', types: ['route'] }, { long_name: 'Hermosillo', types: ['locality'] }, mx] },
+    { formatted_address: 'Hermosillo, Son., México', address_components: [{ long_name: 'Hermosillo', types: ['locality'] }, mx] },
+  ] }) }) });
+  assert.equal(result.street, 'Calle Real');
+  assert.equal(result.place, 'Hermosillo');
+});
+
 test('Google quota reservation completes before the external request starts', async () => {
   const order = [];
   await reverseGeocode(29, -110, {
