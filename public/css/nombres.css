@@ -3,6 +3,3 @@
 .nombres-badge.sat69b { background: #fff3cd; color: #664d03; }
 .nombres-badge.approx { background: #e2e3e5; color: #41464b; font-weight: 600; margin-top: .25rem; }
 .nombres-details { font-size: .85rem; word-break: break-word; }
-.nombres-history li { padding: .4rem 0; border-bottom: 1px solid rgba(128, 128, 128, .2); }
-.nombres-history li:last-child { border-bottom: 0; }
-.nombres-history a { word-break: break-word; }

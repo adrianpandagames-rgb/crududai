@@ -35,7 +35,7 @@
             </form>
           </div>
 
-          <div class="card p-3 mb-4 nombres-status">
+          <div class="card p-3 nombres-status">
             <h3 class="h6">Listas oficiales</h3>
             <% listStatus.forEach((list) => { %>
               <div class="mb-2">
@@ -53,21 +53,6 @@
                 <button type="submit" class="btn btn-sm btn-outline-secondary">Actualizar listas ahora</button>
               </form>
             <% } %>
-          </div>
-
-          <div class="card p-3 nombres-history">
-            <h3 class="h6">Búsquedas recientes</h3>
-            <% if (history.length === 0) { %>
-              <p class="small text-muted mb-0">Sin búsquedas todavía.</p>
-            <% } %>
-            <ul class="list-unstyled mb-0">
-              <% history.forEach((item) => { %>
-                <li>
-                  <a href="/nombres?<%= new URLSearchParams({ q: item.query, ciudad: item.city }) %>"><%= item.query %><%= item.city ? ` · ${item.city}` : '' %></a>
-                  <div class="small text-muted"><%= item.requestedBy || '—' %> · <%= item.createdAt %> · <%= item.results %> en listas</div>
-                </li>
-              <% }) %>
-            </ul>
           </div>
         </div>
 

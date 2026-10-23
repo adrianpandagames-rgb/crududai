@@ -1,5 +1,4 @@
 import express from 'express';
-import { fileGroupOf, visibleFiles } from './fileGroups.js';
 import { MaigretQueueFullError } from './maigretRouter.js';
 import {
   LIST_SOURCES, buildNameIndex, isIdentifierQuery, normalizeName, parseOfac, parseSat69b,
@@ -47,16 +46,6 @@ export function createNameLists(pool, { fetchImpl = fetch } = {}) {
         entries INT UNSIGNED NOT NULL DEFAULT 0,
         attempted_at DATETIME NULL,
         error_message VARCHAR(500) NULL
-      )`);
-      await pool.query(`CREATE TABLE IF NOT EXISTS busqueda_nombres (
-        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-        user_id BIGINT NOT NULL,
-        owner_group VARCHAR(10) NOT NULL DEFAULT 'general',
-        query VARCHAR(200) NOT NULL,
-        city VARCHAR(100) NOT NULL DEFAULT '',
-        list_results INT UNSIGNED NOT NULL DEFAULT 0,
-        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        INDEX busqueda_nombres_group (owner_group, created_at)
       )`);
     })().catch((error) => { storage = null; throw error; });
     return storage;
@@ -176,17 +165,10 @@ export function createNombresRouter(pool, { lists = createNameLists(pool), maigr
             links: identifier ? [] : preparedSearches(name, city),
             variants: identifier ? [] : usernameVariants(name),
           };
-          await pool.execute(`INSERT INTO busqueda_nombres (user_id, owner_group, query, city, list_results) VALUES (?, ?, ?, ?, ?)`,
-            [req.session.userId, fileGroupOf(req.session), name.slice(0, 200), city, results.length]);
         }
       }
-      const scope = visibleFiles(req.session, 'b');
-      const [history] = await pool.execute(`SELECT b.query, b.city, b.list_results AS results, u.email AS requestedBy,
-        DATE_FORMAT(b.created_at, '%Y-%m-%d %H:%i') AS createdAt
-        FROM busqueda_nombres b LEFT JOIN users u ON u.id = b.user_id
-        WHERE ${scope.where} ORDER BY b.id DESC LIMIT 30`, scope.values);
       return res.render('pages/nombres', {
-        search, error, name, city, history,
+        search, error, name, city,
         listStatus: await lists.status(),
         sources: LIST_SOURCES,
         canRefresh: req.session.isAdmin === true,

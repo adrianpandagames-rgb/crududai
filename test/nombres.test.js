@@ -81,7 +81,7 @@ test('username variants follow given name plus paternal surname', () => {
   assert.deepEqual(usernameVariants('Luis'), []);
 });
 
-test('the tab searches the lists, keeps history per group and sends variants to Maigret', async (t) => {
+test('the tab searches the lists without saving a history and sends variants to Maigret', async (t) => {
   const executed = [];
   const pool = {
     execute: async (sql, values) => {
@@ -127,15 +127,11 @@ test('the tab searches the lists, keeps history per group and sends variants to 
   assert.ok(page.includes('GUZMAN LOERA, Joaquin'));
   assert.ok(page.includes('aproximada'));
   assert.ok(page.includes('site%3Afacebook.com'));
-  const insert = executed.find(({ sql }) => sql.startsWith('INSERT INTO busqueda_nombres'));
-  assert.deepEqual(insert.values, [5, 'uecs', 'Joakin Gusman', 'Culiacan', 1]);
-  const history = executed.find(({ sql }) => sql.includes('FROM busqueda_nombres b'));
-  assert.deepEqual(history.values, ['uecs']);
+  assert.ok(!page.includes('Búsquedas recientes'));
+  assert.deepEqual(executed, []);
 
-  executed.length = 0;
   const short = await (await fetch(`${base}?q=Joaquin`, { headers: { 'x-role': 'usuario' } })).text();
   assert.ok(short.includes('Escribe al menos nombre y apellido'));
-  assert.ok(!executed.some(({ sql }) => sql.startsWith('INSERT')));
 
   assert.equal((await fetch(`${base}/actualizar`, { method: 'POST', headers: { 'x-role': 'usuario' } })).status, 403);
 
