@@ -164,7 +164,11 @@ export function createMaigretRouter(pool, { runSearch, searches = createMaigretS
       const search = await searches.find(req.session, req.params.id, 'm.username, m.report_html');
       if (!search?.report_html) return res.status(404).send('Reporte no encontrado o todavía no disponible.');
       res.type('text/html; charset=utf-8');
-      res.attachment(`Maigret-${search.username}.html`);
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      // The report repeats text from third-party profiles, so it never runs scripts or shares the session.
+      res.setHeader('Content-Security-Policy', "sandbox allow-popups allow-popups-to-escape-sandbox; default-src 'none'; style-src https: 'unsafe-inline'; img-src https: data:; font-src https:");
+      if (req.query.ver === '1') res.setHeader('Content-Disposition', 'inline');
+      else res.attachment(`Maigret-${search.username}.html`);
       return res.send(search.report_html);
     } catch (error) {
       return next(error);

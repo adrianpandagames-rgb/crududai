@@ -128,3 +128,29 @@ test('the restart cleanup runs before the first search is queued, so it never ma
   assert.ok(cleanup !== -1 && cleanup < insert);
   assert.equal(statements.filter(isCleanup).length, 1);
 });
+
+test('the report opens sandboxed in the browser or downloads as a file', async (t) => {
+  const { createMaigretRouter } = await import('../src/maigretRouter.js');
+  const id = '0f8fad5b-d9cb-469f-a165-70867728950e';
+  const searches = {
+    initialize: async () => {},
+    find: async (session, searchId) => (searchId === id ? { username: 'soxoj', report_html: '<p>reporte</p>' } : null),
+  };
+  const app = express();
+  app.use((req, res, next) => { req.session = { userId: 1, role: 'usuario', isAdmin: false }; next(); });
+  app.use('/maigret', createMaigretRouter({}, { searches }));
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise((resolve) => server.once('listening', resolve));
+  t.after(() => { server.closeAllConnections(); server.close(); });
+  const base = `http://127.0.0.1:${server.address().port}/maigret/${id}/reporte`;
+
+  const view = await fetch(`${base}?ver=1`);
+  assert.equal(view.headers.get('content-disposition'), 'inline');
+  assert.match(view.headers.get('content-security-policy'), /^sandbox allow-popups allow-popups-to-escape-sandbox;/);
+  assert.ok(!view.headers.get('content-security-policy').includes('allow-scripts'));
+  assert.equal(await view.text(), '<p>reporte</p>');
+
+  const download = await fetch(base);
+  assert.equal(download.headers.get('content-disposition'), 'attachment; filename="Maigret-soxoj.html"');
+  assert.match(download.headers.get('content-security-policy'), /^sandbox/);
+});

@@ -26,7 +26,8 @@
           <div class="d-flex gap-2 flex-wrap">
             <a class="btn btn-outline-secondary" href="/maigret">Volver</a>
             <% if (search.hasReport) { %>
-              <a class="btn btn-outline-primary" href="/maigret/<%= search.id %>/reporte"><i class="bi bi-download"></i> Reporte HTML</a>
+              <a class="btn btn-primary" href="/maigret/<%= search.id %>/reporte?ver=1" target="_blank" rel="noopener"><i class="bi bi-file-earmark-text"></i> Ver reporte</a>
+              <a class="btn btn-outline-primary" href="/maigret/<%= search.id %>/reporte" download="Maigret-<%= search.username %>.html"><i class="bi bi-download"></i> Descargar HTML</a>
             <% } %>
           </div>
         </div>
