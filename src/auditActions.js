@@ -7,7 +7,7 @@ export const auditResources = {
   ESTUDIANTE: 'Estudiante', OTRO: 'Otro',
   GEOREFERENCIACION: 'Georreferenciación', PLANEACION: 'Planeación geográfica',
   TELEFONO: 'Teléfono', RED: 'Red telefónica', AUDITORIA: 'Auditoría', METRICAS: 'Métricas',
-  MAIGRET: 'Maigret', IMAGEN: 'Búsqueda por imagen', NOMBRE: 'Búsqueda por nombre',
+  MAIGRET: 'Maigret', IMAGEN: 'Búsqueda por imagen', NOMBRE: 'RastroX',
 };
 
 const metricTypes = {

@@ -143,7 +143,7 @@ export function createNombresRouter(pool, { lists = createNameLists(pool), maigr
       await lists.initialize();
       next();
     } catch {
-      res.status(503).send('No fue posible acceder a la búsqueda por nombre.');
+      res.status(503).send('No fue posible acceder a RastroX.');
     }
   });
 
