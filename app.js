@@ -24,7 +24,7 @@ import { sanitizeAuditData } from './src/auditDetails.js';
 import { auditActivity } from './src/auditMiddleware.js';
 import { requireSameOrigin } from './src/requestSecurity.js';
 import { createTelegramApiRouter } from './src/telegramApiRouter.js';
-import { decryptTelegramId, encryptTelegramId } from './src/telegramIdCrypto.js';
+import { decryptTelegramId, encryptTelegramId, telegramIdHash } from './src/telegramIdCrypto.js';
 import { createPlaneacionRouter } from './src/planeacionRouter.js';
 import { createRedTelefonicaRouter } from './src/redTelefonicaRouter.js';
 import { createMaigretRouter, createMaigretSearches } from './src/maigretRouter.js';
@@ -595,7 +595,7 @@ app.post('/usuarios/:id/rol', requireAdmin, async (req, res, next) => {
   if (userId === req.session.userId && !isAdmin) return toUsers(req, res, { error: 'No puedes quitarte tu propio acceso de administrador.' });
 
   try {
-    const [targets] = await pool.execute('SELECT id, email, is_admin, role, is_initial_admin, telegram_id_hash FROM users WHERE id = ?', [userId]);
+    const [targets] = await pool.execute('SELECT id, email, is_admin, role, is_initial_admin FROM users WHERE id = ?', [userId]);
     if (targets.length !== 1) return toUsers(req, res, { error: 'Usuario no encontrado.' });
     const target = targets[0];
     if (protectsInitialAdmin(target, req)) {
@@ -618,19 +618,7 @@ app.post('/usuarios/:id/rol', requireAdmin, async (req, res, next) => {
 
     const [result] = await pool.execute('UPDATE users SET is_admin = ?, role = ? WHERE id = ?', [isAdmin ? 1 : 0, role, userId]);
     if (result.affectedRows !== 1) return toUsers(req, res, { error: 'Usuario no encontrado.' });
-    const message = `Rol de ${target.email} cambiado a ${roleLabels[role]}.`;
-    // The bot only needs a restart when the change affects someone who uses it.
-    if (!target.telegram_id_hash) return toUsers(req, res, { message });
-    try {
-      await restartTelegramBot();
-    } catch (restartError) {
-      console.error('No se pudo reiniciar el bot de Telegram:', restartError.message);
-      return toUsers(req, res, {
-        message,
-        error: 'El rol se guardó, pero no se pudo reiniciar el bot. Revisa el proceso de Telegram en PM2.',
-      });
-    }
-    return toUsers(req, res, { message, toast: { message: 'Bot actualizado', title: 'Telegram' } });
+    return toUsers(req, res, { message: `Rol de ${target.email} cambiado a ${roleLabels[role]}.` });
   } catch (error) {
     return next(error);
   }
@@ -643,17 +631,29 @@ app.post('/usuarios/:id/telegram', requireAdmin, async (req, res, next) => {
   if (telegramId && !/^[1-9]\d{0,19}$/.test(telegramId)) return toUsers(req, res, { error: 'El ID de Telegram debe ser numérico.' });
 
   try {
-    const [users] = await pool.execute('SELECT id, email FROM users WHERE id = ?', [userId]);
+    const [users] = await pool.execute('SELECT id, email, telegram_id_hash FROM users WHERE id = ?', [userId]);
     if (users.length !== 1) return toUsers(req, res, { error: 'Usuario no encontrado.' });
+    // Saving the same ID again must not restart the bot for everyone.
+    if ((telegramId ? telegramIdHash(telegramId) : null) === (users[0].telegram_id_hash || null)) {
+      return toUsers(req, res, { message: `El ID de Telegram de ${users[0].email} no cambió.` });
+    }
     if (!telegramId) {
       await pool.execute('UPDATE users SET telegram_id_encrypted = NULL, telegram_id_hash = NULL WHERE id = ?', [userId]);
     } else {
       const { encrypted, hash } = encryptTelegramId(telegramId);
       await pool.execute('UPDATE users SET telegram_id_encrypted = ?, telegram_id_hash = ? WHERE id = ?', [encrypted, hash, userId]);
     }
-    return toUsers(req, res, {
-      message: telegramId ? `ID de Telegram de ${users[0].email} actualizado.` : `Telegram desvinculado de ${users[0].email}.`,
-    });
+    const message = telegramId ? `ID de Telegram de ${users[0].email} actualizado.` : `Telegram desvinculado de ${users[0].email}.`;
+    try {
+      await restartTelegramBot();
+    } catch (restartError) {
+      console.error('No se pudo reiniciar el bot de Telegram:', restartError.message);
+      return toUsers(req, res, {
+        message,
+        error: 'El ID se guardó, pero no se pudo reiniciar el bot. Revisa el proceso de Telegram en PM2.',
+      });
+    }
+    return toUsers(req, res, { message, toast: { message: 'Bot actualizado', title: 'Telegram' } });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') return toUsers(req, res, { error: 'Ese ID de Telegram ya está vinculado a otro usuario.' });
     return next(error);
