@@ -1,4 +1,4 @@
-import { findHeaderColumn, LATITUDE_HEADERS, LONGITUDE_HEADERS, normalizeRutaValue, parseCoordinateNumber } from './rutaService.js';
+import { findHeaderColumn, firstListedValue, LATITUDE_HEADERS, LONGITUDE_HEADERS, normalizeRutaValue, parseCoordinateNumber } from './rutaService.js';
 
 const pad = (value) => String(value).padStart(2, '0');
 
@@ -55,15 +55,15 @@ export function extractPlanningPoints(rows) {
       const time = parsePlanningTime(row[dateIndex], timeIndex >= 0 && timeIndex !== dateIndex ? row[timeIndex] : '');
       if (time) times[index] = time;
     }
-    const rawLat = latIndex >= 0 ? row[latIndex] : '';
-    const rawLng = lngIndex >= 0 ? row[lngIndex] : '';
+    const rawLat = latIndex >= 0 ? firstListedValue(row[latIndex]) : '';
+    const rawLng = lngIndex >= 0 ? firstListedValue(row[lngIndex]) : '';
     const lat = String(rawLat ?? '').trim() ? parseCoordinateNumber(rawLat, rows.delimiter) : null;
     const lng = String(rawLng ?? '').trim() ? parseCoordinateNumber(rawLng, rows.delimiter) : null;
     if (lat === null || lng === null || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
       omitted++;
       continue;
     }
-    const rawAzimuth = String(azimuthIndex >= 0 ? row[azimuthIndex] ?? '' : '').trim().replace(/°/g, '').replace(',', '.');
+    const rawAzimuth = String(azimuthIndex >= 0 ? firstListedValue(row[azimuthIndex]) ?? '' : '').trim().replace(/°/g, '').replace(',', '.');
     const value = rawAzimuth ? Number(rawAzimuth) : NaN;
     const azimuth = Number.isFinite(value) ? ((value % 360) + 360) % 360 : null;
     if (azimuth === null) missingAzimuth++;

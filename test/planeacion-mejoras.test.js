@@ -94,3 +94,26 @@ test('Excel annexes with title rows above the table and US-style dates are read 
   assert.equal(result.points.length, 1);
   assert.equal(result.points[0].time, '2026-10-06T12:00');
 });
+
+test('AT&T cells listing several coordinates use only the first one', async () => {
+  const { firstListedValue } = await import('../src/rutaService.js');
+  assert.equal(firstListedValue('[32.512345:32.600000]'), '32.512345');
+  assert.equal(firstListedValue('[305.0:120.0]'), '305.0');
+  assert.equal(firstListedValue('[0]'), '');
+  assert.equal(firstListedValue('29.07'), '29.07');
+
+  const csv = [
+    'Case 1,,,,Informe de CDR,,',
+    ',,,,,,',
+    'NO,FECHA,HORA,ID_CELDA,LATITUD,LONGITUD,AZIMUTH',
+    '1,2026-07-23,00:27:07,A1,[20.091234:20.5],[-98.361234:-98.9],[305.0:120.0]',
+    '2,2026-07-23,00:32:28,A2,[0],[0],',
+    ',,,,© 2026 AT&T Intellectual Property,,',
+  ].join('\n');
+  const rows = processRutaCsv(csv, []);
+  assert.equal(rows.length, 3);
+  assert.equal(rows[1][1], '23/07/2026');
+  const result = extractPlanningPoints(rows);
+  assert.deepEqual(result.points, [{ lat: 20.091234, lng: -98.361234, azimuth: 305, row: 1, time: '2026-07-23T00:27' }]);
+  assert.equal(result.omitted, 1);
+});

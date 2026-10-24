@@ -18,7 +18,17 @@ const parseDmsCoordinate = (value) => {
   return /[SW]/i.test(dmsMatch[4] || '') ? -coordinate : coordinate;
 };
 
-export const parseCoordinateNumber = (value, delimiter = ',') => {
+// AT&T lists every cell a session used in one field, "[32.51:32.52]", with "[0]" when there is no
+// location. Only the first value counts; plain values pass through unchanged.
+export const firstListedValue = (value) => {
+  const match = String(value ?? '').trim().match(/^\[(.*)\]$/s);
+  if (!match) return value;
+  const first = match[1].split(/[:;|]/)[0].trim();
+  return first === '0' ? '' : first;
+};
+
+export const parseCoordinateNumber = (rawValue, delimiter = ',') => {
+  const value = firstListedValue(rawValue);
   const normalizedValue = String(value ?? '')
     .trim()
     .replace(/\s+/g, '')
@@ -220,14 +230,25 @@ const processRutaRows = (sourceRows, locations, delimiter = ',') => {
   const antennaNumbers = new Map();
   const result = [outputHeaders];
   let nextAntennaNumber = 1;
+  const dateColumns = headers.flatMap((header, index) => (findHeaderColumn([header], ['fecha', 'date']) === 0 ? [index] : []));
+  // Blank lines and legal footers (one filled cell in a wide table) are not records.
+  const isRecord = (row) => {
+    const filled = row.filter((cell) => String(cell ?? '').trim() !== '').length;
+    return filled > 1 || (filled === 1 && headers.length < 4);
+  };
 
   for (const sourceRow of rows.slice(1)) {
+    if (!isRecord(sourceRow)) continue;
     const outputRow = sourceRow.slice();
+    // Carriers send ISO dates (2026-07-23); the app shows dd/mm/aaaa everywhere.
+    for (const column of dateColumns) {
+      outputRow[column] = String(outputRow[column] ?? '').replace(/^(\d{4})-(\d{2})-(\d{2})(?=$|[ T])/, '$3/$2/$1');
+    }
     while (outputRow.length < outputHeaders.length) outputRow.push('');
 
     const rawAntenna = String(antennaColumn >= 0 ? sourceRow[antennaColumn] ?? '' : '').trim();
-    const rawLatitude = String(latitudeColumn >= 0 ? sourceRow[latitudeColumn] ?? '' : '').trim();
-    const rawLongitude = String(longitudeColumn >= 0 ? sourceRow[longitudeColumn] ?? '' : '').trim();
+    const rawLatitude = String(latitudeColumn >= 0 ? firstListedValue(sourceRow[latitudeColumn]) ?? '' : '').trim();
+    const rawLongitude = String(longitudeColumn >= 0 ? firstListedValue(sourceRow[longitudeColumn]) ?? '' : '').trim();
     const numericLatitude = parseCoordinateNumber(rawLatitude, delimiter);
     const numericLongitude = parseCoordinateNumber(rawLongitude, delimiter);
     const coordinateKey = numericLatitude !== null && numericLongitude !== null

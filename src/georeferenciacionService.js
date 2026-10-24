@@ -1,4 +1,4 @@
-import { parseCsv, detectCsvDelimiter, findRutaHeaderRow, normalizeRutaValue, parseCoordinateNumber, readRutaXlsxRows } from './rutaService.js';
+import { parseCsv, detectCsvDelimiter, findRutaHeaderRow, firstListedValue, normalizeRutaValue, parseCoordinateNumber, readRutaXlsxRows } from './rutaService.js';
 import { createCrossStreetLookup } from './entrecallesService.js';
 import { formatGeocodingLocation } from './georeferenciacionFormato.js';
 
@@ -94,8 +94,9 @@ export async function processGeocodingFile(input, { geocode = reverseGeocode, cr
     if (signal?.aborted) throw new Error('Procesamiento cancelado.');
     const row = source.slice();
     while (row.length < headers.length) row.push('');
-    const latText = String(source[latitude] ?? '').trim();
-    const lngText = String(source[longitude] ?? '').trim();
+    // "[0]" (no location in AT&T files) must not become 0,0 and spend a Google request.
+    const latText = String(firstListedValue(source[latitude]) ?? '').trim();
+    const lngText = String(firstListedValue(source[longitude]) ?? '').trim();
     const lat = latText ? parseCoordinateNumber(latText, delimiter) : null;
     const lng = lngText ? parseCoordinateNumber(lngText, delimiter) : null;
     row[address] = '';
