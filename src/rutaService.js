@@ -37,6 +37,18 @@ export const normalizeRutaValue = (value) => String(value ?? '')
   .toLowerCase()
   .replace(/\s+/g, ' ');
 
+export const LATITUDE_HEADERS = ['latitud', 'latitude', 'lat'];
+export const LONGITUDE_HEADERS = ['longitud', 'longitude', 'lon', 'long', 'lng'];
+
+// Exact header first, then a whole word, so "Colonia" or "Plataforma" never pass for "lon" or "lat".
+// Long names also match glued words such as "LatitudAntena". `headers` must be normalized.
+export const findHeaderColumn = (headers, names) => {
+  const exact = headers.findIndex((header) => names.includes(header));
+  if (exact >= 0) return exact;
+  return headers.findIndex((header) => header.split(/[^a-z0-9]+/).some((word) => names.includes(word)
+    || names.some((name) => name.length >= 7 && word.startsWith(name))));
+};
+
 export const detectCsvDelimiter = (text) => {
   const firstLine = String(text).split(/\r?\n/, 1)[0];
   const delimiters = [',', ';', '\t'];
@@ -175,8 +187,8 @@ const processRutaRows = (rows, locations, delimiter = ',') => {
   const findColumn = (names) => headers.findIndex((header) => names.some((name) => header === name));
   const findColumnContaining = (names) => headers.findIndex((header) => names.some((name) => header.includes(name)));
   const antennaColumn = findColumnContaining(['antena', 'antenna']);
-  const latitudeColumn = findColumnContaining(['latitud', 'latitude', 'lat']);
-  const longitudeColumn = findColumnContaining(['longitud', 'longitude', 'lon', 'long']);
+  const latitudeColumn = findHeaderColumn(headers, LATITUDE_HEADERS);
+  const longitudeColumn = findHeaderColumn(headers, LONGITUDE_HEADERS);
   const locationColumn = findColumnContaining(['ubicacion', 'ubicación', 'location']);
   const placeColumn = findColumnContaining(['lugar', 'place']);
 

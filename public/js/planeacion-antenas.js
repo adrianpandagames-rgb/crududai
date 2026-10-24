@@ -27,3 +27,37 @@ export function summarizeAntennas(data) {
   });
   return [...groups.values()].sort((a, b) => b.rows.length - a.rows.length || a.name.localeCompare(b.name));
 }
+
+const foldText = (value) => String(value ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+// Case- and accent-insensitive search over every cell of a record.
+export function rowMatches(row, term) {
+  const needle = foldText(term).trim();
+  return !needle || row.some((cell) => foldText(cell).includes(needle));
+}
+
+// One light-to-dark blue per fifth of the busiest site, so concentration reads at a glance.
+export const FREQUENCY_COLORS = ['#9ecae1', '#6baed6', '#3182bd', '#08519c', '#08306b'];
+
+export function frequencyScale(maxCount) {
+  const max = Math.max(Math.floor(maxCount) || 1, 1);
+  const steps = Math.min(FREQUENCY_COLORS.length, max);
+  const colors = FREQUENCY_COLORS.slice(FREQUENCY_COLORS.length - steps);
+  const upper = colors.map((_, index) => Math.ceil((max * (index + 1)) / steps));
+  const legend = colors.map((color, index) => {
+    const from = index === 0 ? 1 : upper[index - 1] + 1;
+    return { color, label: from >= upper[index] ? `${upper[index]}` : `${from}–${upper[index]}` };
+  });
+  return {
+    legend,
+    colorFor: (count) => colors[Math.max(upper.findIndex((limit) => count <= limit), 0)],
+  };
+}
+
+const csvCell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+
+// `rowNumbers` are 1-based, as in the table. The BOM keeps accents readable in Excel.
+export function selectionCsv(headers, rows, rowNumbers) {
+  const lines = [headers, ...[...rowNumbers].sort((a, b) => a - b).map((row) => rows[row - 1] || [])];
+  return `﻿${lines.map((line) => line.map(csvCell).join(',')).join('\r\n')}\r\n`;
+}

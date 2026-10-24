@@ -59,7 +59,8 @@ test('planning uses Ruta enrichment and preserves original information and per-r
   assert.equal(rows[1][1], '13/10/2026');
   assert.equal(rows[1][rows[0].indexOf('ubicacion')], 'Centro');
   assert.deepEqual(extractPlanningPoints(rows), {
-    points: [{ lat: 29.1, lng: -110.9, azimuth: 50, row: 1 }], omitted: 0, missingAzimuth: 0,
+    points: [{ lat: 29.1, lng: -110.9, azimuth: 50, row: 1, time: '2026-10-13T00:00' }], omitted: 0, missingAzimuth: 0,
+    times: { 1: '2026-10-13T00:00' }, hasTimes: true,
   });
 });
 

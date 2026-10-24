@@ -10,10 +10,13 @@ export function destination(lat, lng, bearing, metres) {
   return [nextPhi / radians, ((nextLambda / radians + 540) % 360) - 180];
 }
 
-export function coverageSector(lat, lng, azimuth, radius = 500) {
+// `beamwidth` is the full opening in degrees, centred on the azimuth.
+export function coverageSector(lat, lng, azimuth, radius = 500, beamwidth = 90) {
+  const half = beamwidth / 2;
+  const steps = Math.max(Math.ceil(beamwidth / 3), 2);
   const points = [[lat, lng]];
-  for (let angle = azimuth - 45; angle <= azimuth + 45; angle += 3) {
-    points.push(destination(lat, lng, angle, radius));
+  for (let step = 0; step <= steps; step++) {
+    points.push(destination(lat, lng, azimuth - half + (beamwidth * step) / steps, radius));
   }
   points.push([lat, lng]);
   return points;

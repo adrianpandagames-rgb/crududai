@@ -3,11 +3,11 @@
 <head>
   <%- include('../includes/head') %>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <link rel="stylesheet" href="/public/css/planeacion-geografica.css" />
+  <link rel="stylesheet" href="/public/css/planeacion-geografica.css?v=5" />
 </head>
 <body>
   <%- include('../includes/header') %>
-  <main class="container-fluid page-offset planning-page">
+  <main class="container-fluid page-offset planning-page" data-user="<%= typeof currentUser !== 'undefined' && currentUser ? currentUser.id : '' %>">
     <h2 class="text-center title mt-5 mb-4">Planeación geográfica<hr /></h2>
     <form id="planningUpload" class="card p-4 mb-4" enctype="multipart/form-data">
       <div class="row">
@@ -27,48 +27,89 @@
           <button id="planningSubmit" class="btn btn-primary w-100" type="submit">Importar y mostrar mapa</button>
         </div>
       </div>
-      <p class="form-text mb-0">Se conservan las columnas originales y se completan antena, ubicación, lugar, latitud y longitud, igual que en Ruta. La columna azimut o azimuth define la orientación de cada sector.</p>
+      <p class="form-text mb-0">Se conservan las columnas originales y se completan antena, ubicación, lugar, latitud y longitud, igual que en Ruta. La columna azimut o azimuth define la orientación de cada sector; las columnas fecha y hora permiten filtrar por periodo.</p>
     </form>
     <div id="planningStatus" class="alert alert-info" role="status" aria-live="polite">Importa un archivo para mostrar las antenas y sus sectores de cobertura.</div>
+    <div id="planningRestored" class="alert alert-secondary d-flex flex-wrap align-items-center justify-content-between gap-2" hidden>
+      <span id="planningRestoredText"></span>
+      <button id="planningDiscard" type="button" class="btn btn-sm btn-outline-secondary">Descartar archivo</button>
+    </div>
     <div id="planningWorkspace" class="planning-workspace has-records">
     <section class="card p-3 planning-map-panel" aria-label="Mapa de cobertura">
-      <div class="row align-items-end mb-3">
-        <div class="col-sm-4 mb-2">
+      <div class="row align-items-end mb-2">
+        <div class="col-sm-6 col-xl-3 mb-2">
           <label for="planningCoverageMode" class="form-label">Mostrar cobertura</label>
-          <select id="planningCoverageMode" class="form-control">
+          <select id="planningCoverageMode" class="form-select">
             <option value="sector">Rango con azimut (sector)</option>
             <option value="range">Solo rango (círculo sin dirección)</option>
           </select>
         </div>
-        <div class="col-sm-3 mb-2">
+        <div class="col-sm-6 col-xl-2 mb-2">
+          <label for="planningBeam" class="form-label">Apertura del sector</label>
+          <select id="planningBeam" class="form-select">
+            <option value="60">60°</option>
+            <option value="65">65°</option>
+            <option value="90" selected>90°</option>
+            <option value="120">120°</option>
+          </select>
+        </div>
+        <div class="col-sm-6 col-xl-2 mb-2">
           <label for="planningRadius" class="form-label">Alcance (metros)</label>
           <input id="planningRadius" type="number" class="form-control" min="1" max="100000" step="1" value="500" required />
         </div>
-        <div class="col-sm-5 mb-2 d-flex gap-2 flex-wrap">
+        <div class="col-sm-6 col-xl-2 mb-2">
+          <label for="planningColorMode" class="form-label">Color</label>
+          <select id="planningColorMode" class="form-select">
+            <option value="frequency" selected>Por frecuencia</option>
+            <option value="uniform">Un solo color</option>
+          </select>
+        </div>
+        <div class="col-xl-3 mb-2 d-flex gap-2 flex-wrap">
           <button id="planningFit" class="btn btn-outline-primary" type="button" disabled>Ver todas las antenas</button>
-          <button id="planningExport" class="btn btn-outline-secondary" type="button" disabled>Exportar CSV</button>
         </div>
       </div>
-      <p class="small text-muted">Con azimut, la sombra abarca 45° a cada lado de su orientación. “Solo rango” muestra un círculo de alcance. Los registros sin azimut válido muestran únicamente la antena en ambos modos. Cobertura ilustrativa. Los datos importados permanecen en esta pestaña hasta recargarla.</p>
+      <div id="planningTimeFilter" class="row align-items-end mb-2" hidden>
+        <div class="col-sm-5 col-xl-4 mb-2">
+          <label for="planningFrom" class="form-label">Desde</label>
+          <input id="planningFrom" type="datetime-local" class="form-control" />
+        </div>
+        <div class="col-sm-5 col-xl-4 mb-2">
+          <label for="planningTo" class="form-label">Hasta</label>
+          <input id="planningTo" type="datetime-local" class="form-control" />
+        </div>
+        <div class="col-sm-2 col-xl-4 mb-2">
+          <button id="planningClearTime" class="btn btn-outline-secondary" type="button">Todo el periodo</button>
+        </div>
+      </div>
+      <p class="small text-muted">El sector abarca la apertura elegida centrada en el azimut. “Solo rango” muestra un círculo de alcance. Los registros sin azimut válido muestran únicamente la antena. Con color por frecuencia, los puntos más oscuros tienen más registros. Cobertura ilustrativa.</p>
       <div id="planningMap" aria-label="Mapa con sectores de cobertura de las antenas"></div>
     </section>
     <section id="planningData" class="card p-3 planning-data-panel">
       <div class="planning-antennas mb-3" aria-labelledby="planningAntennasTitle">
         <h3 id="planningAntennasTitle" class="h6">Frecuencia de antenas</h3>
-        <p class="small text-muted mb-2">Apariciones en el archivo. Pulsa una antena para identificarla en el mapa.</p>
+        <p class="small text-muted mb-2">Apariciones en el archivo. Pulsa una antena para identificarla en el mapa; “Copiar” la lleva al portapapeles.</p>
         <div id="planningAntennas" class="planning-antennas-list"><p class="small mb-0">Importa un archivo para ver las antenas.</p></div>
       </div>
       <h3 class="h5">Información del archivo</h3>
-      <p class="small text-muted">Marca las casillas o haz clic en los registros para mostrar únicamente las antenas seleccionadas. Vuelve a pulsar para quitar una selección. Usa “Ver todas las antenas” para recuperar la vista completa.</p>
+      <p class="small text-muted">Marca las casillas o haz clic en los registros para mostrar únicamente esas antenas; vuelve a pulsar para quitarlas. Haz clic en un punto del mapa para ver los registros de esas coordenadas.</p>
       <p id="planningFile" class="small">No hay archivo importado.</p>
-      <p class="small text-muted">Haz clic en un punto del mapa para ver todos los registros de esas coordenadas.</p>
-      <div class="mb-2"><button id="planningClearFilter" type="button" class="btn btn-sm btn-outline-secondary" hidden>Mostrar todos los registros</button></div>
+      <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+        <input id="planningSearch" type="search" class="form-control form-control-sm planning-search" placeholder="Buscar en la tabla…" aria-label="Buscar en los registros" autocomplete="off" disabled />
+        <button id="planningClearFilter" type="button" class="btn btn-sm btn-outline-secondary" hidden>Mostrar todas las coordenadas</button>
+        <button id="planningExport" class="btn btn-sm btn-outline-secondary" type="button" disabled>Exportar CSV</button>
+        <button id="planningExportSelection" class="btn btn-sm btn-outline-secondary" type="button" disabled>Exportar selección</button>
+      </div>
       <div class="table-responsive planning-table"><table class="table table-striped"><thead id="planningHeaders"></thead><tbody id="planningRows"><tr><td class="text-center text-muted py-5">Importa un archivo para ver sus registros aquí.</td></tr></tbody></table></div>
+      <nav class="planning-pager" aria-label="Páginas de registros" hidden>
+        <button id="planningPrev" type="button" class="btn btn-sm btn-outline-secondary">Anterior</button>
+        <span id="planningPageInfo" class="small"></span>
+        <button id="planningNext" type="button" class="btn btn-sm btn-outline-secondary">Siguiente</button>
+      </nav>
     </section>
     </div>
   </main>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="/public/js/ruta-upload.js"></script>
-  <script type="module" src="/public/js/planeacion-geografica.js?v=4"></script>
+  <script type="module" src="/public/js/planeacion-geografica.js?v=5"></script>
 </body>
 </html>
