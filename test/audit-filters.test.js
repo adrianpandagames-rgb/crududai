@@ -99,3 +99,26 @@ test('the CSV export neutralises spreadsheet formulas', async () => {
   assert.match(csv, /"'=HYPERLINK\(""x""\)"/);
   assert.match(csv, /"2026-10-23 18:00:00"/);
 });
+
+test('mounted routers are audited with their full path', async (t) => {
+  const { default: express } = await import('express');
+  const { auditActivity } = await import('../src/auditMiddleware.js');
+  const app = express();
+  const events = [];
+  app.locals.writeAuditLog = (entry) => events.push(entry);
+  app.use(auditActivity);
+  app.use((req, res, next) => { req.session = { userId: 1, email: 'a@b.mx' }; next(); });
+  const router = express.Router();
+  router.get('/', (req, res) => res.send('ok'));
+  router.post('/importar', (req, res) => res.json({ ok: true }));
+  app.use('/planeacion-geografica', router);
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise((resolve) => server.once('listening', resolve));
+  t.after(() => { server.closeAllConnections(); server.close(); });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  await fetch(`${base}/planeacion-geografica`);
+  await fetch(`${base}/planeacion-geografica/importar`, { method: 'POST' });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.deepEqual(events.map(({ requestPath, action }) => `${action} ${requestPath}`),
+    ['CONSULTA /planeacion-geografica', 'POST /planeacion-geografica/importar']);
+});

@@ -1,4 +1,4 @@
-import { parseCsv, detectCsvDelimiter, normalizeRutaValue, parseCoordinateNumber, readRutaXlsxRows } from './rutaService.js';
+import { parseCsv, detectCsvDelimiter, findRutaHeaderRow, normalizeRutaValue, parseCoordinateNumber, readRutaXlsxRows } from './rutaService.js';
 import { createCrossStreetLookup } from './entrecallesService.js';
 import { formatGeocodingLocation } from './georeferenciacionFormato.js';
 
@@ -7,7 +7,8 @@ export const getGeocodingKey = () => process.env.GOOGLE_GEOCODING_API_KEY || '';
 export function readGeocodingFile(buffer, extension) {
   const text = extension === '.csv' ? buffer.toString('utf8').replace(/^\uFEFF/, '') : '';
   const delimiter = extension === '.csv' ? detectCsvDelimiter(text) : ',';
-  const rows = extension === '.xlsx' ? readRutaXlsxRows(buffer) : parseCsv(text, delimiter);
+  const sourceRows = extension === '.xlsx' ? readRutaXlsxRows(buffer) : parseCsv(text, delimiter);
+  const rows = sourceRows.slice(findRutaHeaderRow(sourceRows));
   if (rows.length < 2) throw new Error('El archivo debe contener encabezados y al menos una fila de datos.');
   if (rows.length > 100001) throw new Error('El archivo supera el límite de 100000 filas.');
   const headers = rows[0].map(normalizeRutaValue);

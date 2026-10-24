@@ -176,11 +176,23 @@ export const buildRutaLocationIndex = (locations) => {
   return index;
 };
 
-const processRutaRows = (rows, locations, delimiter = ',') => {
-  if (rows.length > MAX_DATA_ROWS + 1) {
+// Official annexes often start with a title, an office number or blank lines before the table.
+// The header is the first of the opening rows naming latitude and longitude, or else an antenna column.
+const HEADER_SEARCH_ROWS = 30;
+export const findRutaHeaderRow = (rows) => {
+  const candidates = rows.slice(0, HEADER_SEARCH_ROWS).map((row) => (row || []).map(normalizeRutaValue));
+  const coordinates = candidates.findIndex((headers) => findHeaderColumn(headers, LATITUDE_HEADERS) >= 0
+    && findHeaderColumn(headers, LONGITUDE_HEADERS) >= 0);
+  if (coordinates >= 0) return coordinates;
+  return Math.max(candidates.findIndex((headers) => findHeaderColumn(headers, ['antena', 'antenna']) >= 0), 0);
+};
+
+const processRutaRows = (sourceRows, locations, delimiter = ',') => {
+  if (sourceRows.length > MAX_DATA_ROWS + 1) {
     throw new Error(`El archivo supera el límite de ${MAX_DATA_ROWS} filas.`);
   }
-  if (rows.length === 0) throw new Error('El CSV está vacío.');
+  if (sourceRows.length === 0) throw new Error('El CSV está vacío.');
+  const rows = sourceRows.slice(findRutaHeaderRow(sourceRows));
 
   const originalHeaders = rows[0].slice();
   const headers = originalHeaders.map(normalizeRutaValue);
@@ -249,13 +261,35 @@ export const processRutaCsv = (text, locations) => {
   return processRutaRows(parseCsv(normalizedText, delimiter), locations, delimiter);
 };
 
+const pad2 = (value) => String(value).padStart(2, '0');
+// The ESM namespace of xlsx leaves the number-format helpers on its default export.
+const SSF = XLSX.SSF || XLSX.default?.SSF;
+
+// Excel shows date cells in the US style ("10/6/26"); write every date or time cell as
+// dd/mm/aaaa, dd/mm/aaaa HH:MM:SS or HH:MM:SS, whatever its column is called.
+const formatExcelDateCells = (worksheet, date1904) => {
+  for (const [address, cell] of Object.entries(worksheet)) {
+    if (address.startsWith('!') || cell?.t !== 'n' || !Number.isFinite(cell.v) || cell.v < 0) continue;
+    if (!cell.z || !SSF.is_date(cell.z)) continue;
+    const parts = SSF.parse_date_code(cell.v, { date1904 });
+    if (!parts) continue;
+    const time = `${pad2(parts.H)}:${pad2(parts.M)}:${pad2(Math.floor(parts.S))}`;
+    const date = `${pad2(parts.d)}/${pad2(parts.m)}/${parts.y}`;
+    const format = cell.z.replace(/"[^"]*"|\[[^\]]*\]/g, '');
+    const hasDate = /[dy]/i.test(format);
+    const hasTime = /[hs]/i.test(format);
+    cell.w = !hasDate ? time : hasTime ? `${date} ${time}` : date;
+  }
+};
+
 export const readRutaXlsxRows = (buffer) => {
-  const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: false });
+  const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: false, cellNF: true });
   const firstSheetName = workbook.SheetNames[0];
   if (!firstSheetName) throw new Error('El archivo Excel no contiene hojas.');
 
   const worksheet = workbook.Sheets[firstSheetName];
   const date1904 = workbook.Workbook?.WBProps?.date1904 === true;
+  formatExcelDateCells(worksheet, date1904);
 
   const rows = XLSX.utils.sheet_to_json(worksheet, {
     header: 1,

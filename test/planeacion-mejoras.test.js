@@ -73,3 +73,24 @@ test('the selection export keeps the headers and the chosen records in order', (
   const csv = selectionCsv(['Antena', 'Lugar'], [['A', 'Centro'], ['B', 'Dice "hola"'], ['C', 'Norte']], new Set([3, 2]));
   assert.equal(csv, '﻿"Antena","Lugar"\r\n"B","Dice ""hola"""\r\n"C","Norte"\r\n');
 });
+
+test('Excel annexes with title rows above the table and US-style dates are read correctly', async () => {
+  const { default: XLSX } = await import('xlsx');
+  const { processRutaXlsx } = await import('../src/rutaService.js');
+  const sheet = XLSX.utils.aoa_to_sheet([
+    ['ANEXO ÚNICO'], ['Oficio 123'], [],
+    ['No.', 'FECHA Y HORA', 'HORA', 'LATITUD', 'LONGITUD', 'Azimut'],
+    [1, 46301.62553240741, 0.5, 29.07, -110.95, 120],
+  ]);
+  sheet.B5.z = 'm/d/yy h:mm';
+  sheet.C5.z = 'hh:mm:ss';
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(book, sheet, 'Hoja1');
+  const rows = processRutaXlsx(XLSX.write(book, { type: 'buffer', bookType: 'xlsx' }), []);
+  assert.deepEqual(rows[0].slice(0, 6), ['No.', 'FECHA Y HORA', 'HORA', 'LATITUD', 'LONGITUD', 'Azimut']);
+  assert.equal(rows[1][1], '06/10/2026 15:00:46');
+  assert.equal(rows[1][2], '12:00:00');
+  const result = extractPlanningPoints(rows);
+  assert.equal(result.points.length, 1);
+  assert.equal(result.points[0].time, '2026-10-06T12:00');
+});
