@@ -1,5 +1,5 @@
-import { coverageSector } from './planeacion-geometry.js?v=5';
-import { summarizeAntennas, antennaClipboardText, rowMatches, frequencyScale, selectionCsv } from './planeacion-antenas.js?v=5';
+import { coverageSector } from './planeacion-geometry.js?v=6';
+import { summarizeAntennas, antennaClipboardText, rowMatches, frequencyScale, selectionCsv } from './planeacion-antenas.js?v=6';
 
 const byId = (id) => document.getElementById(id);
 const status = byId('planningStatus');
@@ -250,8 +250,9 @@ if (!window.L) {
           L.polygon(coverageSector(point.lat, point.lng, bearing, Number(radius.value), Number(beam.value)), style).addTo(layers);
         }
       }
+      // A dark outline keeps every point visible over roads, parks and water.
       L.circleMarker([point.lat, point.lng], {
-        radius: selectionActive ? 6 : 5, color, weight: 1, fillColor: color, fillOpacity: 1, interactive: true,
+        radius: selectionActive ? 7 : 6, color: '#1f1f1f', weight: 1.5, fillColor: color, fillOpacity: 1, interactive: true,
       }).on('click', () => showCoordinateRecords(point)).addTo(layers);
     }
     renderLegend(scale);

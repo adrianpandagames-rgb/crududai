@@ -33,5 +33,5 @@ body.planning-map-open { overflow: hidden; }
 .planning-pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 10px; }
 .planning-legend { padding: 8px 10px; border-radius: 6px; background: rgba(255, 255, 255, .92); box-shadow: 0 1px 6px rgba(0, 0, 0, .25); color: #16456b; font-size: 12px; line-height: 1.6; }
 .planning-legend strong { display: block; margin-bottom: 2px; }
-.planning-legend-swatch { display: inline-block; width: 12px; height: 12px; margin-right: 6px; border-radius: 50%; vertical-align: -1px; }
+.planning-legend-swatch { display: inline-block; width: 12px; height: 12px; margin-right: 6px; border: 1.5px solid #1f1f1f; border-radius: 50%; vertical-align: -1px; }
 html[data-theme="dark"] .planning-legend { background: rgba(31, 41, 55, .94); color: var(--dark-text); }

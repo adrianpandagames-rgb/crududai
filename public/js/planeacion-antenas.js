@@ -36,8 +36,10 @@ export function rowMatches(row, term) {
   return !needle || row.some((cell) => foldText(cell).includes(needle));
 }
 
-// One light-to-dark blue per fifth of the busiest site, so concentration reads at a glance.
-export const FREQUENCY_COLORS = ['#9ecae1', '#6baed6', '#3182bd', '#08519c', '#08306b'];
+// One light-to-dark red per fifth of the busiest site, so concentration reads at a glance. Red stands
+// out on the beige OpenStreetMap base and even the lightest step keeps 2:1 contrast against it
+// (the earlier light blues sat at 1.5:1 and got lost).
+export const FREQUENCY_COLORS = ['#f08a7e', '#e8604f', '#d43d2f', '#a82820', '#6e140f'];
 
 export function frequencyScale(maxCount) {
   const max = Math.max(Math.floor(maxCount) || 1, 1);
