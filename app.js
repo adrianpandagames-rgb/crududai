@@ -14,14 +14,14 @@ import swaggerJsdoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
 import router from "./src/router.js"; // Importa el enrutador
 import pool from "./src/db.js";
-import { buildAuditFilters, auditActionLabels } from './src/auditFilters.js';
-import { auditOperationSql, auditResourceSql, auditResources, describeAuditAction } from './src/auditActions.js';
+import { buildAuditFilters, auditActionLabels, auditFilterQuery, auditOrigins, auditResults } from './src/auditFilters.js';
+import { auditResources } from './src/auditActions.js';
+import { consultarAuditoria, exportarAuditoriaCsv, AUDIT_EXPORT_LIMIT } from './src/auditService.js';
 import { buildSessionCookieOptions, isSessionExpired, SESSION_TIMEOUT_MS } from './src/sessionUtils.js';
 import { startImeiMetadataDailyJob } from './src/imeiMetadataService.js';
 import { hashPassword, verifyPassword } from './src/passwordUtils.js';
 import { sanitizeAuditData } from './src/auditDetails.js';
 import { auditActivity } from './src/auditMiddleware.js';
-import { presentAuditEntry } from './src/auditPresentation.js';
 import { requireSameOrigin } from './src/requestSecurity.js';
 import { createTelegramApiRouter } from './src/telegramApiRouter.js';
 import { decryptTelegramId, encryptTelegramId } from './src/telegramIdCrypto.js';
@@ -461,22 +461,34 @@ app.get('/auditoria', requireAdmin, async (req, res, next) => {
         if (typeof req.query[key] === 'string') selection.filters[key] = req.query[key].slice(0, 255);
       }
     }
-    const [users] = await pool.execute("SELECT DISTINCT user_email FROM audit_logs WHERE user_email <> '' ORDER BY user_email");
-    const [entries] = filterError ? [[]] : await pool.execute(
-      `SELECT user_email, method, request_path, status_code, ip_address, details,
-              ${auditOperationSql} AS operation, ${auditResourceSql} AS resource,
-              DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
-       FROM audit_logs
-       ${selection.where}
-       ORDER BY id DESC
-       LIMIT 200`,
-      selection.values,
-    );
+    const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
+    const result = filterError
+      ? { entries: [], summary: { total: 0, usuarios: 0, errores: 0, denegados: 0, fallidos: 0 }, failedByIp: [], page: 1, totalPages: 1,
+        users: (await pool.query("SELECT DISTINCT user_email FROM audit_logs WHERE user_email <> '' ORDER BY user_email"))[0] }
+      : await consultarAuditoria(pool, selection, page);
     return res.status(filterError ? 400 : 200).render('pages/auditoria', {
-      entries: entries.map(presentAuditEntry), users, filters: selection.filters, filterError, auditActionLabels, auditResources, describeAuditAction,
+      ...result, filters: selection.filters, filterError, auditActionLabels, auditResources, auditResults, auditOrigins, auditFilterQuery,
+      exportLimit: AUDIT_EXPORT_LIMIT,
     });
   } catch (error) {
     next(error);
+  }
+});
+
+app.get('/auditoria/exportar', requireAdmin, async (req, res, next) => {
+  let selection;
+  try {
+    selection = buildAuditFilters(req.query);
+  } catch (error) {
+    return res.status(400).type('text/plain').send(error.message);
+  }
+  try {
+    const { csv } = await exportarAuditoriaCsv(pool, selection);
+    const stamp = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Disposition', `attachment; filename="auditoria-${stamp}.csv"`);
+    return res.type('text/csv; charset=utf-8').send(csv);
+  } catch (error) {
+    return next(error);
   }
 });
 

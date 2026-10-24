@@ -32,6 +32,11 @@ try {
   if (columns.length === 0) {
     await connection.query('ALTER TABLE audit_logs ADD COLUMN details LONGTEXT NULL');
   }
+  // The audit page filters by e-mail (Telegram entries have no user_id).
+  const [emailIndex] = await connection.query("SHOW INDEX FROM audit_logs WHERE Key_name = 'audit_logs_user_email_index'");
+  if (emailIndex.length === 0) {
+    await connection.query('ALTER TABLE audit_logs ADD INDEX audit_logs_user_email_index (user_email, created_at)');
+  }
   console.log('Audit log table is ready.');
 } finally {
   await connection.end();

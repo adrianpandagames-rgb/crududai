@@ -2,43 +2,57 @@
 <html lang="es">
   <head>
     <%- include('../includes/head') %>
+    <style>
+      .audit-header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: .75rem; margin-bottom: 1.25rem; }
+      .audit-header p { margin: 0; }
+      .audit-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .75rem; margin-bottom: 1.25rem; }
+      .audit-stat { display: block; padding: .85rem 1rem; color: inherit; text-decoration: none; border-left: 4px solid var(--audit-accent, #087f8c); }
+      a.audit-stat:hover { color: inherit; box-shadow: 0 6px 16px rgba(24, 50, 75, .12); }
+      .audit-stat-label { display: block; font-size: .75rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; opacity: .75; }
+      .audit-stat-value { display: block; font-size: 1.6rem; font-weight: 800; line-height: 1.2; }
+      .audit-failed { margin-bottom: 1.25rem; }
+      .audit-failed table { margin: 0; }
+      .audit-table td { vertical-align: top; }
+      .audit-table .filter-link { color: inherit; text-decoration: underline dotted; text-underline-offset: 3px; }
+      .audit-table pre { max-width: 420px; max-height: 320px; overflow: auto; font-size: .75rem; }
+      .audit-table details summary { cursor: pointer; white-space: nowrap; }
+      .audit-searched { max-width: 340px; }
+      .audit-pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; margin-top: 1rem; }
+    </style>
   </head>
   <body>
     <%- include('../includes/header') %>
 
+    <% const linkWith = (extra) => `/auditoria?${auditFilterQuery(filters, { ...extra, page: '' })}`; %>
+    <% const formatNumber = (value) => Number(value || 0).toLocaleString('es-MX'); %>
+    <% const resultBadges = { OK: 'text-bg-success', DENEGADO: 'text-bg-warning', RECHAZADO: 'text-bg-secondary', ERROR: 'text-bg-danger' }; %>
+
     <main class="content-wrapper mt-5 page-offset">
       <div class="container py-4 page-container-wide">
-        <h2 class="title mb-4">Auditoría de actividad</h2>
-        <section class="card">
+        <div class="audit-header">
+          <div>
+            <h2 class="title mb-1">Auditoría de actividad</h2>
+            <p class="text-muted">Las fechas y horas están en hora de Sonora (UTC−7).</p>
+          </div>
+          <% if (!filterError && summary.total > 0) { %>
+            <a class="btn btn-outline-secondary" href="/auditoria/exportar?<%= auditFilterQuery(filters) %>">
+              Exportar CSV<% if (summary.total > exportLimit) { %> (primeros <%= formatNumber(exportLimit) %>)<% } %>
+            </a>
+          <% } %>
+        </div>
+
+        <section class="card mb-4">
           <div class="card-body">
-            <form method="GET" action="/auditoria" class="row g-3 mb-4">
+            <form method="GET" action="/auditoria" class="row g-3">
               <div class="col-sm-6 col-lg-2">
                 <label for="audit-desde" class="form-label">Desde</label>
-                <input type="date" id="audit-desde" name="desde" class="form-control" value="<%= filters.desde %>" min="1000-01-01" max="9999-12-30">
+                <input type="date" id="audit-desde" name="desde" class="form-control" value="<%= filters.desde %>" min="1970-01-02" max="9999-12-30">
               </div>
               <div class="col-sm-6 col-lg-2">
                 <label for="audit-hasta" class="form-label">Hasta</label>
-                <input type="date" id="audit-hasta" name="hasta" class="form-control" value="<%= filters.hasta %>" min="1000-01-01" max="9999-12-30">
+                <input type="date" id="audit-hasta" name="hasta" class="form-control" value="<%= filters.hasta %>" min="1970-01-02" max="9999-12-30">
               </div>
-              <div class="col-sm-6 col-lg-2">
-                <label for="audit-tipo" class="form-label">Tipo</label>
-                <select id="audit-tipo" name="tipo" class="form-select">
-                  <option value="">Todos los tipos</option>
-                  <% Object.entries(auditResources).forEach(([value, label]) => { %>
-                    <option value="<%= value %>" <%= filters.tipo === value ? 'selected' : '' %>><%= label %></option>
-                  <% }) %>
-                </select>
-              </div>
-              <div class="col-sm-6 col-lg-2">
-                <label for="audit-accion" class="form-label">Acción</label>
-                <select id="audit-accion" name="accion" class="form-select">
-                  <option value="">Todas las acciones</option>
-                  <% Object.entries(auditActionLabels).forEach(([value, label]) => { %>
-                    <option value="<%= value %>" <%= filters.accion === value ? 'selected' : '' %>><%= label %></option>
-                  <% }) %>
-                </select>
-              </div>
-              <div class="col-sm-6 col-lg-2">
+              <div class="col-sm-6 col-lg-3">
                 <label for="audit-usuario" class="form-label">Usuario</label>
                 <select id="audit-usuario" name="usuario" class="form-select">
                   <option value="">Todos los usuarios</option>
@@ -50,50 +64,179 @@
                   <% }) %>
                 </select>
               </div>
-              <div class="col-lg-2 d-flex align-items-end gap-2">
-                <button type="submit" class="btn btn-primary">Filtrar</button>
-                <a href="/auditoria" class="btn btn-outline-secondary">Limpiar</a>
+              <div class="col-sm-6 col-lg-2">
+                <label for="audit-tipo" class="form-label">Sección</label>
+                <select id="audit-tipo" name="tipo" class="form-select">
+                  <option value="">Todas las secciones</option>
+                  <% Object.entries(auditResources).forEach(([value, label]) => { %>
+                    <option value="<%= value %>" <%= filters.tipo === value ? 'selected' : '' %>><%= label %></option>
+                  <% }) %>
+                </select>
+              </div>
+              <div class="col-sm-6 col-lg-3">
+                <label for="audit-accion" class="form-label">Acción</label>
+                <select id="audit-accion" name="accion" class="form-select">
+                  <option value="">Todas las acciones</option>
+                  <% Object.entries(auditActionLabels).forEach(([value, label]) => { %>
+                    <option value="<%= value %>" <%= filters.accion === value ? 'selected' : '' %>><%= label %></option>
+                  <% }) %>
+                </select>
+              </div>
+              <div class="col-sm-6 col-lg-2">
+                <label for="audit-resultado" class="form-label">Resultado</label>
+                <select id="audit-resultado" name="resultado" class="form-select">
+                  <option value="">Todos</option>
+                  <% Object.entries(auditResults).forEach(([value, label]) => { %>
+                    <option value="<%= value %>" <%= filters.resultado === value ? 'selected' : '' %>><%= label %></option>
+                  <% }) %>
+                </select>
+              </div>
+              <div class="col-sm-6 col-lg-2">
+                <label for="audit-origen" class="form-label">Origen</label>
+                <select id="audit-origen" name="origen" class="form-select">
+                  <option value="">Todos</option>
+                  <% Object.entries(auditOrigins).forEach(([value, label]) => { %>
+                    <option value="<%= value %>" <%= filters.origen === value ? 'selected' : '' %>><%= label %></option>
+                  <% }) %>
+                </select>
+              </div>
+              <div class="col-sm-6 col-lg-2">
+                <label for="audit-ip" class="form-label">IP</label>
+                <input type="text" id="audit-ip" name="ip" class="form-control" value="<%= filters.ip %>" maxlength="45" autocomplete="off" spellcheck="false">
+              </div>
+              <div class="col-sm-6 col-lg-3">
+                <label for="audit-texto" class="form-label">Buscar texto</label>
+                <input type="search" id="audit-texto" name="texto" class="form-control" value="<%= filters.texto %>" maxlength="100" placeholder="Número, IMEI, ruta, correo…" autocomplete="off" spellcheck="false">
+              </div>
+              <div class="col-lg-3 d-flex flex-column justify-content-end gap-2">
+                <div class="form-check mb-0">
+                  <input class="form-check-input" type="checkbox" id="audit-automaticas" name="automaticas" value="1" <%= filters.automaticas ? 'checked' : '' %>>
+                  <label class="form-check-label" for="audit-automaticas">Incluir consultas automáticas</label>
+                </div>
+                <div class="d-flex gap-2">
+                  <button type="submit" class="btn btn-primary">Filtrar</button>
+                  <a href="/auditoria" class="btn btn-outline-secondary">Limpiar</a>
+                </div>
               </div>
             </form>
             <% if (filterError) { %>
-              <div class="alert alert-danger" role="alert"><%= filterError %></div>
+              <div class="alert alert-danger mt-3 mb-0" role="alert"><%= filterError %></div>
             <% } %>
-            <p class="text-muted">Se muestran hasta 200 registros más recientes que coinciden con los filtros. Las fechas incluyen el día completo y usan la hora de la base de datos.</p>
+          </div>
+        </section>
+
+        <% if (!filterError) { %>
+          <section class="audit-stats" aria-label="Resumen de la actividad filtrada">
+            <div class="card audit-stat">
+              <span class="audit-stat-label">Registros</span>
+              <span class="audit-stat-value"><%= formatNumber(summary.total) %></span>
+            </div>
+            <div class="card audit-stat" style="--audit-accent: #3273a8">
+              <span class="audit-stat-label">Usuarios</span>
+              <span class="audit-stat-value"><%= formatNumber(summary.usuarios) %></span>
+            </div>
+            <a class="card audit-stat" style="--audit-accent: #dc3545" href="<%= linkWith({ resultado: 'ERROR' }) %>">
+              <span class="audit-stat-label">Errores del servidor</span>
+              <span class="audit-stat-value"><%= formatNumber(summary.errores) %></span>
+            </a>
+            <a class="card audit-stat" style="--audit-accent: #e0a800" href="<%= linkWith({ resultado: 'DENEGADO' }) %>">
+              <span class="audit-stat-label">Accesos denegados</span>
+              <span class="audit-stat-value"><%= formatNumber(summary.denegados) %></span>
+            </a>
+            <a class="card audit-stat" style="--audit-accent: #ed7d3a" href="<%= linkWith({ accion: 'LOGIN_FAILED' }) %>">
+              <span class="audit-stat-label">Sesiones fallidas</span>
+              <span class="audit-stat-value"><%= formatNumber(summary.fallidos) %></span>
+            </a>
+          </section>
+
+          <% if (failedByIp.length > 0) { %>
+            <section class="card audit-failed">
+              <div class="card-body">
+                <h3 class="h6 mb-2">Intentos de sesión fallidos por IP</h3>
+                <div class="table-responsive">
+                  <table class="table table-sm align-middle">
+                    <thead><tr><th>IP</th><th>Intentos</th><th>Cuentas distintas</th><th>Último intento</th></tr></thead>
+                    <tbody>
+                      <% failedByIp.forEach(({ ip, intentos, cuentas, ultimo }) => { %>
+                        <tr>
+                          <td><% if (ip) { %><a href="<%= linkWith({ ip, accion: 'LOGIN_FAILED' }) %>"><code><%= ip %></code></a><% } else { %>Sin IP<% } %></td>
+                          <td><strong><%= formatNumber(intentos) %></strong></td>
+                          <td><%= formatNumber(cuentas) %></td>
+                          <td class="text-nowrap"><%= ultimo %></td>
+                        </tr>
+                      <% }) %>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+          <% } %>
+        <% } %>
+
+        <section class="card">
+          <div class="card-body">
             <div class="table-responsive">
-              <table class="table table-sm align-middle mb-0">
+              <table class="table table-sm mb-0 audit-table">
                 <thead>
-                  <tr><th>Día</th><th>Hora</th><th>Quién</th><th>Dónde / sección</th><th>Acción</th><th>Qué buscó / parámetros</th><th>Página / ruta</th><th>Estado</th><th>IP</th><th>Información registrada</th></tr>
+                  <tr><th>Fecha</th><th>Usuario</th><th>Sección</th><th>Acción</th><th>Qué buscó / parámetros</th><th>Resultado</th><th>IP</th><th>Detalle</th></tr>
                 </thead>
                 <tbody>
                   <% if (entries.length === 0) { %>
-                    <tr><td colspan="10" class="text-center text-muted py-4"><%= filterError ? 'Corrige los filtros para consultar la actividad.' : 'No hay actividad que coincida con los filtros.' %></td></tr>
+                    <tr><td colspan="8" class="text-center text-muted py-4"><%= filterError ? 'Corrige los filtros para consultar la actividad.' : 'No hay actividad que coincida con los filtros.' %></td></tr>
                   <% } %>
                   <% entries.forEach((entry) => { %>
                     <tr>
-                      <td class="text-nowrap"><%= entry.day %></td>
-                      <td class="text-nowrap"><%= entry.time %></td>
-                      <td><%= entry.user_email %></td>
-                      <td><%= auditResources[entry.resource] || 'Otro' %><div class="small text-muted"><%= entry.origin %></div></td>
-                      <td><span class="badge bg-secondary"><%= describeAuditAction(entry) %></span></td>
-                      <td class="text-break"><%= entry.searched %></td>
-                      <td><code><%= entry.request_path %></code></td>
-                      <td><%= entry.status_code %></td>
-                      <td><%= entry.ip_address || '-' %></td>
+                      <td class="text-nowrap"><%= entry.day %><div class="small text-muted"><%= entry.time %></div></td>
+                      <td class="text-break">
+                        <% if (entry.user_email) { %>
+                          <a class="filter-link" href="<%= linkWith({ usuario: entry.user_email }) %>" title="Ver solo la actividad de este usuario"><%= entry.user_email %></a>
+                        <% } else { %>—<% } %>
+                      </td>
+                      <td><%= entry.section %><div class="small text-muted"><%= entry.origin %></div></td>
+                      <td><span class="badge bg-secondary"><%= entry.action %></span></td>
+                      <td class="text-break audit-searched"><%= entry.searched %></td>
+                      <td class="text-nowrap"><span class="badge <%= resultBadges[entry.result] %>"><%= entry.resultLabel %></span><div class="small text-muted"><%= entry.status_code %></div></td>
+                      <td class="text-nowrap">
+                        <% if (entry.ip_address) { %>
+                          <a class="filter-link" href="<%= linkWith({ ip: entry.ip_address }) %>" title="Ver solo la actividad de esta IP"><%= entry.ip_address %></a>
+                        <% } else { %>—<% } %>
+                      </td>
                       <td>
-                        <% if (entry.details) { %>
-                          <details>
-                            <summary>Ver información</summary>
-                            <pre class="mt-2 mb-0 text-wrap"><%= JSON.stringify(typeof entry.details === 'string' ? JSON.parse(entry.details) : entry.details, null, 2) %></pre>
-                          </details>
-                        <% } else { %>
-                          <span class="text-muted">Sin información adicional</span>
-                        <% } %>
+                        <details>
+                          <summary>Ver</summary>
+                          <div class="small mt-2">Ruta: <code><%= entry.request_path %></code></div>
+                          <% if (entry.details) { %>
+                            <pre class="mt-2 mb-0 text-wrap"><%= JSON.stringify(entry.details, null, 2) %></pre>
+                          <% } else { %>
+                            <div class="small text-muted mt-1">Sin información adicional</div>
+                          <% } %>
+                        </details>
                       </td>
                     </tr>
                   <% }) %>
                 </tbody>
               </table>
             </div>
+
+            <% if (!filterError && summary.total > 0) { %>
+              <nav class="audit-pagination" aria-label="Paginación de la auditoría">
+                <span class="text-muted small">Página <%= page %> de <%= formatNumber(totalPages) %> · <%= formatNumber(summary.total) %> registros</span>
+                <ul class="pagination pagination-sm mb-0">
+                  <li class="page-item <%= page <= 1 ? 'disabled' : '' %>">
+                    <a class="page-link" href="/auditoria?<%= auditFilterQuery(filters, { page: 1 }) %>">Primera</a>
+                  </li>
+                  <li class="page-item <%= page <= 1 ? 'disabled' : '' %>">
+                    <a class="page-link" href="/auditoria?<%= auditFilterQuery(filters, { page: page - 1 }) %>">Anterior</a>
+                  </li>
+                  <li class="page-item <%= page >= totalPages ? 'disabled' : '' %>">
+                    <a class="page-link" href="/auditoria?<%= auditFilterQuery(filters, { page: page + 1 }) %>">Siguiente</a>
+                  </li>
+                  <li class="page-item <%= page >= totalPages ? 'disabled' : '' %>">
+                    <a class="page-link" href="/auditoria?<%= auditFilterQuery(filters, { page: totalPages }) %>">Última</a>
+                  </li>
+                </ul>
+              </nav>
+            <% } %>
           </div>
         </section>
       </div>
