@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
+import { fileURLToPath } from 'node:url';
 import exifr from 'exifr';
 import { createPublicCopy, detectImageType, readImageMetadata, reverseSearchLinks } from '../src/imageService.js';
 import { createImagenesRouter, createPublicImageRouter } from '../src/imagenesRouter.js';
@@ -70,7 +71,7 @@ test('uploads are stored for the uploader group and the public link serves only 
     },
   };
   const app = express();
-  app.set('views', new URL('../views', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'));
+  app.set('views', fileURLToPath(new URL('../views', import.meta.url)));
   app.set('view engine', 'ejs');
   app.use((req, res, next) => {
     const role = req.headers['x-role'];

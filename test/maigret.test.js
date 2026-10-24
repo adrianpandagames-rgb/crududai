@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
+import { fileURLToPath } from 'node:url';
 import { buildMaigretArgs, isValidUsername, normalizeUsername, parseMaigretReports } from '../src/maigretService.js';
 import { createMaigretRouter } from '../src/maigretRouter.js';
 
@@ -64,7 +65,7 @@ test('searches are queued per group and each group only sees its own searches', 
     return new Promise((resolve) => { finishSearch = resolve; });
   };
   const app = express();
-  app.set('views', new URL('../views', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'));
+  app.set('views', fileURLToPath(new URL('../views', import.meta.url)));
   app.set('view engine', 'ejs');
   app.use(express.urlencoded({ extended: false }));
   app.use((req, res, next) => {

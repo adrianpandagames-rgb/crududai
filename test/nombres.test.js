@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
+import { fileURLToPath } from 'node:url';
 import {
   buildNameIndex, isIdentifierQuery, normalizeName, parseOfac, parseSat69b, phoneticKey,
   preparedSearches, searchNameIndex, usernameVariants, withinOneEdit,
@@ -108,7 +109,7 @@ test('the tab searches the lists without saving a history and sends variants to 
     },
   };
   const app = express();
-  app.set('views', new URL('../views', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'));
+  app.set('views', fileURLToPath(new URL('../views', import.meta.url)));
   app.set('view engine', 'ejs');
   app.use(express.urlencoded({ extended: false }));
   app.use((req, res, next) => {
