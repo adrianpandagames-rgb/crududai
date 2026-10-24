@@ -2,7 +2,7 @@ import { auditRequestPath } from './auditActions.js';
 import { buildAuditDetails } from './auditDetails.js';
 
 const mutations = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
-const backgroundPaths = new Set(['/health', '/health/ready', '/api/route-toast']);
+const backgroundPaths = new Set(['/health', '/health/ready', '/api/route-toast', '/medidores/resumen']);
 const presentationParameters = new Set(['page', 'pagina', 'pageSize', 'partial', 'message', 'type', 'toastMessage']);
 
 export function auditRequestAction(req) {

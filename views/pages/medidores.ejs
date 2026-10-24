@@ -2,16 +2,36 @@
 <html lang="es">
   <head>
     <%- include('../includes/head') %>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
     <style>
       .metrics-page {
         --ink: #18324b;
         --muted: #66788a;
         --line: #dce7ed;
+        --surface: #fff;
+        --track: #edf3f5;
         --teal: #087f8c;
         --orange: #ed7d3a;
         --blue: #3273a8;
         --green: #3f9435;
+        --pink: #b35c92;
+        --olive: #8d7a3b;
+        --pending: #f0a35b;
+        --warning: #c2410c;
         padding-bottom: 3rem;
+      }
+
+      html[data-theme="dark"] .metrics-page {
+        --surface: var(--dark-panel);
+        --track: #2b394c;
+        --teal: #3fb8c4;
+        --orange: #f29a63;
+        --blue: #6ea8dc;
+        --green: #6cc25f;
+        --pink: #d98bbb;
+        --olive: #c9b56c;
+        --pending: #f5b97a;
+        --warning: #fb923c;
       }
 
       .metrics-header {
@@ -30,23 +50,29 @@
 
       .metric-card,
       .chart-panel {
-        background: #fff;
+        background: var(--surface);
         border: 1px solid var(--line);
         border-radius: 12px;
         box-shadow: 0 12px 28px rgba(24, 50, 75, .07);
       }
 
       .metric-card {
+        display: flex;
+        flex-direction: column;
         height: 100%;
         padding: 1.15rem;
-        border-top: 4px solid var(--teal);
+        border-top: 4px solid var(--accent, var(--teal));
+        color: inherit;
+        text-decoration: none;
+        transition: transform .15s ease, box-shadow .15s ease;
       }
 
-      .metric-card:nth-child(2) { border-top-color: var(--orange); }
-      .metric-card:nth-child(3) { border-top-color: var(--blue); }
-      .metric-card:nth-child(4) { border-top-color: var(--green); }
-      .metric-card:nth-child(5) { border-top-color: #b35c92; }
-      .metric-card:nth-child(6) { border-top-color: #8d7a3b; }
+      .metric-card:hover,
+      .metric-card:focus-visible {
+        transform: translateY(-2px);
+        box-shadow: 0 16px 32px rgba(24, 50, 75, .12);
+        color: inherit;
+      }
 
       .metric-label {
         color: var(--muted);
@@ -62,6 +88,12 @@
         font-weight: 800;
         line-height: 1;
         margin-top: .55rem;
+      }
+
+      .metric-hint {
+        color: var(--muted);
+        font-size: .78rem;
+        margin-top: .45rem;
       }
 
       .chart-panel {
@@ -81,6 +113,63 @@
         margin-bottom: 1.35rem;
       }
 
+      .chart-empty {
+        color: var(--muted);
+        font-size: .9rem;
+        padding: 1.5rem 0;
+        text-align: center;
+      }
+
+      .trend-summary {
+        display: flex;
+        gap: 2rem;
+        margin-bottom: 1rem;
+      }
+
+      .trend-summary strong {
+        display: block;
+        color: var(--ink);
+        font-size: 1.6rem;
+        font-weight: 800;
+        line-height: 1.1;
+      }
+
+      .trend-summary span {
+        color: var(--muted);
+        font-size: .8rem;
+      }
+
+      .trend-chart {
+        display: flex;
+        align-items: end;
+        gap: 3px;
+        height: 150px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .trend-bar {
+        display: flex;
+        flex: 1;
+        align-items: end;
+        height: 100%;
+      }
+
+      .trend-bar span {
+        width: 100%;
+        background: var(--teal);
+        border-radius: 3px 3px 0 0;
+      }
+
+      .trend-bar:hover span { background: var(--blue); }
+
+      .trend-axis {
+        display: flex;
+        justify-content: space-between;
+        color: var(--muted);
+        font-size: .75rem;
+        margin-top: .4rem;
+      }
+
       .bar-chart {
         display: grid;
         gap: .85rem;
@@ -88,33 +177,38 @@
 
       .bar-row {
         display: grid;
-        grid-template-columns: 120px 1fr 48px;
+        grid-template-columns: 140px 1fr 56px;
         align-items: center;
         gap: .7rem;
       }
 
       .bar-label,
       .bar-number {
+        overflow: hidden;
         color: var(--ink);
         font-size: .86rem;
         font-weight: 700;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
+
+      a.bar-label:hover { text-decoration: underline; }
+
+      .bar-row.is-other .bar-label { color: var(--muted); font-style: italic; }
 
       .bar-number { text-align: right; }
 
       .bar-track {
         height: 14px;
         overflow: hidden;
-        background: #edf3f5;
+        background: var(--track);
         border-radius: 3px;
       }
 
       .bar-fill {
         height: 100%;
-        min-width: 3px;
         background: linear-gradient(90deg, var(--teal), #35b6ac);
         border-radius: inherit;
-        transition: width .7s ease;
       }
 
       .status-chart {
@@ -126,63 +220,80 @@
       }
 
       .donut {
-        display: grid;
+        position: relative;
+        display: flex;
+        flex-direction: column;
         width: 150px;
         height: 150px;
-        place-items: center;
+        align-items: center;
+        justify-content: center;
         border-radius: 50%;
-        background: conic-gradient(var(--green) <%= metrics.imeisConMetadata + metrics.imeisPendientes ? (metrics.imeisConMetadata / (metrics.imeisConMetadata + metrics.imeisPendientes) * 100) : 0 %>%, #f0a35b 0);
+        background: conic-gradient(var(--green) var(--completion, 0%), var(--pending) 0);
       }
 
-      .donut::after {
-        width: 92px;
-        height: 92px;
+      .donut::before {
+        position: absolute;
+        inset: 29px;
         content: '';
-        background: #fff;
+        background: var(--surface);
         border-radius: 50%;
       }
+
+      .donut-value,
+      .donut-label { position: relative; }
+      .donut-value { color: var(--ink); font-size: 1.5rem; font-weight: 800; line-height: 1; }
+      .donut-label { color: var(--muted); font-size: .72rem; }
 
       .legend { display: grid; gap: .8rem; }
-      .legend-item { display: flex; align-items: center; gap: .55rem; color: var(--ink); font-size: .9rem; }
+      .legend-item { display: flex; align-items: center; gap: .55rem; color: var(--ink); font-size: .9rem; text-decoration: none; }
+      .legend-link:hover { color: var(--ink); text-decoration: underline; }
       .legend-dot { width: 11px; height: 11px; border-radius: 50%; background: var(--green); }
-      .legend-dot.pending { background: #f0a35b; }
+      .legend-dot.pending { background: var(--pending); }
       .legend strong { margin-left: auto; padding-left: 1.25rem; }
 
-      .refresh-status {
+      .quality-list {
+        display: grid;
+        gap: .2rem;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .quality-item {
+        display: flex;
+        align-items: center;
+        gap: .6rem;
+        padding: .6rem 0;
+        border-bottom: 1px solid var(--line);
+        color: var(--ink);
+        font-size: .9rem;
+      }
+
+      .quality-item:last-child { border-bottom: 0; }
+      .quality-item a { color: var(--ink); }
+      .quality-item strong { margin-left: auto; white-space: nowrap; }
+      .quality-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--green); }
+      .quality-item.is-warning .quality-dot { background: var(--warning); }
+      .quality-item.is-warning strong { color: var(--warning); }
+      .quality-item.is-ok strong { color: var(--muted); font-weight: 600; }
+
+      .refresh-button {
         display: inline-flex;
         align-items: center;
-        gap: .45rem;
-        font-size: .78rem;
-        font-weight: 700;
+        gap: .4rem;
       }
 
-      .refresh-icon {
-        display: inline-block;
-        transition: transform .2s ease;
-      }
-
-      .refresh-icon.spinning {
-        animation: refresh-spin 1s linear infinite;
-      }
+      .refresh-icon { display: inline-block; }
+      .refresh-icon.spinning { animation: refresh-spin 1s linear infinite; }
 
       @keyframes refresh-spin {
         from { transform: rotate(0deg); }
         to { transform: rotate(360deg); }
       }
 
-      .city-chart {
-        display: grid;
-        gap: .85rem;
-        max-height: 335px;
-        overflow-y: auto;
-        padding-right: .35rem;
-      }
-
-      .city-chart-empty {
+      .last-updated {
         color: var(--muted);
-        font-size: .9rem;
-        padding: 1.5rem 0;
-        text-align: center;
+        font-size: .78rem;
       }
 
       .heatmap-panel {
@@ -191,17 +302,12 @@
 
       .heatmap-map {
         width: 100%;
-        height: 1100px;
+        height: min(70vh, 560px);
+        min-height: 320px;
         border-radius: 12px;
         border: 1px solid var(--line);
-        background: #edf3f5;
+        background: var(--track);
         overflow: hidden;
-      }
-
-      .heatmap-map .leaflet-container {
-        width: 100%;
-        height: 100%;
-        border-radius: 12px;
       }
 
       .heatmap-empty {
@@ -215,12 +321,18 @@
         padding: 1rem;
       }
 
+      @media (prefers-reduced-motion: reduce) {
+        .metric-card { transition: none; }
+        .refresh-icon.spinning { animation: none; }
+      }
+
       @media (max-width: 700px) {
         .metrics-header { display: block; }
-        .metrics-header p { margin-top: .5rem; }
-        .bar-row { grid-template-columns: 90px 1fr 40px; gap: .45rem; }
+        .metrics-header p { margin: .5rem 0 .75rem; }
+        .bar-row { grid-template-columns: 100px 1fr 48px; gap: .45rem; }
         .status-chart { flex-direction: column; gap: 1.25rem; }
         .legend { width: min(100%, 230px); }
+        .metric-value { font-size: 1.75rem; }
       }
     </style>
   </head>
@@ -232,191 +344,145 @@
         <div class="metrics-header">
           <div>
             <h2 class="title mb-1">Medidores del sistema</h2>
-            <p>Resumen actualizado de los registros administrados en la plataforma.</p>
+            <p>Resumen de los registros administrados en la plataforma. Se actualiza sola cada 2 minutos mientras la usas.</p>
           </div>
-          <div class="d-flex align-items-center gap-2">
-            <span id="refreshStatus" class="refresh-status badge text-bg-light border" hidden aria-live="polite">
+          <div class="d-flex align-items-center flex-wrap gap-2">
+            <span id="lastUpdated" class="last-updated" aria-live="polite"></span>
+            <button id="refreshButton" type="button" class="btn btn-sm btn-outline-secondary refresh-button">
               <span class="refresh-icon" aria-hidden="true">⟳</span>
-              Actualizando
-            </span>
+              Actualizar
+            </button>
             <span class="badge text-bg-light border">Solo administradores</span>
           </div>
         </div>
 
-        <section class="row g-3 mb-4" aria-label="Resumen de registros">
-          <% const cards = [
-            ['Objetivos', metrics.objetivos],
-            ['Objetivos IMEI', metrics.objetivosImei],
-            ['IMEI registrados', metrics.imeis],
-            ['Contactos', metrics.contactos],
-            ['Ubicaciones', metrics.ubicaciones],
-            ['Usuarios', metrics.usuarios],
-          ]; %>
-          <% cards.forEach(([label, value]) => { %>
-            <div class="col-6 col-lg-2">
-              <article class="metric-card">
-                <div class="metric-label"><%= label %></div>
-                <div class="metric-value"><%= value.toLocaleString('es-CO') %></div>
-              </article>
-            </div>
-          <% }) %>
-        </section>
+        <div id="medidoresResumen">
+          <%- include('../partials/medidores-resumen') %>
+        </div>
 
-        <section class="row g-4">
-          <div class="col-lg-7">
-            <article class="chart-panel">
-              <h3>Registros por módulo</h3>
-              <div class="chart-caption">Comparación del volumen de información principal.</div>
-              <% const modules = [
-                ['Objetivos', metrics.objetivos],
-                ['Objetivos IMEI', metrics.objetivosImei],
-                ['IMEI', metrics.imeis],
-                ['Contactos', metrics.contactos],
-                ['Ubicaciones', metrics.ubicaciones],
-                ['Usuarios', metrics.usuarios],
-              ]; %>
-              <% const maxModuleValue = Math.max(...modules.map(([, value]) => value), 1); %>
-              <div class="bar-chart">
-                <% modules.forEach(([label, value]) => { %>
-                  <div class="bar-row">
-                    <span class="bar-label"><%= label %></span>
-                    <div class="bar-track" role="progressbar" aria-label="<%= label %>" aria-valuenow="<%= value %>" aria-valuemin="0" aria-valuemax="<%= maxModuleValue %>">
-                      <div class="bar-fill" data-width="<%= (value / maxModuleValue) * 100 %>"></div>
-                    </div>
-                    <span class="bar-number"><%= value.toLocaleString('es-CO') %></span>
-                  </div>
-                <% }) %>
-              </div>
-            </article>
-          </div>
-
-          <div class="col-lg-5">
-            <article class="chart-panel">
-              <h3>Estado de metadatos IMEI</h3>
-              <div class="chart-caption">IMEI con marca y modelo frente a pendientes.</div>
-              <div class="status-chart">
-                <div class="donut" data-completion="<%= metrics.imeisConMetadata + metrics.imeisPendientes ? (metrics.imeisConMetadata / (metrics.imeisConMetadata + metrics.imeisPendientes) * 100) : 0 %>" role="img" aria-label="<%= metrics.imeisConMetadata %> IMEI con metadatos completos y <%= metrics.imeisPendientes %> pendientes"></div>
-                <div class="legend">
-                  <div class="legend-item"><span class="legend-dot"></span>Completos <strong><%= metrics.imeisConMetadata.toLocaleString('es-CO') %></strong></div>
-                  <div class="legend-item"><span class="legend-dot pending"></span>Pendientes <strong><%= metrics.imeisPendientes.toLocaleString('es-CO') %></strong></div>
-                </div>
-              </div>
-            </article>
-          </div>
-
-          <div class="col-12">
-            <article class="chart-panel heatmap-panel">
-              <h3>Densidad de antenas</h3>
-              <div class="chart-caption">Mapa de calor con ubicaciones registradas y concentración por zona.</div>
-              <div id="medidoresHeatmapMap" class="heatmap-map" aria-label="Mapa de calor de antenas"></div>
-            </article>
-          </div>
-
-          <div class="col-12">
-            <article class="chart-panel">
-              <h3>Antenas por ciudad</h3>
-              <div class="chart-caption">Cantidad de ubicaciones registradas para cada ciudad.</div>
-              <% const maxCityValue = Math.max(...antennasByCity.map(({ total }) => total), 1); %>
-              <% if (antennasByCity.length === 0) { %>
-                <div class="city-chart-empty">Aún no hay antenas registradas.</div>
-              <% } else { %>
-                <div class="city-chart">
-                  <% antennasByCity.forEach(({ ciudad, total }) => { %>
-                    <div class="bar-row">
-                      <span class="bar-label"><%= ciudad %></span>
-                      <div class="bar-track" role="progressbar" aria-label="Antenas en <%= ciudad %>" aria-valuenow="<%= total %>" aria-valuemin="0" aria-valuemax="<%= maxCityValue %>">
-                        <div class="bar-fill city-bar-fill" data-width="<%= (total / maxCityValue) * 100 %>"></div>
-                      </div>
-                      <span class="bar-number"><%= total.toLocaleString('es-CO') %></span>
-                    </div>
-                  <% }) %>
-                </div>
-              <% } %>
-            </article>
-          </div>
-        </section>
+        <article class="chart-panel heatmap-panel">
+          <h3>Densidad de antenas</h3>
+          <div class="chart-caption">Mapa de calor con ubicaciones registradas y concentración por zona.</div>
+          <div id="medidoresHeatmapMap" class="heatmap-map" data-carto-key="<%= cartoApiKey %>" aria-label="Mapa de calor de antenas"></div>
+        </article>
       </div>
     </main>
 
-    <script>
-      document.querySelectorAll('.bar-fill[data-width]').forEach((bar) => {
-        bar.style.width = `${bar.dataset.width}%`;
-      });
-      document.querySelectorAll('.donut[data-completion]').forEach((donut) => {
-        donut.style.setProperty('--completion', `${donut.dataset.completion}%`);
-      });
-
-      const medidoresHeatmapMap = document.getElementById('medidoresHeatmapMap');
-      const showMedidoresHeatmapUnavailable = (message = 'No fue posible cargar la densidad de antenas.') => {
-        if (!medidoresHeatmapMap) return;
-        medidoresHeatmapMap.innerHTML = `<div class="heatmap-empty">${message}</div>`;
-      };
-
-      window.initMedidoresHeatmap = async function () {
-        if (!medidoresHeatmapMap) return;
-        if (window.medidoresHeatmapInitDone) return;
-        window.medidoresHeatmapInitDone = true;
-
-        if (typeof L === 'undefined' || typeof L.heatLayer !== 'function') {
-          showMedidoresHeatmapUnavailable('No fue posible cargar la librería del mapa de calor.');
-          return;
-        }
-
-        try {
-          const response = await fetch('/api/ubicaciones/heatmap');
-          if (!response.ok) throw new Error('No se pudieron cargar las ubicaciones.');
-
-          const { points } = await response.json();
-          if (!Array.isArray(points) || points.length === 0) {
-            medidoresHeatmapMap.innerHTML = '<div class="heatmap-empty">Aún no hay ubicaciones registradas para mostrar el mapa de calor.</div>';
-            return;
-          }
-
-          const cartoTileUrl = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=cb1_3pxb_1_cd7ebf01ffa3b92fb39cb734';
-
-          const map = L.map(medidoresHeatmapMap, {
-            zoomControl: true,
-            attributionControl: true,
-          }).setView([23.6345, -102.5528], 5);
-
-          L.tileLayer(cartoTileUrl, {
-            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-            maxZoom: 19,
-          }).addTo(map);
-
-          const heatData = points.map(({ lat, lng, weight }) => [lat, lng, Math.min(Math.max(Number(weight) || 1, 1), 12)]);
-          const heatLayer = L.heatLayer(heatData, {
-            radius: 22,
-            blur: 16,
-            maxZoom: 12,
-            gradient: { 0.1: '#5ac8fa', 0.35: '#2ec4b6', 0.7: '#f4d35e', 1.0: '#ff4d6d' },
-          }).addTo(map);
-
-          const bounds = L.latLngBounds(points.map(({ lat, lng }) => [lat, lng]));
-          if (bounds.isValid()) {
-            map.fitBounds(bounds.pad(0.25));
-          }
-
-          window.addEventListener('resize', () => map.invalidateSize(), { passive: true });
-        } catch (error) {
-          console.warn('Heatmap unavailable:', error);
-          showMedidoresHeatmapUnavailable('No fue posible cargar la densidad de antenas.');
-        }
-      };
-
-      const refreshStatus = document.getElementById('refreshStatus');
-      if (refreshStatus) {
-        refreshStatus.hidden = true;
-      }
-    </script>
-
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
     <script>
-      document.addEventListener('DOMContentLoaded', () => {
-        initMedidoresHeatmap();
-      });
+      (() => {
+        const REFRESH_MS = 2 * 60 * 1000;
+        const resumen = document.getElementById('medidoresResumen');
+        const refreshButton = document.getElementById('refreshButton');
+        const refreshIcon = refreshButton?.querySelector('.refresh-icon');
+        const lastUpdated = document.getElementById('lastUpdated');
+        let lastRefresh = Date.now();
+        let loading = false;
+
+        const markUpdated = () => {
+          lastRefresh = Date.now();
+          const time = new Date(lastRefresh).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+          lastUpdated.textContent = `Actualizado a las ${time}`;
+        };
+
+        const refresh = async () => {
+          if (loading || !resumen) return;
+          loading = true;
+          refreshButton.disabled = true;
+          refreshIcon?.classList.add('spinning');
+          try {
+            const response = await fetch('/medidores/resumen', { credentials: 'same-origin' });
+            // An expired session redirects to the login page; reload so the user sees it.
+            if (response.redirected) return window.location.reload();
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            resumen.innerHTML = await response.text();
+            markUpdated();
+          } catch (error) {
+            console.warn('Medidores refresh failed:', error);
+            lastUpdated.textContent = 'No se pudo actualizar; se reintentará.';
+          } finally {
+            loading = false;
+            refreshButton.disabled = false;
+            refreshIcon?.classList.remove('spinning');
+          }
+        };
+
+        // Every request renews the server session, so an unattended tab must stop polling
+        // and let the session expire as usual.
+        const ACTIVE_MS = 5 * 60 * 1000;
+        let lastInteraction = Date.now();
+        ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'].forEach((eventName) => {
+          document.addEventListener(eventName, () => { lastInteraction = Date.now(); }, { passive: true });
+        });
+        const shouldAutoRefresh = () => document.visibilityState === 'visible' && Date.now() - lastInteraction < ACTIVE_MS;
+
+        markUpdated();
+        refreshButton?.addEventListener('click', refresh);
+        // Hidden tabs skip refreshes; catch up as soon as the tab is visible again.
+        setInterval(() => {
+          if (shouldAutoRefresh()) refresh();
+        }, REFRESH_MS);
+        document.addEventListener('visibilitychange', () => {
+          if (shouldAutoRefresh() && Date.now() - lastRefresh >= REFRESH_MS) refresh();
+        });
+      })();
+
+      (() => {
+        const mapElement = document.getElementById('medidoresHeatmapMap');
+        if (!mapElement) return;
+
+        const showMessage = (message) => {
+          mapElement.innerHTML = `<div class="heatmap-empty">${message}</div>`;
+        };
+
+        if (typeof L === 'undefined' || typeof L.heatLayer !== 'function') {
+          showMessage('No fue posible cargar la librería del mapa de calor.');
+          return;
+        }
+
+        const cartoKey = mapElement.dataset.cartoKey;
+        const tileUrl = (dark) => `https://{s}.basemaps.cartocdn.com/${dark ? 'dark_all' : 'light_all'}/{z}/{x}/{y}{r}.png`
+          + (cartoKey ? `?key=${encodeURIComponent(cartoKey)}` : '');
+        const isDark = () => document.documentElement.dataset.theme === 'dark';
+
+        fetch('/api/ubicaciones/heatmap')
+          .then((response) => {
+            if (!response.ok) throw new Error('No se pudieron cargar las ubicaciones.');
+            return response.json();
+          })
+          .then(({ points }) => {
+            if (!Array.isArray(points) || points.length === 0) {
+              showMessage('Aún no hay ubicaciones registradas para mostrar el mapa de calor.');
+              return;
+            }
+
+            const map = L.map(mapElement, { zoomControl: true, attributionControl: true }).setView([23.6345, -102.5528], 5);
+            const tiles = L.tileLayer(tileUrl(isDark()), {
+              attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+              maxZoom: 19,
+            }).addTo(map);
+
+            L.heatLayer(points.map(({ lat, lng, weight }) => [lat, lng, Math.min(Math.max(Number(weight) || 1, 1), 12)]), {
+              radius: 22,
+              blur: 16,
+              maxZoom: 12,
+              gradient: { 0.1: '#5ac8fa', 0.35: '#2ec4b6', 0.7: '#f4d35e', 1.0: '#ff4d6d' },
+            }).addTo(map);
+
+            const bounds = L.latLngBounds(points.map(({ lat, lng }) => [lat, lng]));
+            if (bounds.isValid()) map.fitBounds(bounds.pad(0.25));
+
+            // Follow the theme toggle so the base map matches the page.
+            new MutationObserver(() => tiles.setUrl(tileUrl(isDark())))
+              .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+            window.addEventListener('resize', () => map.invalidateSize(), { passive: true });
+          })
+          .catch((error) => {
+            console.warn('Heatmap unavailable:', error);
+            showMessage('No fue posible cargar la densidad de antenas.');
+          });
+      })();
     </script>
 
     <%- include('../includes/scripts') %>

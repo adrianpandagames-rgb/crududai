@@ -30,6 +30,7 @@ import { createRedTelefonicaRouter } from './src/redTelefonicaRouter.js';
 import { createMaigretRouter, createMaigretSearches } from './src/maigretRouter.js';
 import { createImagenesRouter, createPublicImageRouter } from './src/imagenesRouter.js';
 import { createNombresRouter } from './src/nombresRouter.js';
+import { obtenerMedidores } from './src/medidoresService.js';
 import { getGoogleGeocodingQuota, resetGoogleGeocodingQuota } from './src/googleGeocodingQuota.js';
 import { createLoginRateLimiter, LOGIN_WINDOW_MS } from './src/loginRateLimit.js';
 import { forwardAsyncErrors, handleErrors } from './src/errorHandling.js';
@@ -483,39 +484,19 @@ app.use('/red-telefonica', requireAdmin, createRedTelefonicaRouter(pool));
 
 app.get('/medidores', requireAdmin, async (req, res, next) => {
   try {
-    const [[metricRows], [antennaRows]] = await Promise.all([
-      pool.query(`
-      SELECT
-        (SELECT COUNT(*) FROM objetivo) AS objetivos,
-        (SELECT COUNT(*) FROM objetivoImei) AS objetivosImei,
-        (SELECT COUNT(*) FROM imei) AS imeis,
-        (SELECT COUNT(*) FROM contactos) AS contactos,
-        (SELECT COUNT(*) FROM ubicaciones) AS ubicaciones,
-        (SELECT COUNT(*) FROM users) AS usuarios,
-        (SELECT COUNT(*) FROM imei WHERE brand_name IS NOT NULL AND modelo IS NOT NULL) AS imeisConMetadata,
-        (SELECT COUNT(*) FROM imei WHERE brand_name IS NULL OR modelo IS NULL) AS imeisPendientes
-      `),
-      pool.query(`
-        SELECT COALESCE(NULLIF(TRIM(lugar), ''), 'Sin ciudad') AS ciudad, COUNT(*) AS total
-        FROM ubicaciones
-        GROUP BY COALESCE(NULLIF(TRIM(lugar), ''), 'Sin ciudad')
-        ORDER BY total DESC, ciudad ASC
-      `),
-    ]);
-
-    const metrics = Object.fromEntries(
-      Object.entries(metricRows[0] || {}).map(([key, value]) => [key, Number(value) || 0]),
-    );
-    const antennasByCity = antennaRows.map(({ ciudad, total }) => ({
-      ciudad,
-      total: Number(total) || 0,
-    }));
     return res.render('pages/medidores', {
-      metrics,
-      antennasByCity,
-      googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY,
-      cartoApiKey: process.env.CARTO_API_KEY,
+      ...await obtenerMedidores(pool),
+      cartoApiKey: process.env.CARTO_API_KEY || '',
     });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// Polled by the open page; listed as a background path so it does not flood the audit log.
+app.get('/medidores/resumen', requireAdmin, async (req, res, next) => {
+  try {
+    return res.render('partials/medidores-resumen', await obtenerMedidores(pool));
   } catch (error) {
     return next(error);
   }

@@ -1,0 +1,132 @@
+<% const formatNumber = (value) => Number(value || 0).toLocaleString('es-MX'); %>
+<% const formatDay = (dia) => new Date(`${dia}T00:00:00Z`).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', timeZone: 'UTC' }); %>
+
+<section class="row g-3 mb-4" aria-label="Resumen de registros">
+  <% const cards = [
+    { label: 'Objetivos', value: metrics.objetivos, href: '/Crud', accent: 'var(--teal)' },
+    { label: 'Objetivos IMEI', value: metrics.objetivosImei, href: '/imei', accent: 'var(--orange)' },
+    { label: 'IMEI registrados', value: metrics.imeis, href: '/imei', accent: 'var(--blue)' },
+    { label: 'Contactos', value: metrics.contactos, href: '/Crud', accent: 'var(--green)' },
+    { label: 'Ubicaciones', value: metrics.ubicaciones, href: '/ubicaciones', accent: 'var(--pink)', hint: `+${formatNumber(ultimos7)} en 7 días` },
+    { label: 'Usuarios', value: metrics.usuarios, href: '/usuarios', accent: 'var(--olive)' },
+  ]; %>
+  <% cards.forEach(({ label, value, href, accent, hint }) => { %>
+    <div class="col-6 col-md-4 col-xl-2">
+      <a class="metric-card" href="<%= href %>" style="--accent: <%= accent %>">
+        <span class="metric-label"><%= label %></span>
+        <span class="metric-value"><%= formatNumber(value) %></span>
+        <% if (hint) { %><span class="metric-hint"><%= hint %></span><% } %>
+      </a>
+    </div>
+  <% }) %>
+</section>
+
+<section class="row g-4">
+  <div class="col-lg-7">
+    <article class="chart-panel">
+      <h3>Ubicaciones registradas</h3>
+      <div class="chart-caption">Altas por día en los últimos <%= tendencia.length %> días.</div>
+      <div class="trend-summary">
+        <div><strong><%= formatNumber(ultimos7) %></strong><span>últimos 7 días</span></div>
+        <div><strong><%= formatNumber(ultimos30) %></strong><span>últimos <%= tendencia.length %> días</span></div>
+      </div>
+      <% const maxTrendValue = Math.max(...tendencia.map(({ total }) => total), 1); %>
+      <% if (ultimos30 === 0) { %>
+        <div class="chart-empty">Sin ubicaciones nuevas en los últimos <%= tendencia.length %> días.</div>
+      <% } else { %>
+        <div class="trend-chart" role="img" aria-label="<%= formatNumber(ultimos30) %> ubicaciones registradas en los últimos <%= tendencia.length %> días">
+          <% tendencia.forEach(({ dia, total }) => { %>
+            <div class="trend-bar" title="<%= formatDay(dia) %>: <%= formatNumber(total) %>">
+              <span style="height: <%= total ? Math.max((total / maxTrendValue) * 100, 4) : 0 %>%"></span>
+            </div>
+          <% }) %>
+        </div>
+        <div class="trend-axis">
+          <span><%= formatDay(tendencia[0].dia) %></span>
+          <span><%= formatDay(tendencia[Math.floor(tendencia.length / 2)].dia) %></span>
+          <span>Hoy</span>
+        </div>
+      <% } %>
+    </article>
+  </div>
+
+  <div class="col-lg-5">
+    <article class="chart-panel">
+      <h3>Estado de metadatos IMEI</h3>
+      <div class="chart-caption">IMEI con marca y modelo frente a pendientes.</div>
+      <div class="status-chart">
+        <div class="donut" style="--completion: <%= imeiCompletion %>%" role="img" aria-label="<%= imeiCompletion %> % de IMEI con metadatos completos">
+          <span class="donut-value"><%= imeiCompletion %>%</span>
+          <span class="donut-label">completos</span>
+        </div>
+        <div class="legend">
+          <div class="legend-item"><span class="legend-dot"></span>Completos <strong><%= formatNumber(metrics.imeisConMetadata) %></strong></div>
+          <% if (metrics.imeisPendientes > 0) { %>
+            <a class="legend-item legend-link" href="/imei?pendientes=1"><span class="legend-dot pending"></span>Pendientes <strong><%= formatNumber(metrics.imeisPendientes) %></strong></a>
+          <% } else { %>
+            <div class="legend-item"><span class="legend-dot pending"></span>Pendientes <strong>0</strong></div>
+          <% } %>
+        </div>
+      </div>
+    </article>
+  </div>
+
+  <div class="col-lg-5">
+    <article class="chart-panel">
+      <h3>Calidad de datos</h3>
+      <div class="chart-caption">Registros incompletos que conviene revisar.</div>
+      <% const checks = [
+        { label: 'Ubicaciones sin coordenadas', value: metrics.ubicacionesSinCoordenadas, href: '/ubicaciones' },
+        { label: 'Ubicaciones sin ciudad', value: metrics.ubicacionesSinCiudad, href: '/ubicaciones' },
+        { label: 'Objetivos IMEI sin IMEI', value: metrics.objetivosImeiSinImei, href: '/imei' },
+        { label: 'Objetivos sin contactos', value: metrics.objetivosSinContactos, href: '/Crud' },
+      ]; %>
+      <ul class="quality-list">
+        <% checks.forEach(({ label, value, href }) => { %>
+          <li class="quality-item <%= value ? 'is-warning' : 'is-ok' %>">
+            <span class="quality-dot" aria-hidden="true"></span>
+            <% if (value) { %>
+              <a href="<%= href %>"><%= label %></a>
+            <% } else { %>
+              <span><%= label %></span>
+            <% } %>
+            <strong><%= value ? formatNumber(value) : 'Sin pendientes' %></strong>
+          </li>
+        <% }) %>
+      </ul>
+    </article>
+  </div>
+
+  <div class="col-lg-7">
+    <article class="chart-panel">
+      <h3>Antenas por ciudad</h3>
+      <div class="chart-caption">
+        <% if (antennasByCity.some(({ otras }) => otras)) { %>
+          Las <%= antennasByCity.length - 1 %> ciudades con más ubicaciones de <%= formatNumber(totalCiudades) %> registradas.
+        <% } else { %>
+          Cantidad de ubicaciones registradas para cada ciudad.
+        <% } %>
+      </div>
+      <% const maxCityValue = Math.max(...antennasByCity.filter(({ otras }) => !otras).map(({ total }) => total), 1); %>
+      <% if (antennasByCity.length === 0) { %>
+        <div class="chart-empty">Aún no hay antenas registradas.</div>
+      <% } else { %>
+        <div class="bar-chart">
+          <% antennasByCity.forEach(({ ciudad, total, otras }) => { %>
+            <div class="bar-row<%= otras ? ' is-other' : '' %>">
+              <% if (otras || ciudad === 'Sin ciudad') { %>
+                <span class="bar-label" title="<%= ciudad %>"><%= ciudad %></span>
+              <% } else { %>
+                <a class="bar-label" href="/ubicaciones?search=<%= encodeURIComponent(ciudad) %>" title="<%= ciudad %>"><%= ciudad %></a>
+              <% } %>
+              <div class="bar-track" role="progressbar" aria-label="Antenas en <%= ciudad %>" aria-valuenow="<%= total %>" aria-valuemin="0" aria-valuemax="<%= otras ? metrics.ubicaciones : maxCityValue %>">
+                <div class="bar-fill" style="width: <%= otras ? 0 : (total / maxCityValue) * 100 %>%"></div>
+              </div>
+              <span class="bar-number"><%= formatNumber(total) %></span>
+            </div>
+          <% }) %>
+        </div>
+      <% } %>
+    </article>
+  </div>
+</section>

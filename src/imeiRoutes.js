@@ -68,8 +68,9 @@ router.get("/imei", async (req, res, next) => {
   try {
     const searchTerm = req.query.search || "";
     const { page, pageSize } = parsePagination(req.query);
+    const pendientes = req.query.pendientes === '1';
 
-    const { rows: imeis, total } = await listarImeis(searchTerm, page, pageSize);
+    const { rows: imeis, total } = await listarImeis(searchTerm, page, pageSize, { pendientes });
     const totalPages = Math.max(Math.ceil(total / pageSize), 1);
     const startIndex = (page - 1) * pageSize + 1;
 
@@ -77,6 +78,7 @@ router.get("/imei", async (req, res, next) => {
       return res.render('partials/imei-results', {
         imeis,
         searchTerm,
+        pendientes,
         currentPage: page,
         totalPages,
         startIndex,
@@ -87,6 +89,7 @@ router.get("/imei", async (req, res, next) => {
     res.render("pages/imei", {
       imeis,
       searchTerm,
+      pendientes,
       message: req.query.message || null,
       messageType: req.query.type || null,
       currentPage: page,

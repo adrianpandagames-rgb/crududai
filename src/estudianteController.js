@@ -265,31 +265,29 @@ export const buscarObjetivoEnObjetivo = async (numObjetivo, nuc, ano) => {
 };
 
 // Obtener todos los IMEIs o buscar por término con paginación
-export const listarImeis = async (searchTerm = "", page = 1, pageSize = 10) => {
+// `pendientes` limits the list to IMEI still missing brand or model (linked from /medidores).
+export const listarImeis = async (searchTerm = "", page = 1, pageSize = 10, { pendientes = false } = {}) => {
   try {
     const offset = (page - 1) * pageSize;
     const hasSearch = searchTerm && searchTerm.toString().trim() !== "";
+    const conditions = [];
+    const values = [];
 
     if (hasSearch) {
-      const term = `%${searchTerm.toString().trim()}%`;
-      const [rows] = await pool.query(
-        "SELECT i.idImei, i.idObjetivo, i.imei, o.numObjetivo, o.nuc, o.tipo, o.ano, i.brand_name, i.modelo FROM imei i INNER JOIN objetivoImei o ON i.idObjetivo = o.idObjetivo WHERE CONCAT_WS('|', i.imei, o.numObjetivo, o.nuc, o.tipo, o.ano, i.brand_name, i.modelo) LIKE ? LIMIT ? OFFSET ?",
-        [term, pageSize, offset]
-      );
-      const [countRows] = await pool.query(
-        "SELECT COUNT(*) AS count FROM imei i INNER JOIN objetivoImei o ON i.idObjetivo = o.idObjetivo WHERE CONCAT_WS('|', i.imei, o.numObjetivo, o.nuc, o.tipo, o.ano, i.brand_name, i.modelo) LIKE ?",
-        [term]
-      );
-      return { rows, total: countRows[0].count };
+      conditions.push("CONCAT_WS('|', i.imei, o.numObjetivo, o.nuc, o.tipo, o.ano, i.brand_name, i.modelo) LIKE ?");
+      values.push(`%${searchTerm.toString().trim()}%`);
+    }
+    if (pendientes) {
+      conditions.push('(i.brand_name IS NULL OR i.modelo IS NULL)');
     }
 
+    const from = 'FROM imei i INNER JOIN objetivoImei o ON i.idObjetivo = o.idObjetivo'
+      + (conditions.length ? ` WHERE ${conditions.join(' AND ')}` : '');
     const [rows] = await pool.query(
-      'SELECT i.idImei, i.idObjetivo, i.imei, o.numObjetivo, o.nuc, o.tipo, o.ano, i.brand_name, i.modelo FROM imei i INNER JOIN objetivoImei o ON i.idObjetivo = o.idObjetivo LIMIT ? OFFSET ?',
-      [pageSize, offset]
+      `SELECT i.idImei, i.idObjetivo, i.imei, o.numObjetivo, o.nuc, o.tipo, o.ano, i.brand_name, i.modelo ${from} LIMIT ? OFFSET ?`,
+      [...values, pageSize, offset]
     );
-    const [countRows] = await pool.query(
-      'SELECT COUNT(*) AS count FROM imei i INNER JOIN objetivoImei o ON i.idObjetivo = o.idObjetivo'
-    );
+    const [countRows] = await pool.query(`SELECT COUNT(*) AS count ${from}`, values);
     return { rows, total: countRows[0].count };
   } catch (error) {
     console.log(error);
