@@ -296,6 +296,19 @@
         font-size: .78rem;
       }
 
+      .geocoding-panel {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        height: auto;
+      }
+
+      .geocoding-info { flex: 1 1 320px; }
+      .geocoding-panel.is-blocked { border-color: var(--warning); }
+      .bar-fill.is-high { background: var(--warning); }
+
       .heatmap-panel {
         margin-top: 1.5rem;
       }
@@ -355,6 +368,9 @@
             <span class="badge text-bg-light border">Solo administradores</span>
           </div>
         </div>
+
+        <% if (locals.message) { %><div class="alert alert-success"><%= message %></div><% } %>
+        <% if (locals.error) { %><div class="alert alert-danger"><%= error %></div><% } %>
 
         <div id="medidoresResumen">
           <%- include('../partials/medidores-resumen') %>

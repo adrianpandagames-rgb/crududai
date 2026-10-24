@@ -3,146 +3,52 @@
   <head>
     <%- include('../includes/head') %>
     <style>
-      .user-management-table .user-actions {
+      .user-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .75rem; margin-bottom: 1.5rem; }
+      .user-stat { padding: .85rem 1rem; border-left: 4px solid var(--user-accent, #087f8c); }
+      .user-stat-label { display: block; font-size: .75rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; opacity: .75; }
+      .user-stat-value { display: block; font-size: 1.6rem; font-weight: 800; line-height: 1.2; }
+
+      .role-help { font-size: .85rem; }
+      .role-help dt { font-weight: 700; }
+      .role-help dd { margin-bottom: .5rem; }
+
+      .user-table td { vertical-align: middle; }
+      .user-email { font-weight: 600; word-break: break-all; }
+      .user-flags { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .3rem; }
+      .user-role-form { display: flex; gap: .35rem; margin: 0; padding: 0; background: transparent; box-shadow: none; }
+      .user-role-form select { min-width: 150px; }
+      .user-inline-form { display: inline; margin: 0; padding: 0; background: transparent; box-shadow: none; }
+
+      .user-more { position: relative; }
+      .user-more summary { list-style: none; cursor: pointer; }
+      .user-more summary::-webkit-details-marker { display: none; }
+      .user-more-panel {
+        position: absolute;
+        right: 0;
+        z-index: 20;
         display: grid;
-        grid-template-columns: repeat(2, 140px);
-        align-items: center;
-        justify-content: end;
-        column-gap: .2rem;
-        row-gap: .35rem;
-        min-width: 300px;
+        gap: .75rem;
+        width: 280px;
+        margin-top: .35rem;
+        padding: .85rem;
+        text-align: left;
+        background: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: .5rem;
+        box-shadow: 0 12px 28px rgba(24, 50, 75, .15);
       }
-
-      .user-management-table .user-actions form {
-        display: contents;
-        margin: 0;
-        padding: 0;
-        background: transparent;
-        border-radius: 0;
-        box-shadow: none;
-      }
-
-      .user-management-table .user-actions .user-action-button {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        justify-self: center;
-        width: 140px;
-        height: 44px;
-        min-height: 44px;
-        padding: .35rem .55rem;
-        border-radius: .375rem;
-        font-size: .78rem;
-        font-weight: 600;
-        line-height: 1.2;
-        text-align: center;
-        white-space: nowrap;
-      }
-
-      .btn-outline-purple {
-        color: #6f42c1;
-        border-color: #6f42c1;
-      }
-
-      .btn-outline-purple:hover {
-        color: #fff;
-        background-color: #6f42c1;
-        border-color: #6f42c1;
-      }
-
-      .user-management-table .user-actions select.user-action-button {
-        width: 140px;
-        height: 44px;
-        min-height: 44px;
-      }
-
-      .user-management-table .user-actions .user-role-button {
-        width: 140px;
-      }
-
-      .user-management-table .user-actions .user-password-button {
-        width: 140px;
-      }
-
-      .user-management-table .user-actions .user-status-button {
-        width: 140px;
-      }
-
-      .user-management-table td[data-label="Rol"],
-      .user-management-table td[data-label="Estado"] {
-        text-align: center;
-        vertical-align: middle;
-      }
+      html[data-theme="dark"] .user-more-panel { background: var(--dark-panel); border-color: var(--dark-border); }
+      .user-more-panel form { display: grid; gap: .35rem; margin: 0; padding: 0; background: transparent; box-shadow: none; }
+      .user-more-panel label { font-size: .8rem; font-weight: 600; }
 
       @media (max-width: 991.98px) {
-        .user-management-table,
-        .user-management-table tbody,
-        .user-management-table tr,
-        .user-management-table td {
-          display: block;
-          width: 100%;
-        }
-
-        .user-management-table thead {
-          display: none;
-        }
-
-        .user-management-table tr {
-          margin-bottom: 1rem;
-          padding: .75rem;
-          border: 1px solid #dee2e6;
-          border-radius: .375rem;
-        }
-
-        .user-management-table td {
-          padding: .35rem 0;
-          text-align: left !important;
-          white-space: normal !important;
-        }
-
-        .user-management-table td::before {
-          content: attr(data-label);
-          display: block;
-          margin-bottom: .25rem;
-          font-weight: 600;
-        }
-
-        .user-management-table .user-actions {
-          display: flex !important;
-          align-items: stretch !important;
-          flex-direction: column !important;
-          justify-content: flex-start !important;
-          min-width: 0;
-        }
-
-        .user-management-table .user-actions form {
-          display: flex;
-          align-items: center;
-          gap: .35rem;
-          width: 100%;
-        }
-
-        .user-management-table .user-actions form:first-child {
-          display: flex;
-          grid-column: auto;
-          flex-wrap: wrap;
-        }
-
-        .user-management-table .user-actions .user-action-button,
-        .user-management-table .user-actions select.user-action-button {
-          width: 100%;
-          min-height: 44px;
-        }
-
-        .user-management-table .user-actions select.user-action-button {
-          flex: 1 1 150px;
-        }
-
-        .user-management-table .user-actions .user-role-button,
-        .user-management-table .user-actions .user-password-button,
-        .user-management-table .user-actions .user-status-button {
-          width: 100%;
-        }
+        .user-table, .user-table tbody, .user-table tr, .user-table td { display: block; width: 100%; }
+        .user-table thead { display: none; }
+        .user-table tr { margin-bottom: 1rem; padding: .75rem; border: 1px solid #dee2e6; border-radius: .375rem; }
+        html[data-theme="dark"] .user-table tr { border-color: var(--dark-border); }
+        .user-table td { padding: .35rem 0; border: 0; text-align: left !important; }
+        .user-table td[data-label]::before { content: attr(data-label); display: block; margin-bottom: .2rem; font-size: .8rem; font-weight: 600; opacity: .75; }
+        .user-more-panel { position: static; width: 100%; box-shadow: none; }
       }
     </style>
   </head>
@@ -150,24 +56,28 @@
     <%- include('../includes/header') %>
 
     <main class="content-wrapper mt-5 page-offset">
-      <div class="container py-4 page-container-medium">
+      <div class="container py-4 page-container-wide">
         <h2 class="title mb-4">Administración de usuarios</h2>
 
         <% if (message) { %><div class="alert alert-success"><%= message %></div><% } %>
         <% if (error) { %><div class="alert alert-danger"><%= error %></div><% } %>
 
-        <section class="card mb-4">
-          <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">
-            <div>
-              <h3 class="h5 mb-1">Google Geocoding</h3>
-              <p class="mb-0">Consultas a la API: <strong><%= googleGeocodingQuota.requestCount %> / <%= googleGeocodingQuota.limit %></strong></p>
-              <% if (googleGeocodingQuota.isBlocked) { %>
-                <div class="alert alert-danger mt-3 mb-0" role="alert">ALARMA: se alcanzó el límite de consultas. Geocoding está bloqueado hasta reiniciar el contador.</div>
-              <% } %>
-            </div>
-            <form action="/usuarios/google-geocoding/reiniciar" method="POST" onsubmit="return confirm('¿Reiniciar el contador de Google Geocoding y desbloquear el servicio?');">
-              <button class="btn btn-outline-danger" type="submit">Reiniciar contador y desbloquear</button>
-            </form>
+        <section class="user-stats" aria-label="Resumen de usuarios">
+          <div class="card user-stat" style="--user-accent: #198754">
+            <span class="user-stat-label">Activos</span>
+            <span class="user-stat-value"><%= counts.activos %></span>
+          </div>
+          <div class="card user-stat" style="--user-accent: #dc3545">
+            <span class="user-stat-label">Deshabilitados</span>
+            <span class="user-stat-value"><%= counts.deshabilitados %></span>
+          </div>
+          <div class="card user-stat" style="--user-accent: #ed7d3a">
+            <span class="user-stat-label">Contraseña temporal pendiente</span>
+            <span class="user-stat-value"><%= counts.pendientes %></span>
+          </div>
+          <div class="card user-stat" style="--user-accent: #3273a8">
+            <span class="user-stat-label">Con Telegram</span>
+            <span class="user-stat-value"><%= counts.telegram %></span>
           </div>
         </section>
 
@@ -182,58 +92,98 @@
               </div>
               <div class="col-md-3">
                 <label class="visually-hidden" for="new-user-role">Tipo de usuario</label>
-                <select class="form-select" name="role" id="new-user-role" aria-label="Tipo de usuario">
-                  <option value="usuario" selected>Usuario</option>
-                  <option value="uecs">UECS</option>
-                  <option value="semiadmin">Semiadministrador</option>
-                  <option value="admin">Administrador</option>
+                <select class="form-select" name="role" id="new-user-role" aria-label="Tipo de usuario" aria-describedby="new-user-role-help">
+                  <% userRoles.forEach((role) => { %>
+                    <option value="<%= role %>" <%= role === 'usuario' ? 'selected' : '' %>><%= roleLabels[role] %></option>
+                  <% }) %>
                 </select>
               </div>
               <div class="col-md-4">
                 <button class="btn btn-primary w-100" type="submit">Crear y enviar contraseña</button>
               </div>
+              <div class="col-12">
+                <div id="new-user-role-help" class="form-text"><%= roleDescriptions.usuario %></div>
+              </div>
             </form>
+            <details class="mt-3">
+              <summary>¿Qué puede hacer cada rol?</summary>
+              <dl class="role-help mt-2 mb-0">
+                <% userRoles.forEach((role) => { %>
+                  <dt><%= roleLabels[role] %></dt>
+                  <dd><%= roleDescriptions[role] %></dd>
+                <% }) %>
+              </dl>
+            </details>
           </div>
         </section>
 
         <section class="card">
           <div class="card-body">
             <h3 class="h5 mb-3">Usuarios</h3>
-            <div class="table-responsive user-management-table-wrapper">
-              <table class="table align-middle user-management-table">
-                <thead><tr><th>Correo</th><th>Rol</th><th>Estado</th><th class="text-end">Acciones</th></tr></thead>
+            <div class="table-responsive overflow-visible">
+              <table class="table user-table mb-0">
+                <thead><tr><th>Usuario</th><th>Rol</th><th>Estado</th><th>Último acceso</th><th>Telegram</th><th class="text-end">Más</th></tr></thead>
                 <tbody>
                   <% users.forEach((user) => { %>
+                    <% const isSelf = user.id === currentUser.id; %>
+                    <% const locked = user.isInitialAdmin && !isSelf; %>
                     <tr>
-                      <td data-label="Correo"><%= user.email %></td>
-                      <td data-label="Rol">
-                        <% const userRole = Number(user.is_admin) === 1 ? 'admin' : (user.role || 'usuario'); %>
-                        <span class="badge <%= userRole === 'admin' ? 'bg-primary' : userRole === 'semiadmin' ? 'bg-warning text-dark' : 'bg-secondary' %>"><%= userRole === 'admin' ? 'Administrador' : userRole === 'semiadmin' ? 'Semiadministrador' : userRole === 'uecs' ? 'UECS' : 'Usuario' %></span>
-                      </td>
-                      <td data-label="Estado"><span class="badge <%= Number(user.is_active) === 1 ? 'bg-success' : 'bg-danger' %>"><%= Number(user.is_active) === 1 ? 'Activo' : 'Deshabilitado' %></span></td>
-                      <td class="text-end" data-label="Acciones">
-                        <div class="user-actions">
-                        <form action="/usuarios/<%= user.id %>/telegram" method="POST">
-                          <input class="form-control user-action-button" type="text" inputmode="numeric" pattern="[1-9][0-9]{0,19}" maxlength="20" name="telegramId" value="<%= user.telegramId %>" placeholder="ID de Telegram" aria-label="ID de Telegram de <%= user.email %>">
-                          <button class="btn btn-sm btn-outline-primary user-action-button" type="submit">Guardar ID</button>
-                        </form>
-                        <form action="/usuarios/<%= user.id %>/rol" method="POST">
-                          <select name="role" class="form-select form-select-sm user-action-button" aria-label="Rol de <%= user.email %>">
-                            <option value="usuario" <%= userRole === 'usuario' ? 'selected' : '' %>>Usuario</option>
-                            <option value="uecs" <%= userRole === 'uecs' ? 'selected' : '' %>>UECS</option>
-                            <option value="semiadmin" <%= userRole === 'semiadmin' ? 'selected' : '' %>>Semiadministrador</option>
-                            <option value="admin" <%= userRole === 'admin' ? 'selected' : '' %>>Administrador</option>
-                          </select>
-                          <button class="btn btn-sm btn-outline-primary user-action-button user-role-button" type="submit">Guardar rol</button>
-                        </form>
-                        <form action="/usuarios/<%= user.id %>/restablecer-contrasena" method="POST">
-                          <button class="btn btn-sm btn-outline-secondary user-action-button user-password-button" type="submit" <% if (Number(user.is_initial_admin) === 1 && user.id !== currentUser.id) { %>disabled title="Solo el administrador inicial puede cambiar su contraseña"<% } %>>Generar contraseña</button>
-                        </form>
-                        <form action="/usuarios/<%= user.id %>/estado" method="POST">
-                          <input type="hidden" name="isActive" value="<%= Number(user.is_active) === 1 ? '0' : '1' %>">
-                          <button class="btn btn-sm btn-outline-<%= Number(user.is_active) === 1 ? 'danger' : 'success' %> user-action-button user-status-button" type="submit" <%= user.id === currentUser.id && Number(user.is_active) === 1 ? 'disabled' : '' %>><%= Number(user.is_active) === 1 ? 'Deshabilitar' : 'Habilitar' %></button>
-                        </form>
+                      <td data-label="Usuario">
+                        <div class="user-email"><%= user.email %></div>
+                        <div class="user-flags">
+                          <% if (isSelf) { %><span class="badge bg-info text-dark">Tú</span><% } %>
+                          <% if (user.isInitialAdmin) { %><span class="badge bg-dark">Administrador inicial</span><% } %>
+                          <% if (user.isActive && user.neverLoggedIn) { %>
+                            <span class="badge bg-warning text-dark">Nunca ha entrado</span>
+                          <% } else if (user.isActive && user.mustChangePassword) { %>
+                            <span class="badge bg-warning text-dark">Contraseña temporal pendiente</span>
+                          <% } %>
                         </div>
+                      </td>
+                      <td data-label="Rol">
+                        <form action="/usuarios/<%= user.id %>/rol" method="POST" class="user-role-form" data-role-email="<%= user.email %>">
+                          <select name="role" class="form-select form-select-sm" data-current="<%= user.role %>" aria-label="Rol de <%= user.email %>" <%= locked ? 'disabled' : '' %>
+                            title="<%= locked ? 'Solo el administrador inicial puede cambiar su propio rol' : roleDescriptions[user.role] %>">
+                            <% userRoles.forEach((role) => { %>
+                              <option value="<%= role %>" <%= user.role === role ? 'selected' : '' %>><%= roleLabels[role] %></option>
+                            <% }) %>
+                          </select>
+                          <button class="btn btn-sm btn-outline-primary" type="submit" <%= locked ? 'disabled' : '' %>>Guardar</button>
+                        </form>
+                      </td>
+                      <td data-label="Estado" class="text-nowrap">
+                        <span class="badge <%= user.isActive ? 'bg-success' : 'bg-danger' %> me-1"><%= user.isActive ? 'Activo' : 'Deshabilitado' %></span>
+                        <form action="/usuarios/<%= user.id %>/estado" method="POST" class="user-inline-form"
+                          data-confirm="<%= user.isActive ? `¿Deshabilitar a ${user.email}? Se cerrarán sus sesiones abiertas.` : `¿Habilitar a ${user.email}?` %>">
+                          <input type="hidden" name="isActive" value="<%= user.isActive ? '0' : '1' %>">
+                          <button class="btn btn-sm btn-outline-<%= user.isActive ? 'danger' : 'success' %>" type="submit"
+                            <%= (isSelf && user.isActive) || locked ? 'disabled' : '' %>
+                            <% if (locked) { %>title="El administrador inicial no puede ser deshabilitado por otro usuario"<% } %>><%= user.isActive ? 'Deshabilitar' : 'Habilitar' %></button>
+                        </form>
+                      </td>
+                      <td data-label="Último acceso" class="text-nowrap">
+                        <%= user.lastLogin ? user.lastLogin.slice(0, 16) : 'Nunca' %>
+                        <div><a class="small" href="/auditoria?usuario=<%= encodeURIComponent(user.email) %>">Ver actividad</a></div>
+                      </td>
+                      <td data-label="Telegram">
+                        <span class="badge <%= user.telegramId ? 'bg-primary' : 'bg-secondary' %>"><%= user.telegramId ? 'Vinculado' : 'Sin vincular' %></span>
+                      </td>
+                      <td data-label="Más" class="text-end">
+                        <details class="user-more">
+                          <summary class="btn btn-sm btn-outline-secondary">Más acciones</summary>
+                          <div class="user-more-panel">
+                            <form action="/usuarios/<%= user.id %>/telegram" method="POST">
+                              <label for="telegram-<%= user.id %>">ID de Telegram</label>
+                              <input class="form-control form-control-sm" id="telegram-<%= user.id %>" type="text" inputmode="numeric" pattern="[1-9][0-9]{0,19}" maxlength="20" name="telegramId" value="<%= user.telegramId %>" placeholder="Vacío para desvincular" autocomplete="off">
+                              <button class="btn btn-sm btn-outline-primary" type="submit">Guardar ID</button>
+                            </form>
+                            <form action="/usuarios/<%= user.id %>/restablecer-contrasena" method="POST"
+                              data-confirm="<%= isSelf ? '¿Generar una contraseña nueva para tu cuenta? Se cerrará tu sesión.' : `¿Generar una contraseña nueva para ${user.email}? Se cerrarán sus sesiones y recibirá la contraseña temporal por correo.` %>">
+                              <button class="btn btn-sm btn-outline-secondary" type="submit" <%= locked ? 'disabled' : '' %>
+                                <% if (locked) { %>title="Solo el administrador inicial puede cambiar su contraseña"<% } %>>Generar contraseña</button>
+                            </form>
+                          </div>
+                        </details>
                       </td>
                     </tr>
                   <% }) %>
@@ -244,6 +194,34 @@
         </section>
       </div>
     </main>
+
+    <script>
+      (() => {
+        const descriptions = <%- JSON.stringify(roleDescriptions).replace(/</g, '\\u003c') %>;
+        const select = document.getElementById('new-user-role');
+        const help = document.getElementById('new-user-role-help');
+        select?.addEventListener('change', () => { help.textContent = descriptions[select.value] || ''; });
+
+        // Confirmation texts live in data attributes so e-mails never end up inside inline JavaScript.
+        document.querySelectorAll('form[data-confirm]').forEach((form) => form.addEventListener('submit', (event) => {
+          if (!window.confirm(form.dataset.confirm)) event.preventDefault();
+        }));
+        document.querySelectorAll('form[data-role-email]').forEach((form) => form.addEventListener('submit', (event) => {
+          const role = form.elements.role;
+          if (role.value === role.dataset.current) return;
+          if (!window.confirm(`¿Cambiar el rol de ${form.dataset.roleEmail} a ${role.options[role.selectedIndex].text}?`)) event.preventDefault();
+        }));
+
+        // Close any open "Más acciones" panel when another opens or when clicking elsewhere.
+        const panels = [...document.querySelectorAll('.user-more')];
+        panels.forEach((panel) => panel.addEventListener('toggle', () => {
+          if (panel.open) panels.forEach((other) => { if (other !== panel) other.open = false; });
+        }));
+        document.addEventListener('click', (event) => {
+          panels.forEach((panel) => { if (panel.open && !panel.contains(event.target)) panel.open = false; });
+        });
+      })();
+    </script>
 
     <%- include('../includes/scripts') %>
   </body>

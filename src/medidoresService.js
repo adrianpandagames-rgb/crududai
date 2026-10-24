@@ -1,3 +1,5 @@
+import { getGoogleGeocodingQuota } from './googleGeocodingQuota.js';
+
 export const TOP_CIUDADES = 15;
 export const DIAS_TENDENCIA = 30;
 
@@ -26,7 +28,7 @@ export const completarDias = (rows, hoy, dias = DIAS_TENDENCIA) => {
 };
 
 export const obtenerMedidores = async (pool) => {
-  const [[metricRows], [cityRows], [trendRows]] = await Promise.all([
+  const [[metricRows], [cityRows], [trendRows], googleGeocodingQuota] = await Promise.all([
     pool.query(`
       SELECT
         (SELECT COUNT(*) FROM objetivo) AS objetivos,
@@ -55,6 +57,7 @@ export const obtenerMedidores = async (pool) => {
       WHERE created_at >= CURDATE() - INTERVAL ${DIAS_TENDENCIA - 1} DAY
       GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d')
     `),
+    getGoogleGeocodingQuota(pool),
   ]);
 
   const { hoy, ...counts } = metricRows[0] || {};
@@ -70,5 +73,6 @@ export const obtenerMedidores = async (pool) => {
     tendencia,
     ultimos7: tendencia.slice(-7).reduce((sum, { total }) => sum + total, 0),
     ultimos30: tendencia.reduce((sum, { total }) => sum + total, 0),
+    googleGeocodingQuota,
   };
 };

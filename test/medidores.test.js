@@ -24,7 +24,8 @@ test('fills every day of the trend, oldest first, across month boundaries', () =
   ]);
 });
 
-const fakePool = (counts, cities = [], trend = []) => ({
+const fakePool = (counts, cities = [], trend = [], quota = { requestCount: 6400, isBlocked: 0 }) => ({
+  execute: async () => [[quota]],
   query: async (sql) => {
     if (sql.includes('AS hoy')) return [[{ ...counts, hoy: '2026-10-24' }]];
     if (sql.includes('GROUP BY COALESCE')) return [cities];
@@ -73,4 +74,13 @@ test('renders an empty dashboard without errors', async () => {
 test('the auto-refresh endpoint stays out of the audit log', () => {
   assert.equal(auditRequestAction({ method: 'GET', path: '/medidores/resumen', query: {} }), null);
   assert.equal(auditRequestAction({ method: 'GET', path: '/medidores', query: {} }), 'CONSULTA');
+});
+
+test('the Google Geocoding quota moved here from the users page', async () => {
+  const data = await obtenerMedidores(fakePool(counts));
+  const html = await ejs.renderFile('views/partials/medidores-resumen.ejs', data);
+  assert.match(html, /6,400 \/ 8,000/);
+  assert.match(html, /action="\/medidores\/google-geocoding\/reiniciar"/);
+  assert.match(html, /bar-fill is-high/);
+  assert.doesNotMatch(html, /ALARMA/);
 });

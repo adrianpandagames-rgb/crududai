@@ -90,6 +90,7 @@ const specificActions = [
   [/^\/usuarios\/\d+\/telegram\/?$/i, 'Vinculó Telegram'],
   [/^\/cambiar-contrasena\/?$/i, 'Cambió su contraseña'],
   [/^\/maigret\/?$/i, 'Búsqueda en Maigret'],
+  [/^\/(medidores|usuarios)\/google-geocoding\/reiniciar\/?$/i, 'Reinició contador de Geocoding'],
   [/\/(editar|modificar)(\/|$)/i, 'Editó registro'],
 ];
 

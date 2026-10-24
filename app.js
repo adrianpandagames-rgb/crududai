@@ -31,7 +31,8 @@ import { createMaigretRouter, createMaigretSearches } from './src/maigretRouter.
 import { createImagenesRouter, createPublicImageRouter } from './src/imagenesRouter.js';
 import { createNombresRouter } from './src/nombresRouter.js';
 import { obtenerMedidores } from './src/medidoresService.js';
-import { getGoogleGeocodingQuota, resetGoogleGeocodingQuota } from './src/googleGeocodingQuota.js';
+import { resetGoogleGeocodingQuota } from './src/googleGeocodingQuota.js';
+import { listarUsuarios, roleDescriptions, roleLabels, userRoleOf, userRoles } from './src/usuariosService.js';
 import { createLoginRateLimiter, LOGIN_WINDOW_MS } from './src/loginRateLimit.js';
 import { forwardAsyncErrors, handleErrors } from './src/errorHandling.js';
 
@@ -421,28 +422,41 @@ app.post('/cambiar-contrasena', requireSameOrigin, requireAuth, async (req, res,
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const generateSecurePassword = () => crypto.randomBytes(24).toString('base64url');
 
-const renderUsersPage = async (res, { message = null, error = null } = {}) => {
-  const [users] = await pool.execute('SELECT id, email, is_admin, role, is_active, is_initial_admin, telegram_id_encrypted FROM users ORDER BY email ASC');
-  for (const user of users) {
-    user.telegramId = decryptTelegramId(user.telegram_id_encrypted);
-    delete user.telegram_id_encrypted;
-  }
-  const googleGeocodingQuota = await getGoogleGeocodingQuota(pool);
-  return res.render('pages/usuarios', { users, message, error, googleGeocodingQuota });
+// Every admin form redirects after saving (so reloading never repeats the action) and leaves its
+// result in the session; messages never come from the URL, where anyone could write them.
+const redirectWithFlash = (req, res, path, { message = null, error = null, toast = null } = {}) => {
+  if (req.session) req.session.flash = { message, error, toast };
+  return res.redirect(303, path);
 };
+
+const takeFlash = (req, res) => {
+  const flash = req.session?.flash || {};
+  if (req.session) delete req.session.flash;
+  if (flash.toast) {
+    res.locals.toastMessage = flash.toast.message;
+    res.locals.toastTitle = flash.toast.title;
+  }
+  return { message: flash.message || null, error: flash.error || null };
+};
+
+const toUsers = (req, res, flash) => redirectWithFlash(req, res, '/usuarios', flash);
 
 app.get('/usuarios', requireAdmin, async (req, res, next) => {
   try {
-    await renderUsersPage(res, { message: req.query.message || null, error: req.query.error || null });
+    const { users, counts } = await listarUsuarios(pool, decryptTelegramId);
+    return res.render('pages/usuarios', {
+      ...takeFlash(req, res), users, counts, roleLabels, roleDescriptions, userRoles,
+      currentUserIsInitialAdmin: users.some((user) => user.id === req.session.userId && user.isInitialAdmin),
+    });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
-app.post('/usuarios/google-geocoding/reiniciar', requireAdmin, async (req, res, next) => {
+app.post('/medidores/google-geocoding/reiniciar', requireAdmin, async (req, res, next) => {
   try {
     await resetGoogleGeocodingQuota(pool);
-    return renderUsersPage(res, { message: 'Contador de Google Geocoding reiniciado y servicio desbloqueado.' });
+    return redirectWithFlash(req, res, '/medidores', { message: 'Contador de Google Geocoding reiniciado y servicio desbloqueado.' });
   } catch (error) {
     return next(error);
   }
@@ -498,6 +512,7 @@ app.get('/medidores', requireAdmin, async (req, res, next) => {
   try {
     return res.render('pages/medidores', {
       ...await obtenerMedidores(pool),
+      ...takeFlash(req, res),
       cartoApiKey: process.env.CARTO_API_KEY || '',
     });
   } catch (error) {
@@ -516,9 +531,9 @@ app.get('/medidores/resumen', requireAdmin, async (req, res, next) => {
 
 app.post('/usuarios', requireAdmin, async (req, res, next) => {
   const email = String(req.body.email || '').trim().toLowerCase();
-  const role = ['admin', 'semiadmin', 'usuario', 'uecs'].includes(req.body.role) ? req.body.role : 'usuario';
+  const role = userRoles.includes(req.body.role) ? req.body.role : 'usuario';
   if (!EMAIL_PATTERN.test(email)) {
-    return renderUsersPage(res, { error: 'Ingresa un correo electrónico válido.' }).catch(next);
+    return toUsers(req, res, { error: 'Ingresa un correo electrónico válido.' });
   }
 
   const generatedPassword = generateSecurePassword();
@@ -526,7 +541,7 @@ app.post('/usuarios', requireAdmin, async (req, res, next) => {
     const passwordHash = await hashPassword(generatedPassword);
     await pool.execute('INSERT INTO users (email, password, is_admin, role, must_change_password) VALUES (?, ?, ?, ?, 1)', [email, passwordHash, role === 'admin' ? 1 : 0, role]);
     const notification = await notifyUser(email, 'created', { temporaryPassword: generatedPassword });
-    return renderUsersPage(res, {
+    return toUsers(req, res, {
       error: notification.sent ? null : `${notification.warning} Restablece la contraseña para recuperar el acceso del usuario.`,
       message: notification.sent
         ? `Usuario creado para ${email}. La contraseña temporal se envió a su correo.`
@@ -534,31 +549,34 @@ app.post('/usuarios', requireAdmin, async (req, res, next) => {
     });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
-      return renderUsersPage(res, { error: 'Ese correo ya está registrado.' }).catch(next);
+      return toUsers(req, res, { error: 'Ese correo ya está registrado.' });
     }
     return next(error);
   }
 });
 
+// Only the initial administrator may change their own role, status or password.
+const protectsInitialAdmin = (target, req) => Number(target.is_initial_admin) === 1 && target.id !== req.session.userId;
+
 app.post('/usuarios/:id/restablecer-contrasena', requireAdmin, async (req, res, next) => {
   const userId = Number.parseInt(req.params.id, 10);
-  if (!Number.isSafeInteger(userId) || userId < 1) return res.status(400).redirect('/usuarios?error=Usuario%20inválido.');
+  if (!Number.isSafeInteger(userId) || userId < 1) return toUsers(req, res, { error: 'Usuario inválido.' });
 
   try {
-    const [users] = await pool.execute('SELECT is_initial_admin, email FROM users WHERE id = ?', [userId]);
-    if (users.length !== 1) return res.status(404).redirect('/usuarios?error=Usuario%20no%20encontrado.');
-    if (Number(users[0].is_initial_admin) === 1 && userId !== req.session.userId) {
-      return res.status(403).redirect('/usuarios?error=Solo%20el%20administrador%20inicial%20puede%20cambiar%20su%20contrase%C3%B1a.');
+    const [users] = await pool.execute('SELECT id, is_initial_admin, email FROM users WHERE id = ?', [userId]);
+    if (users.length !== 1) return toUsers(req, res, { error: 'Usuario no encontrado.' });
+    if (protectsInitialAdmin(users[0], req)) {
+      return toUsers(req, res, { error: 'Solo el administrador inicial puede cambiar su contraseña.' });
     }
 
     const generatedPassword = generateSecurePassword();
     const passwordHash = await hashPassword(generatedPassword);
     const [result] = await pool.execute('UPDATE users SET password = ?, must_change_password = 1 WHERE id = ?', [passwordHash, userId]);
-    if (result.affectedRows !== 1) return res.status(404).redirect('/usuarios?error=Usuario%20no%20encontrado.');
+    if (result.affectedRows !== 1) return toUsers(req, res, { error: 'Usuario no encontrado.' });
     revokeUserSessions(userId);
     if (userId === req.session.userId) res.clearCookie('auth', buildSessionCookieOptions());
     const notification = await notifyUser(users[0].email, 'reset', { temporaryPassword: generatedPassword });
-    return renderUsersPage(res, {
+    return toUsers(req, res, {
       message: notification.sent
         ? 'Contraseña restablecida. La contraseña temporal se envió al correo del usuario.'
         : 'Contraseña restablecida. No se pudo enviar la contraseña temporal.',
@@ -571,12 +589,22 @@ app.post('/usuarios/:id/restablecer-contrasena', requireAdmin, async (req, res, 
 
 app.post('/usuarios/:id/rol', requireAdmin, async (req, res, next) => {
   const userId = Number.parseInt(req.params.id, 10);
-  const role = ['admin', 'semiadmin', 'usuario', 'uecs'].includes(req.body.role) ? req.body.role : 'usuario';
+  const role = userRoles.includes(req.body.role) ? req.body.role : 'usuario';
   const isAdmin = role === 'admin';
-  if (!Number.isSafeInteger(userId) || userId < 1) return res.status(400).redirect('/usuarios?error=Usuario%20inválido.');
-  if (userId === req.session.userId && !isAdmin) return res.redirect('/usuarios?error=No%20puedes%20quitarte%20tu%20propio%20acceso%20de%20administrador.');
+  if (!Number.isSafeInteger(userId) || userId < 1) return toUsers(req, res, { error: 'Usuario inválido.' });
+  if (userId === req.session.userId && !isAdmin) return toUsers(req, res, { error: 'No puedes quitarte tu propio acceso de administrador.' });
 
   try {
+    const [targets] = await pool.execute('SELECT id, email, is_admin, role, is_initial_admin, telegram_id_hash FROM users WHERE id = ?', [userId]);
+    if (targets.length !== 1) return toUsers(req, res, { error: 'Usuario no encontrado.' });
+    const target = targets[0];
+    if (protectsInitialAdmin(target, req)) {
+      return toUsers(req, res, { error: 'Solo el administrador inicial puede cambiar su propio rol.' });
+    }
+    if (userRoleOf(target) === role) {
+      return toUsers(req, res, { message: `${target.email} ya tiene el rol ${roleLabels[role]}; no se hizo ningún cambio.` });
+    }
+
     // Only demoting the last administrator is blocked; other users can move between non-admin roles freely.
     if (!isAdmin) {
       const [[{ adminCount, targetIsAdmin }]] = await pool.execute(
@@ -585,23 +613,24 @@ app.post('/usuarios/:id/rol', requireAdmin, async (req, res, next) => {
          FROM users`,
         [userId],
       );
-      if (Number(targetIsAdmin) === 1 && Number(adminCount) <= 1) return res.redirect('/usuarios?error=Debe%20existir%20al%20menos%20un%20administrador.');
+      if (Number(targetIsAdmin) === 1 && Number(adminCount) <= 1) return toUsers(req, res, { error: 'Debe existir al menos un administrador.' });
     }
 
     const [result] = await pool.execute('UPDATE users SET is_admin = ?, role = ? WHERE id = ?', [isAdmin ? 1 : 0, role, userId]);
-    if (result.affectedRows !== 1) return res.status(404).redirect('/usuarios?error=Usuario%20no%20encontrado.');
+    if (result.affectedRows !== 1) return toUsers(req, res, { error: 'Usuario no encontrado.' });
+    const message = `Rol de ${target.email} cambiado a ${roleLabels[role]}.`;
+    // The bot only needs a restart when the change affects someone who uses it.
+    if (!target.telegram_id_hash) return toUsers(req, res, { message });
     try {
       await restartTelegramBot();
     } catch (restartError) {
       console.error('No se pudo reiniciar el bot de Telegram:', restartError.message);
-      return renderUsersPage(res, {
-        message: 'Rol actualizado.',
+      return toUsers(req, res, {
+        message,
         error: 'El rol se guardó, pero no se pudo reiniciar el bot. Revisa el proceso de Telegram en PM2.',
       });
     }
-    res.locals.toastMessage = 'Bot actualizado';
-    res.locals.toastTitle = 'Telegram';
-    return renderUsersPage(res, { message: 'Rol actualizado.' });
+    return toUsers(req, res, { message, toast: { message: 'Bot actualizado', title: 'Telegram' } });
   } catch (error) {
     return next(error);
   }
@@ -610,21 +639,23 @@ app.post('/usuarios/:id/rol', requireAdmin, async (req, res, next) => {
 app.post('/usuarios/:id/telegram', requireAdmin, async (req, res, next) => {
   const userId = Number.parseInt(req.params.id, 10);
   const telegramId = String(req.body.telegramId || '').trim();
-  if (!Number.isSafeInteger(userId) || userId < 1) return res.status(400).redirect('/usuarios?error=Usuario%20inv%C3%A1lido.');
-  if (telegramId && !/^[1-9]\d{0,19}$/.test(telegramId)) return res.redirect('/usuarios?error=El%20ID%20de%20Telegram%20debe%20ser%20num%C3%A9rico.');
+  if (!Number.isSafeInteger(userId) || userId < 1) return toUsers(req, res, { error: 'Usuario inválido.' });
+  if (telegramId && !/^[1-9]\d{0,19}$/.test(telegramId)) return toUsers(req, res, { error: 'El ID de Telegram debe ser numérico.' });
 
   try {
-    const [users] = await pool.execute('SELECT id FROM users WHERE id = ?', [userId]);
-    if (users.length !== 1) return res.status(404).redirect('/usuarios?error=Usuario%20no%20encontrado.');
+    const [users] = await pool.execute('SELECT id, email FROM users WHERE id = ?', [userId]);
+    if (users.length !== 1) return toUsers(req, res, { error: 'Usuario no encontrado.' });
     if (!telegramId) {
       await pool.execute('UPDATE users SET telegram_id_encrypted = NULL, telegram_id_hash = NULL WHERE id = ?', [userId]);
     } else {
       const { encrypted, hash } = encryptTelegramId(telegramId);
       await pool.execute('UPDATE users SET telegram_id_encrypted = ?, telegram_id_hash = ? WHERE id = ?', [encrypted, hash, userId]);
     }
-    return res.redirect(`/usuarios?message=${encodeURIComponent(telegramId ? 'ID de Telegram actualizado.' : 'ID de Telegram desvinculado.')}`);
+    return toUsers(req, res, {
+      message: telegramId ? `ID de Telegram de ${users[0].email} actualizado.` : `Telegram desvinculado de ${users[0].email}.`,
+    });
   } catch (error) {
-    if (error.code === 'ER_DUP_ENTRY') return res.redirect('/usuarios?error=Ese%20ID%20de%20Telegram%20ya%20est%C3%A1%20vinculado%20a%20otro%20usuario.');
+    if (error.code === 'ER_DUP_ENTRY') return toUsers(req, res, { error: 'Ese ID de Telegram ya está vinculado a otro usuario.' });
     return next(error);
   }
 });
@@ -632,14 +663,19 @@ app.post('/usuarios/:id/telegram', requireAdmin, async (req, res, next) => {
 app.post('/usuarios/:id/estado', requireAdmin, async (req, res, next) => {
   const userId = Number.parseInt(req.params.id, 10);
   const isActive = req.body.isActive === '1';
-  if (!Number.isSafeInteger(userId) || userId < 1) return res.status(400).redirect('/usuarios?error=Usuario%20inv%C3%A1lido.');
-  if (userId === req.session.userId && !isActive) return res.redirect('/usuarios?error=No%20puedes%20deshabilitar%20tu%20propia%20cuenta.');
+  if (!Number.isSafeInteger(userId) || userId < 1) return toUsers(req, res, { error: 'Usuario inválido.' });
+  if (userId === req.session.userId && !isActive) return toUsers(req, res, { error: 'No puedes deshabilitar tu propia cuenta.' });
 
   try {
+    const [users] = await pool.execute('SELECT id, email, is_initial_admin FROM users WHERE id = ?', [userId]);
+    if (users.length !== 1) return toUsers(req, res, { error: 'Usuario no encontrado.' });
+    if (protectsInitialAdmin(users[0], req)) {
+      return toUsers(req, res, { error: 'El administrador inicial no puede ser deshabilitado por otro usuario.' });
+    }
     const [result] = await pool.execute('UPDATE users SET is_active = ? WHERE id = ?', [isActive ? 1 : 0, userId]);
-    if (result.affectedRows !== 1) return res.status(404).redirect('/usuarios?error=Usuario%20no%20encontrado.');
+    if (result.affectedRows !== 1) return toUsers(req, res, { error: 'Usuario no encontrado.' });
     if (!isActive) revokeUserSessions(userId);
-    return res.redirect(`/usuarios?message=${encodeURIComponent(isActive ? 'Usuario habilitado.' : 'Usuario deshabilitado.')}`);
+    return toUsers(req, res, { message: `${users[0].email} ${isActive ? 'habilitado' : 'deshabilitado'}.` });
   } catch (error) {
     return next(error);
   }

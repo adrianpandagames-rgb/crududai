@@ -129,4 +129,24 @@
       <% } %>
     </article>
   </div>
+
+  <% const quota = googleGeocodingQuota; %>
+  <% const quotaPercent = Math.min(Math.round((quota.requestCount / Math.max(quota.limit, 1)) * 100), 100); %>
+  <div class="col-12">
+    <article class="chart-panel geocoding-panel<%= quota.isBlocked ? ' is-blocked' : '' %>">
+      <div class="geocoding-info">
+        <h3>Google Geocoding</h3>
+        <div class="chart-caption mb-2">Consultas a la API: <strong><%= formatNumber(quota.requestCount) %> / <%= formatNumber(quota.limit) %></strong> (<%= quotaPercent %> %)</div>
+        <div class="bar-track" role="progressbar" aria-label="Consumo de Google Geocoding" aria-valuenow="<%= quota.requestCount %>" aria-valuemin="0" aria-valuemax="<%= quota.limit %>">
+          <div class="bar-fill<%= quotaPercent >= 80 ? ' is-high' : '' %>" style="width: <%= quotaPercent %>%"></div>
+        </div>
+        <% if (quota.isBlocked) { %>
+          <div class="alert alert-danger mt-3 mb-0" role="alert">ALARMA: se alcanzó el límite de consultas. Geocoding está bloqueado hasta reiniciar el contador.</div>
+        <% } %>
+      </div>
+      <form action="/medidores/google-geocoding/reiniciar" method="POST" onsubmit="return confirm('¿Reiniciar el contador de Google Geocoding y desbloquear el servicio?');">
+        <button class="btn btn-outline-danger" type="submit">Reiniciar contador y desbloquear</button>
+      </form>
+    </article>
+  </div>
 </section>
