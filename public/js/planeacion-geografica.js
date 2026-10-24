@@ -157,7 +157,11 @@ if (!window.L) {
 
   function antennaSummary() {
     const fragment = document.createDocumentFragment();
-    for (const group of summarizeAntennas(data)) {
+    // Only antennas that can be placed on the map are listed; the rest are counted in a note.
+    const groups = summarizeAntennas(data);
+    const located = groups.filter((group) => group.points.length);
+    const hiddenRecords = groups.reduce((sum, group) => sum + (group.points.length ? 0 : group.rows.length), 0);
+    for (const group of located) {
       const item = document.createElement('div');
       item.className = 'planning-antenna-item';
       const button = document.createElement('button');
@@ -181,13 +185,9 @@ if (!window.L) {
         draw({ fit: true });
         const description = document.createElement('div');
         description.textContent = `${group.name} · ${group.ubicacion} · ${group.lugar} · ${group.rows.length} registros`;
-        if (group.points.length) {
-          const point = group.points[0];
-          L.popup().setLatLng([point.lat, point.lng]).setContent(description).openOn(map);
-          mapElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        } else {
-          message(`${group.name}: ${group.rows.length} registros sin coordenadas válidas para mostrar en el mapa.`, true);
-        }
+        const point = group.points[0];
+        L.popup().setLatLng([point.lat, point.lng]).setContent(description).openOn(map);
+        mapElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       });
       const copy = document.createElement('button');
       copy.type = 'button';
@@ -204,6 +204,18 @@ if (!window.L) {
       });
       item.append(button, copy);
       fragment.append(item);
+    }
+    if (!located.length) {
+      const empty = document.createElement('p');
+      empty.className = 'small mb-0';
+      empty.textContent = 'Ninguna antena del archivo tiene coordenadas válidas.';
+      fragment.append(empty);
+    }
+    if (hiddenRecords) {
+      const note = document.createElement('p');
+      note.className = 'small text-muted mb-0';
+      note.textContent = `${hiddenRecords} registros sin coordenadas válidas no se muestran en esta lista.`;
+      fragment.append(note);
     }
     byId('planningAntennas').replaceChildren(fragment);
   }
