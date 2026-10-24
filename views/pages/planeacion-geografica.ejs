@@ -7,7 +7,7 @@
 </head>
 <body>
   <%- include('../includes/header') %>
-  <main class="container-fluid page-offset planning-page" data-user="<%= typeof currentUser !== 'undefined' && currentUser ? currentUser.id : '' %>">
+  <main class="container-fluid page-offset planning-page">
     <h2 class="text-center title mt-5 mb-4">Planeación geográfica<hr /></h2>
     <form id="planningUpload" class="card p-4 mb-4" enctype="multipart/form-data">
       <div class="row">
@@ -27,13 +27,9 @@
           <button id="planningSubmit" class="btn btn-primary w-100" type="submit">Importar y mostrar mapa</button>
         </div>
       </div>
-      <p class="form-text mb-0">Se conservan las columnas originales y se completan antena, ubicación, lugar, latitud y longitud, igual que en Ruta. La columna azimut o azimuth define la orientación de cada sector; las columnas fecha y hora permiten filtrar por periodo.</p>
+      <p class="form-text mb-0">Se conservan las columnas originales y se completan antena, ubicación, lugar, latitud y longitud, igual que en Ruta. La columna azimut o azimuth define la orientación de cada sector; las columnas fecha y hora permiten filtrar por periodo. El archivo no se guarda: se descarta al salir o recargar la página.</p>
     </form>
     <div id="planningStatus" class="alert alert-info" role="status" aria-live="polite">Importa un archivo para mostrar las antenas y sus sectores de cobertura.</div>
-    <div id="planningRestored" class="alert alert-secondary d-flex flex-wrap align-items-center justify-content-between gap-2" hidden>
-      <span id="planningRestoredText"></span>
-      <button id="planningDiscard" type="button" class="btn btn-sm btn-outline-secondary">Descartar archivo</button>
-    </div>
     <div id="planningWorkspace" class="planning-workspace has-records">
     <section class="card p-3 planning-map-panel" aria-label="Mapa de cobertura">
       <div class="row align-items-end mb-2">

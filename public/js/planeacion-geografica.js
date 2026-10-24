@@ -4,10 +4,13 @@ import { summarizeAntennas, antennaClipboardText, rowMatches, frequencyScale, se
 const byId = (id) => document.getElementById(id);
 const status = byId('planningStatus');
 const PAGE_SIZE = 200;
-// The last import survives a reload of this tab only, and only for the user who imported it.
-const STORAGE_PREFIX = 'planeacion-geografica-ultima:';
-const STORAGE_KEY = STORAGE_PREFIX + (document.querySelector('.planning-page')?.dataset.user || '');
-const STORAGE_LIMIT = 4_500_000;
+// Imported files live only in this page: leaving or reloading it discards them. Earlier versions
+// kept the last import in sessionStorage; wipe anything they left behind.
+try {
+  for (const key of Object.keys(sessionStorage)) {
+    if (key.startsWith('planeacion-geografica-ultima')) sessionStorage.removeItem(key);
+  }
+} catch { /* Storage may be disabled; nothing was saved then. */ }
 
 async function copyAntenna(text) {
   try {
@@ -373,7 +376,7 @@ if (!window.L) {
       if (current) current.querySelector('input[type="checkbox"]').checked = true;
     }
   }
-  function load(result, { restored = false } = {}) {
+  function load(result) {
     data = { times: {}, hasTimes: false, ...result };
     selectedRows.clear();
     selectionActive = false;
@@ -407,11 +410,6 @@ if (!window.L) {
     byId('planningExport').disabled = false;
     table();
     draw({ fit: true });
-    byId('planningRestored').hidden = !restored;
-    if (restored) byId('planningRestoredText').textContent = `Se recuperó la última importación de esta pestaña: ${data.name} · Línea ${data.line}.`;
-  }
-  function clearStored() {
-    try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* Storage may be disabled. */ }
   }
 
   byId('planningUpload').addEventListener('submit', async (event) => {
@@ -431,11 +429,6 @@ if (!window.L) {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'No fue posible importar el archivo.');
       load(result);
-      clearStored();
-      try {
-        const serialized = JSON.stringify(result);
-        if (serialized.length <= STORAGE_LIMIT) sessionStorage.setItem(STORAGE_KEY, serialized);
-      } catch { /* Too large or storage disabled: the map still works, it just won't survive a reload. */ }
     } catch (error) {
       message(error.message || 'No fue posible conectar con el servidor.', true);
     } finally {
@@ -495,18 +488,4 @@ if (!window.L) {
     if (!data || !selectedRows.size) return;
     download(`Planeacion-${safeLine(data.line)}-seleccion.csv`, selectionCsv(data.headers, data.rows, selectedRows));
   });
-  byId('planningDiscard').addEventListener('click', () => {
-    clearStored();
-    window.location.reload();
-  });
-
-  let stored = null;
-  try {
-    // Someone else may have used this tab before logging out; drop their file.
-    for (const key of Object.keys(sessionStorage)) {
-      if (key.startsWith(STORAGE_PREFIX) && key !== STORAGE_KEY) sessionStorage.removeItem(key);
-    }
-    stored = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || 'null');
-  } catch { stored = null; }
-  if (stored?.rows && stored?.headers && stored?.points) load(stored, { restored: true });
 }
