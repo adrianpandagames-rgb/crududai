@@ -122,3 +122,14 @@ test('mounted routers are audited with their full path', async (t) => {
   assert.deepEqual(events.map(({ requestPath, action }) => `${action} ${requestPath}`),
     ['CONSULTA /planeacion-geografica', 'POST /planeacion-geografica/importar']);
 });
+
+test('the header lights up the section being viewed, sub-pages included', async () => {
+  const render = (currentPath) => ejs.renderFile('views/includes/header.ejs', { currentUser: { isAdmin: true, role: 'admin' }, currentPath });
+  const current = (html) => [...html.matchAll(/class="menu-item is-current"[^>]*>([^<]+)</g)].map((match) => match[1]);
+  assert.deepEqual(current(await render('/imei/editar/5')), ['IMEI']);
+  assert.deepEqual(current(await render('/planeacion-geografica')), ['Planeación geográfica']);
+  assert.deepEqual(current(await render('/auditoria')), ['Administración', 'Auditoría']);
+  assert.deepEqual(current(await render('/imeis')), []);
+  assert.match(await render('/ruta'), /href="\/ruta" aria-current="page"/);
+  assert.deepEqual(current(await ejs.renderFile('views/includes/header.ejs', { currentUser: { isAdmin: false } })), []);
+});

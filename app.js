@@ -114,6 +114,11 @@ app.use((req, res, next) => {
 });
 
 app.use(auditActivity);
+// The header highlights the section being viewed. Taken here, before any router strips its prefix.
+app.use((req, res, next) => {
+  res.locals.currentPath = req.path;
+  next();
+});
 
 const requireAuth = async (req, res, next) => {
   const token = getAuthToken(req);

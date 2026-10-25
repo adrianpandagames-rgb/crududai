@@ -1,3 +1,8 @@
+<%# The section being viewed gets a light (see menu.css); sub-pages such as /imei/editar/5 count too. %>
+<% const navPath = (typeof currentPath === 'string' ? currentPath : '').toLowerCase().replace(/\/+$/, '') || '/'; %>
+<% const navAt = (...paths) => paths.some((path) => navPath === path.toLowerCase() || navPath.startsWith(path.toLowerCase() + '/')); %>
+<% const navClass = (...paths) => (navAt(...paths) ? ' is-current' : ''); %>
+<% const navAria = (...paths) => (navAt(...paths) ? ' aria-current="page"' : ''); %>
 <header class="header">
   <a href="/Crud" class="logo">
     <img src="/public/imgs/logo.png" alt="Logo" />
@@ -8,50 +13,50 @@
   <ul class="menu">
     <% if (!(typeof currentUser !== 'undefined' && currentUser.role === 'uecs')) { %>
     <li>
-      <a class="menu-item" href="/metricas">Métricas</a>
+      <a class="menu-item<%= navClass('/metricas') %>" href="/metricas"<%- navAria('/metricas') %>>Métricas</a>
     </li>
     <% } %>
     <li>
-      <a class="menu-item" href="/Crud">Líneas</a>
+      <a class="menu-item<%= navClass('/Crud', '/lineas', '/estudiantes') %>" href="/Crud"<%- navAria('/Crud', '/lineas', '/estudiantes') %>>Líneas</a>
     </li>
     <li>
-      <a class="menu-item" href="/imei">IMEI</a>
+      <a class="menu-item<%= navClass('/imei') %>" href="/imei"<%- navAria('/imei') %>>IMEI</a>
     </li>
     <li>
-      <a class="menu-item" href="/ubicaciones">Ubicaciones</a>
+      <a class="menu-item<%= navClass('/ubicaciones') %>" href="/ubicaciones"<%- navAria('/ubicaciones') %>>Ubicaciones</a>
     </li>
     <% if (typeof currentUser !== 'undefined' && (currentUser.isAdmin || currentUser.role === 'uecs')) { %>
     <li>
-      <a class="menu-item" href="/georeferenciacion">Georeferenciación</a>
+      <a class="menu-item<%= navClass('/georeferenciacion') %>" href="/georeferenciacion"<%- navAria('/georeferenciacion') %>>Georeferenciación</a>
     </li>
     <% } %>
     <li>
-      <a class="menu-item" href="/planeacion-geografica">Planeación geográfica</a>
+      <a class="menu-item<%= navClass('/planeacion-geografica') %>" href="/planeacion-geografica"<%- navAria('/planeacion-geografica') %>>Planeación geográfica</a>
     </li>
     <li>
-      <a class="menu-item" href="/ruta">Ruta</a>
+      <a class="menu-item<%= navClass('/ruta') %>" href="/ruta"<%- navAria('/ruta') %>>Ruta</a>
     </li>
     <li>
-      <a class="menu-item" href="/telefono">Líneas Internacionales</a>
+      <a class="menu-item<%= navClass('/telefono') %>" href="/telefono"<%- navAria('/telefono') %>>Líneas Internacionales</a>
     </li>
     <li>
-      <a class="menu-item" href="/maigret">Maigret</a>
+      <a class="menu-item<%= navClass('/maigret') %>" href="/maigret"<%- navAria('/maigret') %>>Maigret</a>
     </li>
     <li>
-      <a class="menu-item" href="/imagenes">Búsqueda por imagen</a>
+      <a class="menu-item<%= navClass('/imagenes') %>" href="/imagenes"<%- navAria('/imagenes') %>>Búsqueda por imagen</a>
     </li>
     <li>
-      <a class="menu-item" href="/nombres">RastroX</a>
+      <a class="menu-item<%= navClass('/nombres') %>" href="/nombres"<%- navAria('/nombres') %>>RastroX</a>
     </li>
     <% if (typeof currentUser !== 'undefined' && currentUser.isAdmin && currentUser.role !== 'uecs') { %>
     <li class="admin-menu">
       <details>
-        <summary class="menu-item">Administración</summary>
+        <summary class="menu-item<%= navClass('/usuarios', '/auditoria', '/medidores', '/red-telefonica') %>">Administración</summary>
         <ul class="admin-submenu">
-          <li><a class="menu-item" href="/usuarios">Usuarios</a></li>
-          <li><a class="menu-item" href="/auditoria">Auditoría</a></li>
-          <li><a class="menu-item" href="/medidores">Medidores</a></li>
-          <li><a class="menu-item" href="/red-telefonica">Red telefónica</a></li>
+          <li><a class="menu-item<%= navClass('/usuarios') %>" href="/usuarios"<%- navAria('/usuarios') %>>Usuarios</a></li>
+          <li><a class="menu-item<%= navClass('/auditoria') %>" href="/auditoria"<%- navAria('/auditoria') %>>Auditoría</a></li>
+          <li><a class="menu-item<%= navClass('/medidores') %>" href="/medidores"<%- navAria('/medidores') %>>Medidores</a></li>
+          <li><a class="menu-item<%= navClass('/red-telefonica') %>" href="/red-telefonica"<%- navAria('/red-telefonica') %>>Red telefónica</a></li>
         </ul>
       </details>
     </li>
