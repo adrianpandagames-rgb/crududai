@@ -68,7 +68,7 @@ Un archivo `001-backup.sql.partial` indica una exportación fallida; revisa el
 error y retira ese archivo antes de volver a intentar. Cambiar el respaldo o las
 credenciales de los archivos no modifica un volumen ya inicializado.
 
-Incluye `package-lock.json` y `xlsx-0.18.5.tgz` al trasladar o versionar el
+Incluye `package-lock.json` y `xlsx-0.20.3.tgz` al trasladar o versionar el
 proyecto: `npm ci` necesita ambos. Conserva también, de forma privada, los tres
 archivos generados al trasladar esta instalación. Las dependencias nativas se
 instalan dentro de Linux; no se copia `node_modules` de Windows.

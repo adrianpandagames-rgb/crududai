@@ -3,7 +3,7 @@ FROM node:22-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production
 
-COPY package.json package-lock.json xlsx-0.18.5.tgz ./
+COPY package.json package-lock.json xlsx-0.20.3.tgz ./
 RUN npm ci --omit=dev && npm cache clean --force
 
 COPY app.js ./

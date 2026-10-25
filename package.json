@@ -43,7 +43,7 @@
     "sharp": "^0.35.4",
     "swagger-jsdoc": "^6.3.0",
     "swagger-ui-express": "^5.0.1",
-    "xlsx": "file:xlsx-0.18.5.tgz"
+    "xlsx": "file:xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "nodemon": "^3.1.14",

@@ -169,7 +169,7 @@ add-ruta-admin.js
 
 # Required for reproducible Docker builds.
 !package-lock.json
-!xlsx-0.18.5.tgz
+!xlsx-0.20.3.tgz
 .env.docker
 docker/mysql.env
 docker/init/*.sql
