@@ -45,9 +45,10 @@ test('Sherlock, Holehe and Ignorant outputs are read into accounts', () => {
   assert.deepEqual(holehe.accounts[1].fields.map(({ key, value }) => `${key}: ${value}`), ['Correo de recuperación: j*****@gmail.com', 'Teléfono asociado: +52 *** *** **67']);
   assert.deepEqual(holehe.unverified, ['spotify.com']);
 
-  const ignorant = parseIgnorantOutput('\u001b[32m[+] instagram.com\u001b[0m\n[-] amazon.com\n[x] snapchat.com\n3 websites checked');
-  assert.deepEqual(ignorant.accounts.map((account) => account.site), ['instagram.com']);
-  assert.deepEqual(ignorant.unverified, ['snapchat.com']);
+  const ignorant = parseIgnorantOutput('\u001b[32m[+] amazon.com\u001b[0m\n[+] instagram.com\n[x] snapchat.com\n[+] Phone number used, [-] Phone number not used\n3 websites checked');
+  assert.deepEqual(ignorant.accounts.map((account) => account.site), ['amazon.com']);
+  // Instagram says "registered" for any number, so it never counts as a registration.
+  assert.deepEqual(ignorant.unverified, ['instagram.com', 'snapchat.com']);
   assert.equal(ignorant.checked, 3);
 });
 

@@ -171,6 +171,10 @@ export const IGNORANT_TIMEOUT_MS = 3 * 60 * 1000;
 // Same --timeout bug as Holehe, so its default is kept.
 export const buildIgnorantArgs = (countryCode, phone) => [countryCode, phone, '--no-color', '--no-clear'];
 
+// Checked on 2026-10-25 with four made-up numbers: Ignorant's Instagram module answers "registered" for any
+// number, so its "[+]" is never shown as a registration.
+export const IGNORANT_UNRELIABLE_SITES = new Set(['instagram.com']);
+
 // Ignorant only prints lines: "[+] site" registered, "[-] site" not registered, "[x] site" rate limited.
 export function parseIgnorantOutput(log) {
   const accounts = [];
@@ -181,8 +185,8 @@ export function parseIgnorantOutput(log) {
     if (!match) continue;
     checked++;
     const domain = match[2].toLowerCase();
-    if (match[1] === '+') accounts.push({ site: domain, url: `https://${domain}`, tags: [], similar: false, fields: [], sources: ['ignorant'] });
-    if (match[1] === 'x') unverified.push(domain);
+    if (match[1] === 'x' || (match[1] === '+' && IGNORANT_UNRELIABLE_SITES.has(domain))) unverified.push(domain);
+    else if (match[1] === '+') accounts.push({ site: domain, url: `https://${domain}`, tags: [], similar: false, fields: [], sources: ['ignorant'] });
   }
   return { accounts, unverified, checked };
 }
