@@ -56,8 +56,27 @@ a {
   display: none;
 }
 
-.header .admin-submenu {
+.header .menu-submenu {
   display: none;
+}
+
+/* A small arrow marks the entries that open a group. */
+.header .menu-group > details > summary.menu-item::after {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 8px;
+  vertical-align: 3px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 0.2s ease;
+}
+
+.header .menu-group > details[open] > summary.menu-item::after {
+  transform: rotate(-135deg);
+  vertical-align: -1px;
 }
 
 .header .logo {
@@ -93,7 +112,7 @@ a {
   transition: max-height 0.2s ease-out;
 }
 
-.header details[open] > .admin-submenu {
+.header details[open] > .menu-submenu {
   display: block;
   padding: 0 0 0 16px;
 }
@@ -165,9 +184,9 @@ a {
   top: 0;
 }
 
-/* 75em = 1200px: below this the ten admin links do not fit on one row */
+/* 64em = 1024px: below this the logo, Métricas, the four groups and "Cerrar sesión" do not fit on one row */
 
-@media (min-width: 75em) {
+@media (min-width: 64em) {
   .header li {
     float: left;
   }
@@ -187,33 +206,39 @@ a {
     display: none;
   }
 
-  .header .admin-menu {
+  .header .menu-group {
     position: relative;
   }
 
-  .header details[open] > .admin-submenu {
+  .header details[open] > .menu-submenu {
     display: block;
     position: absolute;
     top: 100%;
-    right: 0;
-    min-width: 190px;
+    left: 0;
+    min-width: 220px;
     padding: 8px;
     border: 1px solid #e5e7eb;
     border-radius: 8px;
     box-shadow: 0 12px 24px rgba(15, 23, 42, 0.1);
   }
 
-  .header .admin-submenu li {
+  /* Administración is the last group; open it towards the left so it stays on screen. */
+  .header details[open] > .admin-submenu {
+    left: auto;
+    right: 0;
+  }
+
+  .header .menu-submenu li {
     float: none;
   }
 
-  .header .admin-submenu li a {
+  .header .menu-submenu li a {
     padding: 12px 16px;
   }
 }
 
 /* The logo text competes with the links for space on smaller desktops. */
-@media (min-width: 75em) and (max-width: 87.5em) {
+@media (min-width: 64em) and (max-width: 80em) {
   .logo-text {
     display: none;
   }

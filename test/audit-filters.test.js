@@ -126,10 +126,31 @@ test('mounted routers are audited with their full path', async (t) => {
 test('the header lights up the section being viewed, sub-pages included', async () => {
   const render = (currentPath) => ejs.renderFile('views/includes/header.ejs', { currentUser: { isAdmin: true, role: 'admin' }, currentPath });
   const current = (html) => [...html.matchAll(/class="menu-item is-current"[^>]*>([^<]+)</g)].map((match) => match[1]);
-  assert.deepEqual(current(await render('/imei/editar/5')), ['IMEI']);
-  assert.deepEqual(current(await render('/planeacion-geografica')), ['Planeación geográfica']);
+  assert.deepEqual(current(await render('/imei/editar/5')), ['Datos conservados', 'IMEI']);
+  assert.deepEqual(current(await render('/planeacion-geografica')), ['Mapeo', 'Planeación geográfica']);
   assert.deepEqual(current(await render('/auditoria')), ['Administración', 'Auditoría']);
+  assert.deepEqual(current(await render('/metricas')), ['Métricas']);
   assert.deepEqual(current(await render('/imeis')), []);
   assert.match(await render('/ruta'), /href="\/ruta" aria-current="page"/);
   assert.deepEqual(current(await ejs.renderFile('views/includes/header.ejs', { currentUser: { isAdmin: false } })), []);
+});
+
+test('the menu is grouped and each role keeps exactly its links', async () => {
+  const menu = async (currentUser) => {
+    const html = await ejs.renderFile('views/includes/header.ejs', { currentUser, currentPath: '/' });
+    return [...html.matchAll(/<summary[^>]*>([^<]+)<\/summary>|<a class="menu-item[^"]*" href="[^"]+"[^>]*>([^<]+)</g)]
+      .map(([, group, link]) => (group ? `[${group}]` : link));
+  };
+  assert.deepEqual(await menu({ isAdmin: true, role: 'admin' }), [
+    'Métricas',
+    '[Datos conservados]', 'Líneas', 'IMEI', 'Ubicaciones',
+    '[Mapeo]', 'Georeferenciación', 'Planeación geográfica', 'Ruta',
+    '[OSINT]', 'Líneas Internacionales', 'Maigret', 'RastroX', 'Búsqueda por imagen',
+    '[Administración]', 'Usuarios', 'Auditoría', 'Medidores', 'Red telefónica',
+    'Cerrar sesión',
+  ]);
+  const user = await menu({ isAdmin: false, role: 'usuario' });
+  assert.ok(user.includes('Métricas') && !user.includes('Georeferenciación') && !user.includes('[Administración]'));
+  const uecs = await menu({ isAdmin: false, role: 'uecs' });
+  assert.ok(!uecs.includes('Métricas') && uecs.includes('Georeferenciación') && !uecs.includes('[Administración]'));
 });
