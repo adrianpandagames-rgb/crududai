@@ -9,9 +9,9 @@
   { label: 'Datos conservados', links: [
     ['Líneas', '/Crud', ['/lineas', '/estudiantes']],
     ['IMEI', '/imei'],
-    ['Ubicaciones', '/ubicaciones'],
   ] },
   { label: 'Mapeo', links: [
+    ['Ubicaciones', '/ubicaciones'],
     ...(user.isAdmin || isUecs ? [['Georeferenciación', '/georeferenciacion']] : []),
     ['Planeación geográfica', '/planeacion-geografica'],
     ['Ruta', '/ruta'],
