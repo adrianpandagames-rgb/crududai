@@ -245,10 +245,8 @@ document.getElementById('importCsvButton').addEventListener('click', function(ev
                     if (result.status === 'duplicado_detectado' || result.status === 'confirm_followup') {
                       const confirmMessage = result.duplicado.message ||
                         `La línea ${result.duplicado.numObjetivo} ya está registrada con los mismos contactos.\nTipo actual: ${result.duplicado.tipoExistente}.\n\n¿Desea conservarlo como Seguimiento?`;
-                      if (confirm(confirmMessage)) {
+                      if (await window.confirmToast(confirmMessage, { action: 'Conservar como Seguimiento', tone: 'primary' })) {
                         await submitRealImport(form, true);
-                      } else {
-                        alert('Importación cancelada.');
                       }
                     } else if (result.status === 'ready') {
                       await submitRealImport(form, false);

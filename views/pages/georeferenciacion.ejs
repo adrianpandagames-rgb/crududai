@@ -89,7 +89,7 @@
                         <% } else { %>
                           <button type="button" class="btn btn-sm btn-secondary" disabled>Exportar XLSX</button>
                         <% } %>
-                        <form action="/georeferenciacion/eliminar/<%= file.id %>" method="POST" class="m-0 flex-shrink-0" onsubmit="return confirm('¿Eliminar este archivo de Georeferenciación?');">
+                        <form action="/georeferenciacion/eliminar/<%= file.id %>" method="POST" class="m-0 flex-shrink-0" data-confirm="¿Eliminar este archivo de Georeferenciación?">
                           <button type="submit" class="btn btn-sm btn-outline-danger" aria-label="Eliminar archivo" title="Eliminar archivo">
                             <i class="bi bi-trash3" aria-hidden="true"></i>
                           </button>

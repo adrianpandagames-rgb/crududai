@@ -144,7 +144,7 @@
           <div class="alert alert-danger mt-3 mb-0" role="alert">ALARMA: se alcanzó el límite de consultas. Geocoding está bloqueado hasta reiniciar el contador.</div>
         <% } %>
       </div>
-      <form action="/medidores/google-geocoding/reiniciar" method="POST" onsubmit="return confirm('¿Reiniciar el contador de Google Geocoding y desbloquear el servicio?');">
+      <form action="/medidores/google-geocoding/reiniciar" method="POST" data-confirm="¿Reiniciar el contador de Google Geocoding y desbloquear el servicio?" data-confirm-action="Reiniciar">
         <button class="btn btn-outline-danger" type="submit">Reiniciar contador y desbloquear</button>
       </form>
     </article>

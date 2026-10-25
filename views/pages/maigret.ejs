@@ -149,12 +149,6 @@
       </div>
     </main>
 
-    <script>
-      // The confirmation text lives in a data attribute so searched values never end up inside inline JavaScript.
-      document.querySelectorAll('form[data-confirm]').forEach((form) => form.addEventListener('submit', (event) => {
-        if (!window.confirm(form.dataset.confirm)) event.preventDefault();
-      }));
-    </script>
     <% if (searches.some((search) => search.status === 'pendiente' || search.status === 'procesando')) { %>
       <script>
         // Reload while searches run, unless the analyst is typing a new one.

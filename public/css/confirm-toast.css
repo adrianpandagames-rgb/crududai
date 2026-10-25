@@ -1,0 +1,72 @@
+/* Confirmation toast (public/js/confirm-toast.js): same corner and shape as the green notice toast. */
+.confirm-toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 10001;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px 12px;
+  align-items: start;
+  width: min(420px, calc(100vw - 32px));
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  background: linear-gradient(135deg, #1f2937, #374151);
+  color: #fff;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.35);
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.confirm-toast.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+.confirm-toast-icon {
+  margin-top: 1px;
+  color: #fbbf24;
+  font-size: 20px;
+}
+
+.confirm-toast .bi-question-circle-fill {
+  color: #93c5fd;
+}
+
+.confirm-toast-message {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+.confirm-toast-buttons {
+  display: flex;
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.confirm-toast-buttons .btn:focus-visible {
+  outline: 3px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+@media (max-width: 576px) {
+  .confirm-toast {
+    top: auto;
+    right: 16px;
+    bottom: 16px;
+    left: 16px;
+    width: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .confirm-toast {
+    transition: none;
+  }
+}

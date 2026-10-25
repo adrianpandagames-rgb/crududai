@@ -79,8 +79,9 @@
                         <% } else { %>
                           <button type="button" class="btn btn-sm btn-secondary" disabled>Exportar XLSX</button>
                         <% } %>
-                        <form action="/ruta/eliminar/<%= file.id %>" method="POST" class="m-0 flex-shrink-0 ruta-delete-form" data-line-number="<%= file.lineNumber %>">
-                          <button type="button" class="btn btn-sm btn-outline-danger ruta-delete-open" aria-label="Eliminar archivo" title="Eliminar archivo">
+                        <form action="/ruta/eliminar/<%= file.id %>" method="POST" class="m-0 flex-shrink-0"
+                          data-confirm="¿Desea eliminar ruta de línea &quot;<%= file.lineNumber %>&quot;?">
+                          <button type="submit" class="btn btn-sm btn-outline-danger" aria-label="Eliminar archivo" title="Eliminar archivo">
                             <i class="bi bi-trash3" aria-hidden="true"></i>
                           </button>
                         </form>
@@ -101,22 +102,13 @@
       </div>
     </main>
 
-    <dialog id="rutaDeleteModal" class="ruta-delete-modal" aria-labelledby="rutaDeleteTitle" aria-describedby="rutaDeleteMessage">
-      <h3 id="rutaDeleteTitle" class="h5 mb-3">Eliminar ruta</h3>
-      <p id="rutaDeleteMessage">¿Desea eliminar ruta de línea "<span id="rutaDeleteLine"></span>"?</p>
-      <div class="d-flex justify-content-end gap-2">
-        <button type="button" id="rutaDeleteConfirm" class="btn btn-danger">Eliminar</button>
-        <button type="button" id="rutaDeleteCancel" class="btn btn-secondary" autofocus>Cancelar</button>
-      </div>
-    </dialog>
-
-    <script src="/public/js/ruta-delete.js"></script>
     <script src="/public/js/ruta-upload.js"></script>
 
     <% if (files.some((file) => file.status === 'pendiente')) { %>
       <script>
         setInterval(() => {
-          if (!document.getElementById('rutaDeleteModal').open) window.location.reload();
+          // Never reload while a delete confirmation is waiting for an answer.
+          if (!document.querySelector('.confirm-toast')) window.location.reload();
         }, 5000);
       </script>
     <% } %>

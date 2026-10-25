@@ -141,7 +141,8 @@
                         </div>
                       </td>
                       <td data-label="Rol">
-                        <form action="/usuarios/<%= user.id %>/rol" method="POST" class="user-role-form" data-role-email="<%= user.email %>">
+                        <form action="/usuarios/<%= user.id %>/rol" method="POST" class="user-role-form" data-role-email="<%= user.email %>"
+                          data-confirm-action="Cambiar rol" data-confirm-tone="primary">
                           <select name="role" class="form-select form-select-sm" data-current="<%= user.role %>" aria-label="Rol de <%= user.email %>" <%= locked ? 'disabled' : '' %>
                             title="<%= locked ? 'Solo el administrador inicial puede cambiar su propio rol' : roleDescriptions[user.role] %>">
                             <% userRoles.forEach((role) => { %>
@@ -154,7 +155,8 @@
                       <td data-label="Estado" class="text-nowrap">
                         <span class="badge <%= user.isActive ? 'bg-success' : 'bg-danger' %> me-1"><%= user.isActive ? 'Activo' : 'Deshabilitado' %></span>
                         <form action="/usuarios/<%= user.id %>/estado" method="POST" class="user-inline-form"
-                          data-confirm="<%= user.isActive ? `¿Deshabilitar a ${user.email}? Se cerrarán sus sesiones abiertas.` : `¿Habilitar a ${user.email}?` %>">
+                          data-confirm="<%= user.isActive ? `¿Deshabilitar a ${user.email}? Se cerrarán sus sesiones abiertas.` : `¿Habilitar a ${user.email}?` %>"
+                          data-confirm-action="<%= user.isActive ? 'Deshabilitar' : 'Habilitar' %>"<%- user.isActive ? '' : ' data-confirm-tone="primary"' %>>
                           <input type="hidden" name="isActive" value="<%= user.isActive ? '0' : '1' %>">
                           <button class="btn btn-sm btn-outline-<%= user.isActive ? 'danger' : 'success' %>" type="submit"
                             <%= (isSelf && user.isActive) || locked ? 'disabled' : '' %>
@@ -178,7 +180,8 @@
                               <button class="btn btn-sm btn-outline-primary" type="submit">Guardar ID</button>
                             </form>
                             <form action="/usuarios/<%= user.id %>/restablecer-contrasena" method="POST"
-                              data-confirm="<%= isSelf ? '¿Generar una contraseña nueva para tu cuenta? Se cerrará tu sesión.' : `¿Generar una contraseña nueva para ${user.email}? Se cerrarán sus sesiones y recibirá la contraseña temporal por correo.` %>">
+                              data-confirm="<%= isSelf ? '¿Generar una contraseña nueva para tu cuenta? Se cerrará tu sesión.' : `¿Generar una contraseña nueva para ${user.email}? Se cerrarán sus sesiones y recibirá la contraseña temporal por correo.` %>"
+                              data-confirm-action="Generar contraseña">
                               <button class="btn btn-sm btn-outline-secondary" type="submit" <%= locked ? 'disabled' : '' %>
                                 <% if (locked) { %>title="Solo el administrador inicial puede cambiar su contraseña"<% } %>>Generar contraseña</button>
                             </form>
@@ -202,15 +205,19 @@
         const help = document.getElementById('new-user-role-help');
         select?.addEventListener('change', () => { help.textContent = descriptions[select.value] || ''; });
 
-        // Confirmation texts live in data attributes so e-mails never end up inside inline JavaScript.
-        document.querySelectorAll('form[data-confirm]').forEach((form) => form.addEventListener('submit', (event) => {
-          if (!window.confirm(form.dataset.confirm)) event.preventDefault();
-        }));
-        document.querySelectorAll('form[data-role-email]').forEach((form) => form.addEventListener('submit', (event) => {
+        // Forms with data-confirm ask through the shared confirmation toast (public/js/confirm-toast.js).
+        // The role question depends on the role picked, so it is written when the selection changes;
+        // saving the same role asks nothing.
+        document.querySelectorAll('form[data-role-email]').forEach((form) => {
           const role = form.elements.role;
-          if (role.value === role.dataset.current) return;
-          if (!window.confirm(`¿Cambiar el rol de ${form.dataset.roleEmail} a ${role.options[role.selectedIndex].text}?`)) event.preventDefault();
-        }));
+          role.addEventListener('change', () => {
+            if (role.value === role.dataset.current) {
+              delete form.dataset.confirm;
+              return;
+            }
+            form.dataset.confirm = `¿Cambiar el rol de ${form.dataset.roleEmail} a ${role.options[role.selectedIndex].text}?`;
+          });
+        });
 
         // Close any open "Más acciones" panel when another opens or when clicking elsewhere.
         const panels = [...document.querySelectorAll('.user-more')];

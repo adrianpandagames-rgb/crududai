@@ -65,7 +65,7 @@
                       <td data-label="Acción">
                         <div class="d-flex align-items-center gap-2 flex-nowrap">
                           <a class="btn btn-sm btn-outline-primary" href="/imagenes/<%= image.id %>">Ver</a>
-                          <form action="/imagenes/eliminar/<%= image.id %>" method="POST" class="m-0" onsubmit="return confirm('¿Eliminar esta imagen?');">
+                          <form action="/imagenes/eliminar/<%= image.id %>" method="POST" class="m-0" data-confirm="¿Eliminar esta imagen?">
                             <button type="submit" class="btn btn-sm btn-outline-danger" aria-label="Eliminar imagen" title="Eliminar imagen">
                               <i class="bi bi-trash3" aria-hidden="true"></i>
                             </button>
