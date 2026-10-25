@@ -70,3 +70,29 @@
     transition: none;
   }
 }
+
+/* Error notice (window.noticeToast), in place of alert(): red edge, closes itself. */
+.confirm-toast.is-notice {
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  border-left: 4px solid #ef4444;
+}
+
+.confirm-toast.is-notice .confirm-toast-icon {
+  color: #f87171;
+}
+
+.confirm-toast-close {
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.confirm-toast-close:hover,
+.confirm-toast-close:focus-visible {
+  color: #fff;
+}

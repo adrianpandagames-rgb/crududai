@@ -568,7 +568,7 @@
           }, 1500);
         } catch (error) {
           console.error('Unable to copy IMEI details:', error);
-          alert('No se pudo copiar al portapapeles.');
+          window.noticeToast('No se pudo copiar al portapapeles.');
         }
       });
     </script>

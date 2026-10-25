@@ -175,12 +175,12 @@ document.getElementById('importCsvButton').addEventListener('click', function(ev
                 const csvFile = csvInput.files[0];
 
                 if (!sinUtilidadInput.checked && csvFile && csvFile.size > 5 * 1024 * 1024) {
-                  alert('El CSV supera el límite de 5 MB.');
+                  window.noticeToast('El CSV supera el límite de 5 MB.');
                   return;
                 }
 
                 if (!numObjetivo || !nucObjetivo || !ano || !curso_dc || (!sinUtilidadInput.checked && !csvFile)) {
-                  alert('Todos los campos son requeridos');
+                  window.noticeToast('Todos los campos son requeridos');
                   return;
                 }
 
@@ -188,7 +188,7 @@ document.getElementById('importCsvButton').addEventListener('click', function(ev
                   try {
                     await submitRealImport(form);
                   } catch (error) {
-                    alert('Error al registrar la línea: ' + error.message);
+                    window.noticeToast('Error al registrar la línea: ' + error.message);
                   }
                   return;
                 }
@@ -214,7 +214,7 @@ document.getElementById('importCsvButton').addEventListener('click', function(ev
                     }
 
                     if (headerIndex === -1) {
-                      alert('CSV header debe incluir la columna: contactos');
+                      window.noticeToast('CSV header debe incluir la columna: contactos');
                       return;
                     }
 
@@ -228,7 +228,7 @@ document.getElementById('importCsvButton').addEventListener('click', function(ev
                     }
 
                     if (contactos.length === 0) {
-                      alert('CSV no contiene contactos válidos');
+                      window.noticeToast('CSV no contiene contactos válidos');
                       return;
                     }
 
@@ -253,11 +253,11 @@ document.getElementById('importCsvButton').addEventListener('click', function(ev
                     } else if (result.status === 'success') {
                       window.location.href = result.redirect;
                     } else {
-                      alert('Error: ' + result.message);
+                      window.noticeToast('Error: ' + result.message);
                     }
                   } catch (error) {
                     console.error(error);
-                    alert('Error procesando CSV: ' + error.message);
+                    window.noticeToast('Error procesando CSV: ' + error.message);
                   }
                 };
                 reader.readAsText(csvFile);
@@ -284,9 +284,9 @@ document.getElementById('importCsvButton').addEventListener('click', function(ev
                   sessionStorage.setItem('crudImportPartials', JSON.stringify(data.partialMatches || []));
                   window.location.href = data.redirect;
                 } else if (data.status === 'duplicado_detectado' || data.status === 'confirm_followup') {
-                  alert('No se completó el registro: ' + (data.duplicado?.message || data.message));
+                  window.noticeToast('No se completó el registro: ' + (data.duplicado?.message || data.message));
                 } else {
-                  alert('Error: ' + data.message);
+                  window.noticeToast('Error: ' + data.message);
                 }
               }
 
@@ -341,11 +341,11 @@ document.getElementById('importCsvButton').addEventListener('click', function(ev
                   if (data.status === 'success') {
                     window.location.href = data.redirect;
                   } else {
-                    alert('Error: ' + data.message);
+                    window.noticeToast('Error: ' + data.message);
                   }
                 }).catch(error => {
                   console.error('Error:', error);
-                  alert('Error al procesar la solicitud');
+                  window.noticeToast('Error al procesar la solicitud');
                 });
               };
 

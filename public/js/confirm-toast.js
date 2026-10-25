@@ -2,9 +2,49 @@
 // Forms opt in with data-confirm="¿Pregunta?"; data-confirm-action names the button (default "Eliminar")
 // and data-confirm-tone="primary" makes it blue for actions that do not delete anything.
 // Scripts can also call: if (await window.confirmToast('¿Pregunta?', { action: 'Guardar' })) { ... }
+// window.noticeToast('Mensaje') replaces alert(): an error notice that closes itself after a few seconds.
 (() => {
   if (window.confirmToast) return;
   let pending = null;
+  let notice = null;
+
+  const NOTICE_MS = 8000;
+  const closeNotice = () => {
+    if (!notice) return;
+    const { element, timer } = notice;
+    notice = null;
+    clearTimeout(timer);
+    element.classList.remove('is-visible');
+    setTimeout(() => element.remove(), 200);
+  };
+
+  window.noticeToast = (message) => {
+    closeNotice();
+    const element = document.createElement('div');
+    element.className = 'confirm-toast is-notice';
+    element.setAttribute('role', 'alert');
+    const icon = document.createElement('i');
+    icon.className = 'bi bi-x-circle-fill confirm-toast-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    const text = document.createElement('p');
+    text.className = 'confirm-toast-message';
+    text.textContent = message;
+    const dismiss = document.createElement('button');
+    dismiss.type = 'button';
+    dismiss.className = 'confirm-toast-close';
+    dismiss.setAttribute('aria-label', 'Cerrar aviso');
+    dismiss.textContent = '×';
+    dismiss.addEventListener('click', closeNotice);
+    element.append(icon, text, dismiss);
+    (document.fullscreenElement || document.body).append(element);
+    // Hovering keeps the message open while it is being read.
+    const schedule = () => { clearTimeout(notice?.timer); if (notice) notice.timer = setTimeout(closeNotice, NOTICE_MS); };
+    notice = { element, timer: null };
+    element.addEventListener('mouseenter', () => clearTimeout(notice?.timer));
+    element.addEventListener('mouseleave', schedule);
+    schedule();
+    requestAnimationFrame(() => element.classList.add('is-visible'));
+  };
 
   const close = (answer) => {
     if (!pending) return;
