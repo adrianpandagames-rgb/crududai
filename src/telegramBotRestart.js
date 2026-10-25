@@ -7,7 +7,7 @@ let pendingRestart;
 export function restartTelegramBot({ env = process.env, run = execute, logger = console } = {}) {
   if (pendingRestart) return pendingRestart;
   pendingRestart = (async () => {
-    const name = env.TELEGRAM_BOT_PM2_NAME || 'crududai-telegram';
+    const name = env.TELEGRAM_BOT_PM2_NAME || 'crududai-bot';
     if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(name) || name === 'crududai') {
       throw new Error('Nombre de proceso del bot inválido.');
     }

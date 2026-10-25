@@ -1,12 +1,13 @@
 # Bot de consultas mediante API
 
-### Reinicio automático al guardar un rol en Hostinger
+### Reinicio automático al guardar un ID de Telegram en Hostinger
 
-Al guardar un rol en Usuarios, Node solicita a PM2 reiniciar `crududai-telegram`.
+Al guardar o quitar un ID de Telegram en Usuarios, Node solicita a PM2 reiniciar `crududai-bot`.
+Cambiar un rol no reinicia el bot: los permisos se consultan en cada petición.
 Cuando PM2 confirma el reinicio se muestra el toast **Bot actualizado** y se escribe
 la confirmación en los logs de Node. Esto confirma el reinicio del proceso;
 la conexión posterior con Telegram se revisa en los logs del bot.
-Si falla, el rol permanece guardado y la página muestra un aviso de error.
+Si falla, el ID permanece guardado y la página muestra un aviso de error.
 
 Preparación única en el VPS, desde la raíz del proyecto y con la misma cuenta Linux
 que administra el PM2 de Node (Python 3.10 o posterior y PM2 deben estar instalados):
@@ -16,7 +17,7 @@ python3 -m venv .venv-telegram
 .venv-telegram/bin/python -m pip install -r telegram_bot/requirements.txt
 pm2 start ecosystem.telegram.config.cjs
 pm2 save
-pm2 logs crududai-telegram --lines 30
+pm2 logs crududai-bot --lines 30
 ```
 
 Antes de iniciar este proceso, detén la instancia anterior del bot si ya existe:
@@ -26,7 +27,7 @@ puedes conservarlo y poner su nombre en `TELEGRAM_BOT_PM2_NAME` en `.env`.
 No uses el nombre del proceso web `crududai`. Si PM2 no está en el PATH de Node,
 configura `PM2_EXECUTABLE` con la ruta absoluta que devuelve `command -v pm2`.
 Después de cambiar estas variables, reinicia Node con
-`pm2 restart crududai --update-env`. El reinicio automático se aplica a **Guardar rol**.
+`pm2 restart crududai --update-env`. El reinicio automático se aplica a **Guardar ID**.
 
 ### Búsqueda de nombres de usuario con Maigret
 

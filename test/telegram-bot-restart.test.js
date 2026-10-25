@@ -6,7 +6,7 @@ test('reinicia solamente el bot y espera la confirmación de PM2', async () => {
   const calls = [];
   await restartTelegramBot({ env: {}, run: async (...args) => calls.push(args), logger: { info() {} } });
   assert.equal(calls[0][0], 'pm2');
-  assert.deepEqual(calls[0][1], ['restart', 'crududai-telegram', '--update-env']);
+  assert.deepEqual(calls[0][1], ['restart', 'crududai-bot', '--update-env']);
   assert.equal(calls[0][2].timeout, 20000);
 });
 
