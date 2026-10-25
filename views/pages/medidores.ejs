@@ -458,9 +458,11 @@
         }
 
         const cartoKey = mapElement.dataset.cartoKey;
-        const tileUrl = (dark) => `https://{s}.basemaps.cartocdn.com/${dark ? 'dark_all' : 'light_all'}/{z}/{x}/{y}{r}.png`
+        // CARTO Voyager: roads drawn in color with legible street names. The paler Positron and Dark Matter
+        // styles made it hard to tell which street a hot spot sits on. There is no dark Voyager, so it is
+        // used in both themes.
+        const tileUrl = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
           + (cartoKey ? `?key=${encodeURIComponent(cartoKey)}` : '');
-        const isDark = () => document.documentElement.dataset.theme === 'dark';
 
         fetch('/api/ubicaciones/heatmap')
           .then((response) => {
@@ -474,7 +476,7 @@
             }
 
             const map = L.map(mapElement, { zoomControl: true, attributionControl: true }).setView([23.6345, -102.5528], 5);
-            const tiles = L.tileLayer(tileUrl(isDark()), {
+            L.tileLayer(tileUrl, {
               attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
               maxZoom: 19,
             }).addTo(map);
@@ -483,15 +485,13 @@
               radius: 22,
               blur: 16,
               maxZoom: 12,
-              gradient: { 0.1: '#5ac8fa', 0.35: '#2ec4b6', 0.7: '#f4d35e', 1.0: '#ff4d6d' },
+              // No yellow or orange: Voyager draws main roads in those colors.
+              gradient: { 0.1: '#5ac8fa', 0.4: '#3b6fd6', 0.7: '#c2369b', 1.0: '#e3172e' },
             }).addTo(map);
 
             const bounds = L.latLngBounds(points.map(({ lat, lng }) => [lat, lng]));
             if (bounds.isValid()) map.fitBounds(bounds.pad(0.25));
 
-            // Follow the theme toggle so the base map matches the page.
-            new MutationObserver(() => tiles.setUrl(tileUrl(isDark())))
-              .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
             window.addEventListener('resize', () => map.invalidateSize(), { passive: true });
           })
           .catch((error) => {
