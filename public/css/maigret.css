@@ -11,3 +11,22 @@
 .maigret-fields dt { font-weight: 600; opacity: .75; }
 .maigret-fields dd { margin: 0; word-break: break-word; white-space: pre-line; }
 @media (max-width: 576px) { .maigret-fields { grid-template-columns: 1fr; } .maigret-fields dd { margin-bottom: .35rem; } }
+/* Confidence of a username result: found by both engines, or by only one of them. */
+.maigret-badge.confirmed { background: #d1f2df; color: #0f5132; }
+.maigret-badge.confirmed::before { content: "✔✔ "; }
+.maigret-badge.possible { background: #fff3cd; color: #664d03; }
+.maigret-badge.possible::before { content: "✔ "; }
+/* Kind of search in the list. */
+.maigret-badge[class*="type-"] { margin-bottom: .25rem; font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; }
+.maigret-badge.type-usuario { background: #e7f3f4; color: #075d67; }
+.maigret-badge.type-correo { background: #e8e1fb; color: #4b2a9a; }
+.maigret-badge.type-telefono { background: #fde4d3; color: #8a3b0c; }
+/* Username / e-mail / phone switch above the form. */
+.maigret-type-switch { display: flex; padding: 4px; gap: 4px; border-radius: 10px; background: #eef2f6; }
+.maigret-type-switch a { flex: 1; padding: .5rem; border-radius: 8px; color: #334155; font-weight: 600; text-align: center; text-decoration: none; }
+.maigret-type-switch a:hover { background: #fff; color: #0f5d9a; }
+.maigret-type-switch a.is-selected { background: #fff; color: #0f5d9a; box-shadow: 0 1px 4px rgba(15, 23, 42, .15); }
+html[data-theme="dark"] .maigret-type-switch { background: #111c2c; }
+html[data-theme="dark"] .maigret-type-switch a { color: var(--dark-muted); }
+html[data-theme="dark"] .maigret-type-switch a:hover,
+html[data-theme="dark"] .maigret-type-switch a.is-selected { background: #243d59; color: #fff; }

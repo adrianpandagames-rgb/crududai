@@ -3,6 +3,14 @@ import { spawn } from 'node:child_process';
 import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { mergeSherlockAccounts, runHolehe, runIgnorant, runSherlock } from './osintTools.js';
+
+// The Maigret tab searches by username (Maigret + Sherlock), e-mail (Holehe) or phone (Ignorant).
+export const SEARCH_TYPES = {
+  usuario: { label: 'Usuario', tools: 'Maigret y Sherlock' },
+  correo: { label: 'Correo', tools: 'Holehe' },
+  telefono: { label: 'Teléfono', tools: 'Ignorant' },
+};
 
 export const MAIGRET_MODES = {
   rapida: { label: 'Rápida (100 sitios)', args: ['--top-sites', '100'], timeoutMs: 10 * 60 * 1000 },
@@ -123,4 +131,55 @@ export async function runMaigret({ username, mode, recursive, signal, bin = proc
   } finally {
     await rm(outputDir, { recursive: true, force: true });
   }
+}
+
+const failureNote = (tool, error) => `${tool} no pudo completarse: ${String(error?.message || 'error desconocido').slice(0, 200)}`;
+
+// One entry point for the queue. Every result keeps the shape the pages, the PDF and the bot read:
+// accounts (each with the tools that found it), the usernames searched and optional notes.
+export async function runOsintSearch(options, tools = { runMaigret, runSherlock, runHolehe, runIgnorant }) {
+  const { type = 'usuario', username, mode, recursive, countryCode, phone, signal } = options;
+  if (type === 'correo') {
+    const { accounts, unverified } = await tools.runHolehe({ email: username, signal });
+    return { accounts: accounts.map((account) => ({ ...account, username })), usernames: [username], reportHtml: null,
+      truncated: false, unverified, notes: [] };
+  }
+  if (type === 'telefono') {
+    const { accounts, unverified } = await tools.runIgnorant({ countryCode, phone, signal });
+    return { accounts: accounts.map((account) => ({ ...account, username })), usernames: [username], reportHtml: null,
+      truncated: false, unverified, notes: [] };
+  }
+
+  // Usernames: Sherlock is a second opinion. Either tool alone still gives results, with a note.
+  let maigret = null;
+  let maigretError = null;
+  try {
+    maigret = await tools.runMaigret({ username, mode, recursive, signal });
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    maigretError = error;
+  }
+  let sherlock = null;
+  let sherlockError = null;
+  try {
+    sherlock = await tools.runSherlock({ username, signal });
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    sherlockError = error;
+  }
+  if (!maigret && !sherlock) throw maigretError;
+  const notes = [];
+  if (maigretError) notes.push(failureNote('Maigret', maigretError));
+  if (sherlockError) notes.push(`${failureNote('Sherlock', sherlockError)} Los resultados no están confirmados por un segundo motor.`);
+  const accounts = maigret && sherlock ? mergeSherlockAccounts(maigret.accounts, sherlock, username)
+    : maigret ? maigret.accounts.map((account) => ({ ...account, sources: ['maigret'] }))
+      : sherlock.map(({ site, url }) => ({ username, site, url, tags: [], similar: false, fields: [], sources: ['sherlock'] }));
+  return {
+    accounts,
+    usernames: maigret?.usernames ?? [username],
+    reportHtml: maigret?.reportHtml ?? null,
+    truncated: Boolean(maigret?.truncated),
+    crossChecked: Boolean(maigret && sherlock),
+    notes,
+  };
 }

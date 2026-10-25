@@ -21,32 +21,68 @@
       <div class="row justify-content-md-center mb-4">
         <div class="col-md-5 mb-4">
           <div class="card p-4">
-            <h3 class="text-center mb-4">Buscar nombre de usuario</h3>
-            <form action="/maigret/buscar" method="POST" autocomplete="off">
-              <div class="mb-3">
-                <label for="usuario" class="form-label">Nombre de usuario</label>
-                <input type="text" id="usuario" name="usuario" class="form-control" maxlength="65" required
-                  pattern="@?[A-Za-z0-9_][A-Za-z0-9._\-]{0,63}" placeholder="ej. guero_hmo" aria-describedby="usuarioAyuda" />
-                <div id="usuarioAyuda" class="form-text">Letras, números, punto, guion o guion bajo, sin espacios. Puedes incluir la @.</div>
-              </div>
-              <div class="mb-3">
-                <label for="modo" class="form-label">Profundidad</label>
-                <select id="modo" name="modo" class="form-select">
-                  <% Object.entries(modes).forEach(([value, mode]) => { %>
-                    <option value="<%= value %>"><%= mode.label %></option>
-                  <% }) %>
-                </select>
-                <div class="form-text">La rápida tarda de 1 a 3 minutos; la completa puede tardar más de media hora.</div>
-              </div>
-              <div class="form-check mb-3">
-                <input class="form-check-input" type="checkbox" id="recursivo" name="recursivo" value="1" checked />
-                <label class="form-check-label" for="recursivo">Buscar también los alias que encuentre en los perfiles</label>
-              </div>
-              <button type="submit" class="btn btn-primary w-100">Iniciar búsqueda</button>
+            <h3 class="text-center mb-3">Nueva búsqueda</h3>
+            <nav class="maigret-type-switch mb-4" aria-label="Tipo de búsqueda">
+              <% Object.entries(types).forEach(([value, type]) => { %>
+                <a href="/maigret?tipo=<%= value %>" class="<%= selectedType === value ? 'is-selected' : '' %>"<%- selectedType === value ? ' aria-current="page"' : '' %>><%= type.label %></a>
+              <% }) %>
+            </nav>
+            <form id="maigretForm" action="/maigret/buscar" method="POST" autocomplete="off">
+              <input type="hidden" name="tipo" value="<%= selectedType %>" />
+              <% if (selectedType === 'correo') { %>
+                <div class="mb-3">
+                  <label for="correo" class="form-label">Correo electrónico</label>
+                  <input type="email" id="correo" name="correo" class="form-control" maxlength="254" required placeholder="ej. nombre@gmail.com" />
+                </div>
+                <div class="form-check mb-3">
+                  <input class="form-check-input" type="checkbox" id="alias" name="alias" value="1" checked />
+                  <label class="form-check-label" for="alias">Buscar también la parte antes de la @ como usuario (Maigret y Sherlock)</label>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">Buscar correo</button>
+                <p class="small text-muted mt-3 mb-0">
+                  Holehe revisa unos 120 sitios usando sus formularios de registro. Se omiten los sitios que envían un aviso de recuperación de contraseña, para no alertar al titular. Tarda de 1 a 3 minutos.
+                </p>
+              <% } else if (selectedType === 'telefono') { %>
+                <div class="row g-2 mb-3">
+                  <div class="col-4">
+                    <label for="lada" class="form-label">Clave de país</label>
+                    <input type="text" id="lada" name="lada" class="form-control" inputmode="numeric" maxlength="4" required value="52" pattern="\+?[1-9][0-9]{0,2}" />
+                  </div>
+                  <div class="col-8">
+                    <label for="telefono" class="form-label">Teléfono</label>
+                    <input type="text" id="telefono" name="telefono" class="form-control" inputmode="numeric" maxlength="20" required placeholder="ej. 6621234567" />
+                  </div>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">Buscar teléfono</button>
+                <p class="small text-muted mt-3 mb-0">
+                  Ignorant solo revisa unos pocos sitios (como Instagram, Snapchat y Amazon), así que es normal que encuentre poco. Para la compañía y el tipo de línea usa Líneas Internacionales.
+                </p>
+              <% } else { %>
+                <div class="mb-3">
+                  <label for="usuario" class="form-label">Nombre de usuario</label>
+                  <input type="text" id="usuario" name="usuario" class="form-control" maxlength="65" required
+                    pattern="@?[A-Za-z0-9_][A-Za-z0-9._\-]{0,63}" placeholder="ej. guero_hmo" aria-describedby="usuarioAyuda" />
+                  <div id="usuarioAyuda" class="form-text">Letras, números, punto, guion o guion bajo, sin espacios. Puedes incluir la @.</div>
+                </div>
+                <div class="mb-3">
+                  <label for="modo" class="form-label">Profundidad</label>
+                  <select id="modo" name="modo" class="form-select">
+                    <% Object.entries(modes).forEach(([value, mode]) => { %>
+                      <option value="<%= value %>"><%= mode.label %></option>
+                    <% }) %>
+                  </select>
+                  <div class="form-text">La rápida tarda de 2 a 5 minutos con la confirmación de Sherlock; la completa puede tardar más de media hora.</div>
+                </div>
+                <div class="form-check mb-3">
+                  <input class="form-check-input" type="checkbox" id="recursivo" name="recursivo" value="1" checked />
+                  <label class="form-check-label" for="recursivo">Buscar también los alias que encuentre en los perfiles</label>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">Iniciar búsqueda</button>
+                <p class="small text-muted mt-3 mb-0">
+                  Maigret busca el usuario y Sherlock lo vuelve a buscar por su cuenta: lo que encuentran ambos se marca como confirmado. Que exista una cuenta con el mismo nombre no confirma que sea la misma persona: verifica cada resultado.
+                </p>
+              <% } %>
             </form>
-            <p class="small text-muted mt-3 mb-0">
-              Maigret solo consulta perfiles públicos. Que exista una cuenta con el mismo nombre no confirma que sea la misma persona: verifica cada resultado.
-            </p>
           </div>
         </div>
 
@@ -57,8 +93,8 @@
             <table class="table w-100 maigret-table table-stack">
               <thead>
                 <tr>
-                  <th>Usuario</th>
-                  <th>Profundidad</th>
+                  <th>Búsqueda</th>
+                  <th>Herramientas</th>
                   <th>Solicitó</th>
                   <th>Estado</th>
                   <th>Acción</th>
@@ -69,12 +105,17 @@
                   <tr><td colspan="5" class="text-center">No hay búsquedas</td></tr>
                 <% } else { %>
                   <% searches.forEach((search) => { %>
+                    <% const type = types[search.type] ? search.type : 'usuario'; %>
                     <tr>
-                      <td data-label="Usuario">
-                        <div class="fw-semibold">@<%= search.username %></div>
+                      <td data-label="Búsqueda">
+                        <span class="maigret-badge type-<%= type %>"><%= types[type].label %></span>
+                        <div class="fw-semibold text-break"><%= type === 'usuario' ? '@' : '' %><%= search.username %></div>
                         <div class="small text-muted"><%= search.createdAt %></div>
                       </td>
-                      <td data-label="Profundidad"><%= modes[search.mode]?.label || search.mode %><%= search.recursiveSearch ? ' · con alias' : '' %></td>
+                      <td data-label="Herramientas">
+                        <%= types[type].tools %>
+                        <% if (type === 'usuario') { %><div class="small text-muted"><%= modes[search.mode]?.label || search.mode %><%= search.recursiveSearch ? ' · con alias' : '' %></div><% } %>
+                      </td>
                       <td data-label="Solicitó"><%= search.requestedBy || '—' %></td>
                       <td data-label="Estado">
                         <% if (search.status === 'listo') { %>
@@ -91,7 +132,7 @@
                         <div class="d-flex align-items-center gap-2 flex-nowrap">
                           <a class="btn btn-sm btn-outline-primary" href="/maigret/<%= search.id %>">Ver</a>
                           <form action="/maigret/eliminar/<%= search.id %>" method="POST" class="m-0"
-                            onsubmit="return confirm('¿Eliminar la búsqueda de @<%= search.username %>?');">
+                            data-confirm="¿Eliminar la búsqueda de <%= type === 'usuario' ? '@' : '' %><%= search.username %>?">
                             <button type="submit" class="btn btn-sm btn-outline-danger" aria-label="Eliminar búsqueda" title="Eliminar búsqueda">
                               <i class="bi bi-trash3" aria-hidden="true"></i>
                             </button>
@@ -108,11 +149,19 @@
       </div>
     </main>
 
+    <script>
+      // The confirmation text lives in a data attribute so searched values never end up inside inline JavaScript.
+      document.querySelectorAll('form[data-confirm]').forEach((form) => form.addEventListener('submit', (event) => {
+        if (!window.confirm(form.dataset.confirm)) event.preventDefault();
+      }));
+    </script>
     <% if (searches.some((search) => search.status === 'pendiente' || search.status === 'procesando')) { %>
       <script>
         // Reload while searches run, unless the analyst is typing a new one.
         setInterval(() => {
-          if (!document.getElementById('usuario').value) window.location.reload();
+          const typing = [...document.querySelectorAll('#maigretForm input[type="text"], #maigretForm input[type="email"]')]
+            .some((input) => input.value && input.defaultValue !== input.value);
+          if (!typing) window.location.reload();
         }, 10000);
       </script>
     <% } %>

@@ -7,20 +7,37 @@
   <body>
     <%- include('../includes/header') %>
 
+    <% const isUsername = search.type === 'usuario'; %>
+    <% const shown = isUsername ? `@${search.username}` : search.username; %>
+    <% const titles = { usuario: 'MAIGRET', correo: 'CORREO', telefono: 'TELÉFONO' }; %>
+    <%# Searches made before Sherlock was added have no cross-check, so they show no confidence column. %>
+    <% const showConfidence = isUsername && extras.crossChecked !== null; %>
+    <% const confidence = (account) => {
+      const sources = account.sources || [];
+      if (sources.includes('maigret') && sources.includes('sherlock')) return { css: 'confirmed', label: 'Confirmado', hint: 'Lo encontraron Maigret y Sherlock' };
+      if (sources.includes('sherlock')) return { css: 'possible', label: 'Solo Sherlock', hint: 'Solo lo encontró Sherlock: revísalo a mano' };
+      return { css: 'possible', label: 'Solo Maigret', hint: 'Solo lo encontró Maigret: revísalo a mano' };
+    }; %>
+    <% const all = groups.flatMap((group) => group.accounts); %>
+    <% const confirmedCount = all.filter((account) => confidence(account).css === 'confirmed').length; %>
+
     <main class="container page-offset">
       <div class="row justify-content-md-center mb-4">
         <div class="col-md-12 mt-5">
-          <h2 class="text-center title">MAIGRET · @<%= search.username %> <hr /></h2>
+          <h2 class="text-center title text-break"><%= titles[search.type] %> · <%= shown %> <hr /></h2>
         </div>
       </div>
 
       <div class="maigret-summary card p-3 mb-4">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
           <div>
-            <div><strong>Profundidad:</strong> <%= modes[search.mode]?.label || search.mode %><%= search.recursiveSearch ? ' · con alias' : '' %></div>
+            <div><strong>Herramientas:</strong> <%= types[search.type].tools %><% if (isUsername) { %> · <%= modes[search.mode]?.label || search.mode %><%= search.recursiveSearch ? ' · con alias' : '' %><% } %></div>
             <div><strong>Solicitó:</strong> <%= search.requestedBy || '—' %> · <%= search.createdAt %><%= search.finishedAt ? ` · terminó ${search.finishedAt}` : '' %></div>
             <% if (search.status === 'listo') { %>
-              <div><strong>Cuentas encontradas:</strong> <%= search.accounts %></div>
+              <div><strong><%= isUsername ? 'Cuentas encontradas' : 'Sitios donde está registrado' %>:</strong> <%= search.accounts %><% if (showConfidence && extras.crossChecked) { %> · <%= confirmedCount %> confirmada(s) por ambos motores<% } %></div>
+            <% } %>
+            <% if (extras.aliasSearchId) { %>
+              <div><strong>Alias:</strong> <a href="/maigret/<%= extras.aliasSearchId %>">ver la búsqueda de @<%= search.username.split('@')[0].split('+')[0] %></a></div>
             <% } %>
           </div>
           <div class="d-flex gap-2 flex-wrap">
@@ -43,33 +60,46 @@
         <div class="alert alert-danger"><%= search.error || 'La búsqueda no pudo completarse.' %></div>
       <% } else { %>
         <% if (search.error) { %><div class="alert alert-warning"><%= search.error %></div><% } %>
+        <% extras.notes.forEach((note) => { %><div class="alert alert-warning"><%= note %></div><% }) %>
         <% if (groups.length === 0) { %>
-          <div class="alert alert-secondary">No se encontraron cuentas con ese nombre de usuario.</div>
+          <div class="alert alert-secondary">
+            <%= isUsername ? 'No se encontraron cuentas con ese nombre de usuario.' : `No se encontró ningún sitio donde ${search.type === 'correo' ? 'ese correo' : 'ese teléfono'} esté registrado.` %>
+          </div>
+        <% } %>
+        <% if (showConfidence && extras.crossChecked && all.length) { %>
+          <p class="small text-muted">
+            <span class="maigret-badge confirmed">Confirmado</span> lo encontraron Maigret y Sherlock, por separado.
+            <span class="maigret-badge possible">Solo Maigret</span> o <span class="maigret-badge possible">Solo Sherlock</span>: lo encontró un motor; conviene revisarlo a mano.
+          </p>
         <% } %>
         <% groups.forEach((group, index) => { %>
           <section class="custom_table mb-4">
-            <h3 class="h5 mb-3">
-              @<%= group.username %>
+            <h3 class="h5 mb-3 text-break">
+              <%= isUsername ? `@${group.username}` : group.username %>
               <% if (index > 0) { %><span class="maigret-badge alias">alias encontrado en otro perfil</span><% } %>
             </h3>
             <div class="table-responsive">
               <table class="table w-100 maigret-table table-stack">
-                <thead><tr><th>Sitio</th><th>Perfil</th><th>Datos extraídos</th></tr></thead>
+                <thead><tr><th>Sitio</th><% if (showConfidence) { %><th>Confianza</th><% } %><th><%= isUsername ? 'Perfil' : 'Dirección' %></th><th>Datos extraídos</th></tr></thead>
                 <tbody>
                   <% group.accounts.forEach((account) => { %>
                     <tr>
                       <td data-label="Sitio">
                         <div class="fw-semibold"><%= account.site %></div>
                         <% if (account.similar) { %><span class="maigret-badge similar" title="El sitio devolvió coincidencias parecidas, no exactas">aproximada</span><% } %>
-                        <div class="maigret-tags"><% account.tags.forEach((tag) => { %><span><%= tag %></span><% }) %></div>
+                        <div class="maigret-tags"><% (account.tags || []).forEach((tag) => { %><span><%= tag %></span><% }) %></div>
                       </td>
-                      <td data-label="Perfil" class="maigret-url">
+                      <% if (showConfidence) { %>
+                        <% const level = confidence(account); %>
+                        <td data-label="Confianza"><span class="maigret-badge <%= level.css %>" title="<%= level.hint %>"><%= level.label %></span></td>
+                      <% } %>
+                      <td data-label="<%= isUsername ? 'Perfil' : 'Dirección' %>" class="maigret-url">
                         <% if (account.url) { %>
                           <a href="<%= account.url %>" target="_blank" rel="noopener noreferrer"><%= account.url %></a>
                         <% } else { %>—<% } %>
                       </td>
                       <td data-label="Datos extraídos">
-                        <% if (account.fields.length === 0) { %>
+                        <% if (!account.fields || account.fields.length === 0) { %>
                           <span class="text-muted">—</span>
                         <% } else { %>
                           <dl class="maigret-fields">
@@ -87,7 +117,17 @@
             </div>
           </section>
         <% }) %>
-        <p class="small text-muted">Verifica cada perfil antes de usarlo: un nombre de usuario igual no confirma que se trate de la misma persona.</p>
+        <% if (extras.unverified.length) { %>
+          <div class="alert alert-secondary small">
+            <strong>No se pudieron verificar (el sitio limitó las consultas o falló):</strong> <%= extras.unverified.join(', ') %>.
+            Puedes repetir la búsqueda más tarde.
+          </div>
+        <% } %>
+        <p class="small text-muted">
+          <%= isUsername
+            ? 'Verifica cada perfil antes de usarlo: un nombre de usuario igual no confirma que se trate de la misma persona.'
+            : 'Que un sitio indique que el dato está registrado no dice quién es el titular de la cuenta: verifícalo antes de usarlo.' %>
+        </p>
       <% } %>
     </main>
     <%- include('../includes/scripts') %>

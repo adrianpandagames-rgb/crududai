@@ -93,7 +93,7 @@ test('searches are queued per group and each group only sees its own searches', 
   const accepted = await post('/buscar', { usuario: '@guero_hmo', modo: 'normal', recursivo: '1' }, 'uecs');
   assert.match(decodeURIComponent(accepted.headers.get('location')), /type=success/);
   const insert = executed.find(({ sql }) => sql.startsWith('INSERT INTO maigret_busquedas'));
-  assert.deepEqual(insert.values.slice(1), [4, 'uecs', 'guero_hmo', 'normal', 1]);
+  assert.deepEqual(insert.values.slice(1), [4, 'uecs', 'guero_hmo', 'normal', 1, 'usuario']);
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(runs.length, 1);
   assert.equal(runs[0].username, 'guero_hmo');
