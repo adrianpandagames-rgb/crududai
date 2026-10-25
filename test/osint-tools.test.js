@@ -22,6 +22,8 @@ test('e-mails and phones can never be read as command-line options', () => {
   assert.ok(buildHoleheArgs('a@b.com').includes('--no-password-recovery'));
   assert.deepEqual(buildIgnorantArgs('52', '6621234567').slice(0, 2), ['52', '6621234567']);
   assert.equal(buildSherlockArgs('soxoj')[0], 'soxoj');
+  // Both tools pass --timeout to httpx as text, which makes every check fail at once.
+  assert.ok(!buildHoleheArgs('a@b.com').includes('--timeout') && !buildIgnorantArgs('52', '1234567').includes('--timeout'));
 });
 
 test('Sherlock, Holehe and Ignorant outputs are read into accounts', () => {

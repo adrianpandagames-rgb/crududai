@@ -127,7 +127,8 @@ export function mergeSherlockAccounts(maigretAccounts, sherlockAccounts, usernam
 export const HOLEHE_TIMEOUT_MS = 6 * 60 * 1000;
 
 // --no-password-recovery skips the modules that could e-mail the owner a "reset your password" notice.
-export const buildHoleheArgs = (email) => [email, '--only-used', '--no-color', '--no-clear', '--no-password-recovery', '--csv', '--timeout', '20'];
+// No --timeout: Holehe passes it to httpx as text, which breaks every request (its default of 10 s works).
+export const buildHoleheArgs = (email) => [email, '--only-used', '--no-color', '--no-clear', '--no-password-recovery', '--csv'];
 
 const flag = (value) => String(value).trim().toLowerCase() === 'true';
 const cleanValue = (value) => {
@@ -167,7 +168,8 @@ export async function runHolehe({ email, signal, bin = process.env.HOLEHE_BIN ||
 
 export const IGNORANT_TIMEOUT_MS = 3 * 60 * 1000;
 
-export const buildIgnorantArgs = (countryCode, phone) => [countryCode, phone, '--no-color', '--no-clear', '--timeout', '20'];
+// Same --timeout bug as Holehe, so its default is kept.
+export const buildIgnorantArgs = (countryCode, phone) => [countryCode, phone, '--no-color', '--no-clear'];
 
 // Ignorant only prints lines: "[+] site" registered, "[-] site" not registered, "[x] site" rate limited.
 export function parseIgnorantOutput(log) {
