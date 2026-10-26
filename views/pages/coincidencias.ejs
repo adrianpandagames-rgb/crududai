@@ -27,8 +27,9 @@
           <input id="matchesMetres" type="number" class="form-control" min="0" max="50000" step="1" value="<%= DEFAULT_METRES %>" required aria-describedby="matchesMetresHelp" />
           <small id="matchesMetresHelp" class="form-text">0 = solo la misma antena.</small>
         </div>
-        <div class="col-lg-2 mb-3 d-flex align-items-end">
+        <div class="col-lg-2 mb-3 d-flex flex-column justify-content-end gap-2">
           <button id="matchesSubmit" class="btn btn-primary w-100" type="submit" disabled>Buscar coincidencias</button>
+          <button id="matchesClear" class="btn btn-outline-secondary w-100" type="button">Limpiar tablero</button>
         </div>
       </div>
       <div id="matchesFileList" class="matches-file-list" hidden>
@@ -39,7 +40,7 @@
           </table>
         </div>
       </div>
-      <p class="form-text mb-0">Cada archivo se lee igual que en Ruta: las antenas registradas en Ubicaciones obtienen sus coordenadas. La línea se toma del nombre del archivo; corrígela si hace falta. Solo se comparan registros de archivos distintos, nunca un archivo consigo mismo, y cada archivo debe tener una línea distinta. La comparación usa fecha y hora completas: coinciden si ocurrieron la misma fecha con la diferencia de minutos indicada o menos (10 por defecto), en la misma antena o en antenas a la distancia indicada o menos. Los archivos no se guardan.</p>
+      <p class="form-text mb-0">Cada archivo se lee igual que en Ruta: las antenas registradas en Ubicaciones obtienen sus coordenadas. La línea se toma del nombre del archivo; corrígela si hace falta. Solo se comparan registros de archivos distintos, nunca un archivo consigo mismo, y cada archivo debe tener una línea distinta. La comparación usa fecha y hora completas: coinciden si ocurrieron la misma fecha con la diferencia de minutos indicada o menos (<%= DEFAULT_MINUTES %> por defecto), en la misma antena o en antenas a la distancia indicada o menos. Los archivos no se guardan.</p>
     </form>
     <div id="matchesStatus" class="alert alert-info" role="status" aria-live="polite">Agrega al menos dos archivos para buscar coincidencias.</div>
     <div id="matchesResults" hidden>
@@ -91,6 +92,6 @@
     </div>
   </main>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <script type="module" src="/public/js/coincidencias.js?v=2" data-max-files="<%= maxFiles %>"></script>
+  <script type="module" src="/public/js/coincidencias.js?v=4" data-max-files="<%= maxFiles %>"></script>
 </body>
 </html>

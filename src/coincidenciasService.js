@@ -1,7 +1,7 @@
 import { findHeaderColumn, firstListedValue, LATITUDE_HEADERS, LONGITUDE_HEADERS, normalizeRutaValue, parseCoordinateNumber } from './rutaService.js';
 import { parsePlanningTimestamp } from './planeacionService.js';
 
-export const DEFAULT_MINUTES = 10;
+export const DEFAULT_MINUTES = 20;
 export const DEFAULT_METRES = 500;
 // Two busy lines in the same sector can pair hundreds of records each; the summary still counts
 // every coincidence, only the detail list stops here.

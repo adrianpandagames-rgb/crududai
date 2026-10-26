@@ -273,6 +273,20 @@ if (!window.L) {
     download('coincidencias.csv', `﻿${lines.map((line) => line.map(csvCell).join(',')).join('\r\n')}\r\n`);
   });
 
+  // Back to an empty page: no files, no results and the default minutes and metres.
+  byId('matchesClear').addEventListener('click', async () => {
+    if ((selected.length || data) && !(await window.confirmToast('¿Quitar los archivos y los resultados del tablero?', { action: 'Limpiar' }))) return;
+    selected = [];
+    data = null;
+    pairFilter = null;
+    coordinateFilter = null;
+    page = 1;
+    form.reset();
+    layers.clearLayers();
+    byId('matchesResults').hidden = true;
+    renderFiles();
+  });
+
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     if (selected.length < 2 || !minutes.reportValidity() || !metres.reportValidity()) return;
@@ -292,8 +306,9 @@ if (!window.L) {
     message(`Analizando ${selected.length} archivos…`);
     try {
       const response = await fetch('/coincidencias/buscar', { method: 'POST', body });
+      if (response.redirected) throw new Error('Tu sesión terminó. Vuelve a iniciar sesión para buscar coincidencias.');
       const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.error || 'No fue posible analizar los archivos.');
+      if (!response.ok || !Array.isArray(result.pairs)) throw new Error(result.error || 'No fue posible analizar los archivos.');
       data = result;
       pairFilter = null;
       coordinateFilter = null;
