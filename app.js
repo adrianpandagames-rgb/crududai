@@ -31,6 +31,7 @@ import { createRedTelefonicaRouter } from './src/redTelefonicaRouter.js';
 import { createMaigretRouter, createMaigretSearches } from './src/maigretRouter.js';
 import { createImagenesRouter, createPublicImageRouter } from './src/imagenesRouter.js';
 import { createNombresRouter } from './src/nombresRouter.js';
+import { createPerfilesRouter } from './src/perfilesRouter.js';
 import { obtenerMedidores } from './src/medidoresService.js';
 import { resetGoogleGeocodingQuota } from './src/googleGeocodingQuota.js';
 import { listarUsuarios, roleDescriptions, roleLabels, userRoleOf, userRoles } from './src/usuariosService.js';
@@ -211,6 +212,7 @@ app.use('/coincidencias', requireAuth, createCoincidenciasRouter(pool));
 app.use('/maigret', requireAuth, createMaigretRouter(pool, { searches: maigretSearches }));
 app.use('/imagenes', requireAuth, createImagenesRouter(pool));
 app.use('/nombres', requireAuth, createNombresRouter(pool, { maigretSearches }));
+app.use('/perfiles', requireAuth, createPerfilesRouter(pool));
 // Reverse image search engines download the image without a session, through an expiring token.
 app.use('/imagen-publica', createPublicImageRouter(pool));
 

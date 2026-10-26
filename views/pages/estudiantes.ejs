@@ -71,13 +71,13 @@
                 <input type="checkbox" id="sinUtilidad" name="sinUtilidad" value="true" class="form-check-input" />
                 <label for="sinUtilidad" class="form-check-label">Sin utilidad</label>
               </div>
-             <h5 class="mb-3">Importar CSV</h5>
-            <p class="small text-muted mb-3">CSV header debe incluir la columna: <strong>contactos</strong>.</p>
+             <h5 class="mb-3">Importar CSV o Excel</h5>
+            <p class="small text-muted mb-3">El encabezado debe incluir la columna: <strong>contactos</strong>. Si el archivo trae filas de Nombre o Dirección, se registra el perfil de la línea.</p>
               <div class="mb-3">
-                <label for="csvFile" class="form-label">Archivo CSV</label>
+                <label for="csvFile" class="form-label">Archivo CSV o Excel (.xlsx)</label>
                 <div id="csvDropZone" class="csv-drop-zone">
-                  <p id="csvDropHint" class="small text-muted mb-2">Arrastra y suelta tu archivo CSV aquí o selecciónalo.</p>
-                  <input type="file" id="csvFile" name="csvFile" accept=".csv" class="form-control" aria-describedby="csvDropHint csvDropStatus" />
+                  <p id="csvDropHint" class="small text-muted mb-2">Arrastra y suelta tu archivo CSV o Excel (.xlsx) aquí o selecciónalo.</p>
+                  <input type="file" id="csvFile" name="csvFile" accept=".csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="form-control" aria-describedby="csvDropHint csvDropStatus" />
                   <p id="csvDropStatus" class="small mb-0 mt-2" role="status" aria-live="polite"></p>
                 </div>
               </div>
@@ -114,8 +114,8 @@
                   if (type === 'drop') {
                     csvDragDepth = 0;
                     const files = event.dataTransfer.files;
-                    if (files.length !== 1 || !/\.csv$/i.test(files[0].name)) {
-                      csvDropStatus.textContent = 'Suelta un solo archivo con extensión .csv.';
+                    if (files.length !== 1 || !/\.(csv|xlsx)$/i.test(files[0].name)) {
+                      csvDropStatus.textContent = 'Suelta un solo archivo con extensión .csv o .xlsx.';
                     } else {
                       csvInput.files = files;
                       csvInput.dispatchEvent(new Event('change', { bubbles: true }));
@@ -213,8 +213,9 @@ document.getElementById('importCsvButton').addEventListener('click', function(ev
                       }
                     }
 
+                    // Without contactos the file may still bring the holder's data; the server decides.
                     if (headerIndex === -1) {
-                      window.noticeToast('CSV header debe incluir la columna: contactos');
+                      await validateOnServer(form);
                       return;
                     }
 
@@ -232,35 +233,44 @@ document.getElementById('importCsvButton').addEventListener('click', function(ev
                       return;
                     }
 
-                    // Enviar validación al servidor antes de importar
-                    const formData = new FormData(form);
-                    const response = await fetch('/Crud/import-csv?validateOnly=true', {
-                      method: 'POST',
-                      referrerPolicy: 'no-referrer',
-                      body: formData
-                    });
-
-                    const result = await response.json();
-                    
-                    if (result.status === 'duplicado_detectado' || result.status === 'confirm_followup') {
-                      const confirmMessage = result.duplicado.message ||
-                        `La línea ${result.duplicado.numObjetivo} ya está registrada con los mismos contactos.\nTipo actual: ${result.duplicado.tipoExistente}.\n\n¿Desea conservarlo como Seguimiento?`;
-                      if (await window.confirmToast(confirmMessage, { action: 'Conservar como Seguimiento', tone: 'primary' })) {
-                        await submitRealImport(form, true);
-                      }
-                    } else if (result.status === 'ready') {
-                      await submitRealImport(form, false);
-                    } else if (result.status === 'success') {
-                      window.location.href = result.redirect;
-                    } else {
-                      window.noticeToast('Error: ' + result.message);
-                    }
+                    await validateOnServer(form);
                   } catch (error) {
                     console.error(error);
                     window.noticeToast('Error procesando CSV: ' + error.message);
                   }
                 };
+                // The browser cannot read Excel by itself, so the server checks it.
+                if (/\.xlsx$/i.test(csvFile.name)) {
+                  validateOnServer(form).catch((error) => window.noticeToast('Error procesando Excel: ' + error.message));
+                  return;
+                }
                 reader.readAsText(csvFile);
+              }
+
+              // Enviar validación al servidor antes de importar
+              async function validateOnServer(form) {
+                const formData = new FormData(form);
+                const response = await fetch('/Crud/import-csv?validateOnly=true', {
+                  method: 'POST',
+                  referrerPolicy: 'no-referrer',
+                  body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.status === 'duplicado_detectado' || result.status === 'confirm_followup') {
+                  const confirmMessage = result.duplicado.message ||
+                    `La línea ${result.duplicado.numObjetivo} ya está registrada con los mismos contactos.\nTipo actual: ${result.duplicado.tipoExistente}.\n\n¿Desea conservarlo como Seguimiento?`;
+                  if (await window.confirmToast(confirmMessage, { action: 'Conservar como Seguimiento', tone: 'primary' })) {
+                    await submitRealImport(form, true);
+                  }
+                } else if (result.status === 'ready') {
+                  await submitRealImport(form, false);
+                } else if (result.status === 'success') {
+                  window.location.href = result.redirect;
+                } else {
+                  window.noticeToast('Error: ' + result.message);
+                }
               }
 
               let pendingDuplicateForm = null;

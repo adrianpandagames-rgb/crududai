@@ -5,6 +5,7 @@ import {
   LIST_SOURCES, buildNameIndex, isIdentifierQuery, normalizeName, parseOfac, parseSat69b,
   preparedSearches, searchNameIndex, usernameVariants,
 } from './nameSearchService.js';
+import { createPerfilesStore, isPhoneQuery } from './perfilesService.js';
 
 const REFRESH_AFTER_HOURS = 24;
 const RETRY_AFTER_ERROR_MINUTES = 60;
@@ -133,7 +134,9 @@ export function createNameLists(pool, { fetchImpl = fetch } = {}) {
   return { initialize, getIndex, refresh, status, refreshStale };
 }
 
-export function createNombresRouter(pool, { lists = createNameLists(pool), maigretSearches = null, denue = createDenueDirectory(pool) } = {}) {
+export function createNombresRouter(pool, {
+  lists = createNameLists(pool), maigretSearches = null, denue = createDenueDirectory(pool), perfiles = createPerfilesStore(pool),
+} = {}) {
   const router = express.Router();
   const redirect = (res, message, type = 'error', query = {}) => res.redirect('/nombres?' + new URLSearchParams({ ...query, message, type }));
 
@@ -143,6 +146,7 @@ export function createNombresRouter(pool, { lists = createNameLists(pool), maigr
     try {
       await lists.initialize();
       await denue.initialize();
+      await perfiles.initialize();
       next();
     } catch {
       res.status(503).send('No fue posible acceder a RastroX.');
@@ -159,8 +163,12 @@ export function createNombresRouter(pool, { lists = createNameLists(pool), maigr
       let error = '';
       if (name) {
         const identifier = isIdentifierQuery(name);
+        const phone = !identifier && isPhoneQuery(name);
         if (name.length > 120) error = 'El nombre debe tener hasta 120 caracteres.';
-        else if (!identifier && normalizeName(name).split(' ').filter(Boolean).length < 2) error = 'Escribe al menos nombre y apellido, o un RFC o CURP completo.';
+        else if (phone) {
+          // A phone number is looked up only among the registered profiles.
+          search = { name, city, phone, results: [], perfiles: await perfiles.search(name, req.session), denue: null, links: [], variants: [] };
+        } else if (!identifier && normalizeName(name).split(' ').filter(Boolean).length < 2) error = 'Escribe al menos nombre y apellido, un RFC o CURP completo, o un número telefónico.';
         else {
           // If DENUE fails, the rest of the search is still shown.
           const lookupDenue = identifier ? null : denue.search(name, city).then((results) => ({ results }), (lookupError) => {
@@ -170,6 +178,7 @@ export function createNombresRouter(pool, { lists = createNameLists(pool), maigr
           const results = searchNameIndex(await lists.getIndex(), name);
           search = {
             name, city, identifier, results,
+            perfiles: identifier ? [] : await perfiles.search(name, req.session),
             denue: await lookupDenue,
             links: identifier ? [] : preparedSearches(name, city),
             variants: identifier ? [] : usernameVariants(name),

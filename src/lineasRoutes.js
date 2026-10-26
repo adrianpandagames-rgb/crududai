@@ -17,12 +17,28 @@ import {
 } from "./estudianteController.js";
 import { parseCsvRow } from './csvUtils.js';
 import { MAX_REDIRECT_ITEMS, parsePagination } from './routeHelpers.js';
+import pool from './db.js';
+import { createPerfilesStore, extractTitular, readXlsxSheets } from './perfilesService.js';
 
 const CONTACTS_MAX_FILE_SIZE = 5 * 1024 * 1024;
 const CONTACTS_MAX_ROWS = 10000;
 const uploadStorage = multer.memoryStorage();
 const upload = multer({ storage: uploadStorage, limits: { fileSize: CONTACTS_MAX_FILE_SIZE, files: 1, fields: 10, parts: 11, fieldSize: 4096 } });
 const router = forwardAsyncErrors(express.Router());
+const perfiles = createPerfilesStore(pool);
+
+const isContactsHeader = (row) => row.some((value) => String(value).trim().toLowerCase() === 'contactos');
+const isXlsx = (file) => /\.xlsx$/i.test(file.originalname);
+
+// The CSV lines, or for Excel the first sheet with a "contactos" column, as rows of text cells.
+const readContactRows = (file) => {
+  if (isXlsx(file)) {
+    const sheets = readXlsxSheets(file.buffer).map((rows) => rows.map((row) => row.map((cell) => String(cell ?? ''))));
+    return { sheets, rows: sheets.find((rows) => rows.some(isContactsHeader)) || sheets[0] || [] };
+  }
+  const rows = file.buffer.toString('utf8').split(/\r?\n/).map((line) => line.trim()).filter((line) => line !== '').map(parseCsvRow);
+  return { sheets: [rows], rows };
+};
 
 router.get('/lineas/editar/:id', requireRecordEditor, async (req, res) => {
   const idObjetivo = Number.parseInt(req.params.id, 10);
@@ -140,34 +156,57 @@ router.post('/Crud/import-csv', requireRecordCreator, contactsUpload, async (req
       return res.redirect('/Crud?message=' + encodeURIComponent('Objetivo, NUC, Año y Tipo son requeridos.') + '&type=error');
     }
 
-    const csv = req.file.buffer.toString('utf8');
-    let rowCount = 1;
-    for (const character of csv) {
-      if (character === '\n' && ++rowCount > CONTACTS_MAX_ROWS + 2) {
-        return res.status(413).json({ status: 'error', message: 'El CSV supera el límite de 10000 filas.' });
+    if (!/\.(csv|xlsx)$/i.test(req.file.originalname)) {
+      return res.json({ status: 'error', message: 'El archivo debe ser CSV o Excel (.xlsx).' });
+    }
+    if (!isXlsx(req.file)) {
+      let rowCount = 1;
+      for (const character of req.file.buffer.toString('utf8')) {
+        if (character === '\n' && ++rowCount > CONTACTS_MAX_ROWS + 2) {
+          return res.status(413).json({ status: 'error', message: 'El CSV supera el límite de 10000 filas.' });
+        }
       }
     }
-    const lines = csv.split(/\r?\n/).map((line) => line.trim()).filter((line) => line !== '');
-    if (lines.length > CONTACTS_MAX_ROWS + 1) {
-      return res.status(413).json({ status: 'error', message: 'El CSV supera el límite de 10000 filas.' });
+    let contactRows;
+    try {
+      contactRows = readContactRows(req.file);
+    } catch {
+      return res.json({ status: 'error', message: 'No fue posible leer el archivo Excel.' });
     }
-    if (lines.length === 0) {
+    const { rows } = contactRows;
+    if (rows.length > CONTACTS_MAX_ROWS + 1) {
+      return res.status(413).json({ status: 'error', message: 'El archivo supera el límite de 10000 filas.' });
+    }
+    if (rows.length === 0) {
       return res.redirect('/Crud?message=' + encodeURIComponent('CSV no contiene datos válidos.') + '&type=error');
     }
 
-    let headerIndex = -1;
-    let headers = [];
-    for (let i = 0; i < lines.length; i++) {
-      const row = parseCsvRow(lines[i]).map((header) => header.trim().toLowerCase());
-      if (row.some((value) => value === 'contactos')) {
-        headerIndex = i;
-        headers = row;
-        break;
+    // The holder's Nombre or Dirección in the file becomes a profile of the line, unless the carrier found no record.
+    const titular = extractTitular(contactRows.sheets);
+    const validateOnly = req.query.validateOnly === 'true' || req.body.validateOnly === 'true';
+    const registrarTitular = async () => {
+      if (!titular?.nombre || validateOnly) return '';
+      try {
+        const created = await perfiles.createFromFile({ ...titular, linea: String(numObjetivo).trim() }, req.session);
+        return created ? ` Se registró el perfil de ${titular.nombre}.` : '';
+      } catch (error) {
+        console.error('No se pudo registrar el perfil de la línea:', error.message);
+        return '';
       }
+    };
+
+    const headerIndex = rows.findIndex(isContactsHeader);
+    const headers = headerIndex === -1 ? [] : rows[headerIndex].map((header) => String(header).trim().toLowerCase());
+
+    // A file with only the holder's data still registers the profile.
+    if (headerIndex === -1 && titular?.nombre) {
+      if (validateOnly) return res.json({ status: 'ready' });
+      const message = `El archivo no trae la columna contactos.${await registrarTitular()}`;
+      return res.json({ status: 'success', message, redirect: '/Crud?message=' + encodeURIComponent(message) + '&type=success', partialMatches: [] });
     }
 
     if (headerIndex === -1) {
-      return res.redirect('/Crud?message=' + encodeURIComponent('CSV header debe incluir la columna: contactos.') + '&type=error');
+      return res.json({ status: 'error', message: 'El encabezado debe incluir la columna contactos, o el archivo filas de Nombre o Dirección.' });
     }
 
     const contactColumnIndex = headers.findIndex((value) => value === 'contactos');
@@ -176,8 +215,8 @@ router.post('/Crud/import-csv', requireRecordCreator, contactsUpload, async (req
     }
 
     const contactosCSV = [];
-    for (let i = headerIndex + 1; i < lines.length; i++) {
-      const values = parseCsvRow(lines[i]);
+    for (let i = headerIndex + 1; i < rows.length; i++) {
+      const values = rows[i];
       const contactoValue = values[contactColumnIndex] ? values[contactColumnIndex].trim() : '';
       if (contactoValue !== '' && /^\d+$/.test(contactoValue)) {
         contactosCSV.push(contactoValue);
@@ -199,7 +238,6 @@ router.post('/Crud/import-csv', requireRecordCreator, contactsUpload, async (req
       return tipoObj === 'solución' || tipoObj === 'solucion';
     });
 
-    const validateOnly = req.query.validateOnly === 'true' || req.body.validateOnly === 'true';
     if (verificacion.conMismos && !forceFollowup) {
       return res.json({
         status: 'duplicado_detectado',
@@ -245,8 +283,8 @@ router.post('/Crud/import-csv', requireRecordCreator, contactsUpload, async (req
     const exactDuplicates = [];
     const partialMatches = [];
 
-    for (let i = headerIndex + 1; i < lines.length; i++) {
-      const values = parseCsvRow(lines[i]);
+    for (let i = headerIndex + 1; i < rows.length; i++) {
+      const values = rows[i];
       const contactoValue = values[contactColumnIndex] ? values[contactColumnIndex].trim() : '';
       if (contactoValue !== '') {
         if (/^\d+$/.test(contactoValue)) {
@@ -285,6 +323,7 @@ router.post('/Crud/import-csv', requireRecordCreator, contactsUpload, async (req
     if (partialMatches.length > 0) {
       message += ` ${partialMatches.length} inserted contacts have partial matches with other objectives/NUC/año.`;
     }
+    message += await registrarTitular();
 
     const redirectUrl = '/Crud?message=' + encodeURIComponent(message) + '&type=success';
 

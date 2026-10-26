@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <%- include('../includes/head') %>
+    <style>
+      .perfil-imagenes { display: flex; flex-wrap: wrap; gap: .5rem; margin: .5rem 0; }
+      .perfil-imagen { position: relative; }
+      .perfil-imagen img { width: 72px; height: 72px; object-fit: cover; border-radius: 6px; border: 1px solid rgba(0, 0, 0, .15); }
+      .perfil-imagen form { position: absolute; top: 2px; right: 2px; }
+      .perfil-imagen .btn { padding: 0 .3rem; line-height: 1.4; background: rgba(255, 255, 255, .9); }
+      .perfil-imagenes-form { margin-top: .35rem; }
+    </style>
+  </head>
+  <body>
+    <%- include('../includes/header') %>
+
+    <main class="container page-offset">
+      <div class="row justify-content-md-center mb-5">
+        <div class="col-md-12 mt-5">
+          <h2 class="text-center title">PERFILES <hr /></h2>
+        </div>
+      </div>
+
+      <% if (message) { %>
+        <div class="alert <%= messageType === 'error' ? 'alert-danger' : 'alert-success' %>"><%= message %></div>
+      <% } %>
+
+      <div class="row justify-content-md-center mb-4">
+        <div class="col-md-5 mb-4">
+          <div class="card p-4">
+            <h3 class="text-center mb-4">Registrar perfil</h3>
+            <form action="/perfiles" method="POST" enctype="multipart/form-data" autocomplete="off">
+              <div class="mb-3">
+                <label for="nombre" class="form-label">Nombre</label>
+                <input type="text" id="nombre" name="nombre" class="form-control" maxlength="200" value="<%= form.nombre || '' %>" />
+              </div>
+              <div class="mb-3">
+                <label for="direccion" class="form-label">Dirección</label>
+                <textarea id="direccion" name="direccion" class="form-control" rows="2" maxlength="500"><%= form.direccion || '' %></textarea>
+              </div>
+              <div class="mb-3">
+                <label for="linea" class="form-label">Línea telefónica</label>
+                <input type="text" id="linea" name="linea" class="form-control" maxlength="50" required value="<%= form.linea || '' %>" />
+              </div>
+              <div class="mb-3">
+                <label for="archivo" class="form-label">Respuesta en Excel (.xlsx, opcional)</label>
+                <input type="file" id="archivo" name="archivo" class="form-control" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+                <div class="form-text">Si el archivo tiene una fila de Nombre o Dirección, se usan esos datos. Si indica que no se encontró registro de la línea, se usan los datos escritos.</div>
+              </div>
+              <button type="submit" class="btn btn-primary w-100">Registrar perfil</button>
+            </form>
+          </div>
+        </div>
+
+        <div class="col-md-7 py-3 custom_table">
+          <h3 class="text-center">Perfiles registrados</h3>
+          <p class="text-center small text-muted mb-0">También aparecen al buscar el nombre o la línea en RastroX.</p>
+          <hr />
+          <div class="table-responsive">
+            <table class="table w-100 table-stack">
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Dirección</th>
+                  <th>Línea</th>
+                  <th>Registrado</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% if (perfiles.length === 0) { %>
+                  <tr><td colspan="5" class="text-center">No hay perfiles registrados</td></tr>
+                <% } else { %>
+                  <% perfiles.forEach((perfil) => { %>
+                    <tr>
+                      <td data-label="Nombre">
+                        <div class="fw-semibold"><%= perfil.nombre %></div>
+                        <% if (perfil.imagenes.length > 0) { %>
+                          <div class="perfil-imagenes">
+                            <% perfil.imagenes.forEach((imagenId) => { %>
+                              <div class="perfil-imagen">
+                                <a href="/perfiles/imagenes/<%= imagenId %>" target="_blank" rel="noopener">
+                                  <img src="/perfiles/imagenes/<%= imagenId %>" alt="Imagen del perfil de <%= perfil.nombre %>" loading="lazy" />
+                                </a>
+                                <form action="/perfiles/imagenes/<%= imagenId %>/eliminar" method="POST" class="m-0" data-confirm="¿Desea eliminar esta imagen del perfil?">
+                                  <button type="submit" class="btn btn-sm btn-outline-danger" aria-label="Eliminar imagen" title="Eliminar imagen">
+                                    <i class="bi bi-x-lg" aria-hidden="true"></i>
+                                  </button>
+                                </form>
+                              </div>
+                            <% }) %>
+                          </div>
+                        <% } %>
+                        <form action="/perfiles/<%= perfil.id %>/imagenes" method="POST" enctype="multipart/form-data" class="perfil-imagenes-form">
+                          <label class="btn btn-sm btn-outline-primary m-0" title="JPG, PNG, GIF o WebP; hasta 10 a la vez">
+                            <i class="bi bi-image" aria-hidden="true"></i> Agregar imágenes
+                            <input type="file" name="imagenes" accept="image/jpeg,image/png,image/gif,image/webp" multiple hidden
+                              onchange="if (this.files.length) this.form.submit()" />
+                          </label>
+                        </form>
+                      </td>
+                      <td data-label="Dirección"><%= perfil.direccion || '—' %></td>
+                      <td data-label="Línea"><%= perfil.linea %></td>
+                      <td data-label="Registrado" class="small">
+                        <div><%= perfil.createdAt %></div>
+                        <div class="text-muted"><%= perfil.createdBy || '—' %><%= perfil.origen === 'archivo' ? ' · desde Líneas' : '' %></div>
+                      </td>
+                      <td data-label="Acción">
+                        <form action="/perfiles/eliminar/<%= perfil.id %>" method="POST" class="m-0"
+                          data-confirm="¿Desea eliminar el perfil de &quot;<%= perfil.nombre %>&quot;?<%= perfil.imagenes.length ? ' Primero hay que eliminar sus imágenes.' : '' %>">
+                          <button type="submit" class="btn btn-sm btn-outline-danger" aria-label="Eliminar perfil" title="Eliminar perfil">
+                            <i class="bi bi-trash3" aria-hidden="true"></i>
+                          </button>
+                        </form>
+                      </td>
+                    </tr>
+                  <% }) %>
+                <% } %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+    <%- include('../includes/scripts') %>
+  </body>
+</html>

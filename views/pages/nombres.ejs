@@ -11,7 +11,7 @@
       <div class="row justify-content-md-center mb-4">
         <div class="col-md-12 mt-5">
           <h2 class="text-center title">RASTROX <hr /></h2>
-          <p class="text-center text-muted">Búsqueda por nombre, RFC o CURP</p>
+          <p class="text-center text-muted">Búsqueda por nombre, RFC, CURP o teléfono</p>
         </div>
       </div>
 
@@ -24,7 +24,7 @@
           <div class="card p-4 mb-4">
             <form action="/nombres" method="GET" autocomplete="off">
               <div class="mb-3">
-                <label for="q" class="form-label">Nombre completo, RFC o CURP</label>
+                <label for="q" class="form-label">Nombre completo, RFC, CURP o teléfono</label>
                 <input type="text" id="q" name="q" class="form-control" maxlength="120" required value="<%= name %>" placeholder="ej. Luis Ramírez Gómez" />
               </div>
               <div class="mb-3">
@@ -78,9 +78,47 @@
           <% } else if (!search) { %>
             <div class="card p-4 text-muted">
               Escribe un nombre completo para buscarlo en listas oficiales y en el directorio de negocios DENUE, y obtener búsquedas preparadas en Google y redes sociales.
-              También puedes buscar un RFC o CURP en las listas.
+              También puedes buscar un RFC o CURP en las listas, o un número telefónico en los perfiles registrados.
             </div>
           <% } else { %>
+            <% if (search.perfiles.length > 0 || !search.identifier) { %>
+              <section class="card p-3 mb-4">
+                <h3 class="h5">Perfiles registrados <span class="text-muted fw-normal">· <%= search.perfiles.length %> coincidencia(s)</span></h3>
+                <% if (search.perfiles.length === 0) { %>
+                  <p class="text-muted mb-0">No hay ningún perfil registrado con <%= search.phone ? 'esa línea' : 'ese nombre' %>.</p>
+                <% } else { %>
+                  <div class="table-responsive">
+                    <table class="table nombres-table table-stack mb-0">
+                      <thead><tr><th>Nombre</th><th>Dirección</th><th>Línea</th></tr></thead>
+                      <tbody>
+                        <% search.perfiles.forEach((perfil) => { %>
+                          <tr>
+                            <td data-label="Nombre">
+                              <div class="fw-semibold"><%= perfil.nombre %></div>
+                              <% if (!perfil.exact) { %><span class="nombres-badge approx" title="Coincide por parecido en escritura o sonido, no letra por letra">aproximada</span><% } %>
+                              <div class="small text-muted">Registrado <%= perfil.createdAt %><%= perfil.createdBy ? ` por ${perfil.createdBy}` : '' %></div>
+                              <% if ((perfil.imagenes || []).length > 0) { %>
+                                <div class="d-flex flex-wrap gap-1 mt-1">
+                                  <% perfil.imagenes.forEach((imagenId) => { %>
+                                    <a href="/perfiles/imagenes/<%= imagenId %>" target="_blank" rel="noopener">
+                                      <img src="/perfiles/imagenes/<%= imagenId %>" alt="Imagen del perfil" loading="lazy" width="56" height="56" style="object-fit: cover; border-radius: 6px;" />
+                                    </a>
+                                  <% }) %>
+                                </div>
+                              <% } %>
+                            </td>
+                            <td data-label="Dirección" class="nombres-details"><%= perfil.direccion || '—' %></td>
+                            <td data-label="Línea" class="nombres-details"><%= perfil.linea %></td>
+                          </tr>
+                        <% }) %>
+                      </tbody>
+                    </table>
+                  </div>
+                <% } %>
+              </section>
+            <% } %>
+
+            <% if (!search.phone) { %>
             <section class="card p-3 mb-4">
               <h3 class="h5">Listas oficiales <span class="text-muted fw-normal">· <%= search.results.length %> coincidencia(s)</span></h3>
               <% if (listStatus.every((list) => !list.updatedAt)) { %>
@@ -121,6 +159,7 @@
                 <p class="small text-muted mb-0">Una coincidencia de nombre no confirma identidad: compara fecha de nacimiento, CURP o RFC antes de usarla.</p>
               <% } %>
             </section>
+            <% } %>
 
             <% if (search.denue) { %>
               <section class="card p-3 mb-4">

@@ -132,7 +132,17 @@ test('the tab searches the lists without saving a history and sends variants to 
         colonia: 'CENTRO', cp: '80000', ubicacion: 'CULIACAN, Culiacán, SINALOA', latitud: '24.8', longitud: '-107.4', inPlace: true }];
     },
   };
-  app.use('/nombres', createNombresRouter(pool, { lists, maigretSearches, denue }));
+  const perfilSearches = [];
+  const perfiles = {
+    initialize: async () => {},
+    search: async (query, session) => {
+      perfilSearches.push([query, session.role]);
+      return /gusman|662/i.test(query)
+        ? [{ id: 1, nombre: 'JOAQUIN GUZMAN', direccion: 'CALLE 5 #10, CULIACAN', linea: '6621234567', createdAt: '2026-10-26 10:00', imagenes: [7], exact: false }]
+        : [];
+    },
+  };
+  app.use('/nombres', createNombresRouter(pool, { lists, maigretSearches, denue, perfiles }));
   const server = app.listen(0, '127.0.0.1');
   await new Promise((resolve) => server.once('listening', resolve));
   t.after(() => { server.closeAllConnections(); server.close(); });
@@ -149,6 +159,15 @@ test('the tab searches the lists without saving a history and sends variants to 
   assert.ok(page.includes('Razón social: <strong>JOAQUIN GUZMAN</strong>'));
   assert.ok(page.includes('24.8%2C-107.4'));
   assert.deepEqual(denueCalls, [['Joakin Gusman', 'Culiacan']]);
+  assert.ok(page.includes('Perfiles registrados'));
+  assert.ok(page.includes('CALLE 5 #10, CULIACAN'));
+  assert.ok(page.includes('/perfiles/imagenes/7'));
+
+  const byPhone = await (await fetch(`${base}?q=${encodeURIComponent('(662) 123-4567')}`, { headers: { 'x-role': 'uecs' } })).text();
+  assert.ok(byPhone.includes('JOAQUIN GUZMAN') && byPhone.includes('6621234567'));
+  assert.ok(!byPhone.includes('Listas oficiales <span'));
+  assert.deepEqual(denueCalls.length, 1);
+  assert.deepEqual(perfilSearches, [['Joakin Gusman', 'uecs'], ['(662) 123-4567', 'uecs']]);
 
   const failed = await (await fetch(`${base}?q=Luis+Ramirez`, { headers: { 'x-role': 'uecs' } })).text();
   assert.ok(failed.includes('No se pudo consultar DENUE'));
