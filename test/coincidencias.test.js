@@ -9,7 +9,10 @@ import { processRutaCsv } from '../src/rutaService.js';
 import { createCoincidenciasRouter } from '../src/coincidenciasRouter.js';
 
 const at = (text) => Date.parse(`${text}Z`);
-const record = (line, time, lat, lng, extra = {}) => ({ line, file: `${line}.csv`, row: 1, time: at(time), lat, lng, ubicacion: '', lugar: '', ...extra });
+// One file per line unless the test says otherwise.
+const record = (line, time, lat, lng, extra = {}) => ({ line, file: `${line}.csv`, fileIndex: line.charCodeAt(0), row: 1,
+  time: at(time), lat, lng, ubicacion: '', lugar: '', ...extra });
+const pairOf = (result, ...lines) => result.pairs.find((pair) => pair.lines.join('-') === lines.join('-'));
 
 test('timestamps keep the seconds while planning times stay at the minute', () => {
   assert.equal(parsePlanningTimestamp('13/10/2026', '14:05:30'), at('2026-10-13T14:05:30'));
@@ -21,6 +24,7 @@ test('timestamps keep the seconds while planning times stay at the minute', () =
 test('the line comes from the digits in the file name', () => {
   assert.equal(lineFromFileName('Sábana 662 123 4567 (Telcel).xlsx'), '6621234567');
   assert.equal(lineFromFileName('objetivo-norte.csv'), 'objetivo-norte');
+  assert.equal(lineFromFileName('6621234567-20261013.xlsx'), '6621234567');
 });
 
 test('lines meet at the same antenna or a nearby one within the time window', () => {
@@ -36,16 +40,31 @@ test('lines meet at the same antenna or a nearby one within the time window', ()
   ];
   const result = findCoincidences(records, { minutes: 10, metres: 500 });
   assert.deepEqual(result.pairs.map((pair) => pair.lines.join('-')).sort(), ['A-B', 'A-C', 'B-C']);
-  const ab = result.pairs.find((pair) => pair.key === JSON.stringify(['A', 'B']));
+  const ab = pairOf(result, 'A', 'B');
   assert.equal(ab.count, 2);
   assert.equal(ab.sameAntenna, 2);
-  const ac = result.pairs.find((pair) => pair.key === JSON.stringify(['A', 'C']));
+  const ac = pairOf(result, 'A', 'C');
   assert.equal(ac.sameAntenna, 0);
   assert.ok(Math.abs(ac.minDistance - 300) <= 1);
   assert.equal(result.truncated, false);
 
   const sameOnly = findCoincidences(records, { minutes: 10, metres: 0 });
   assert.deepEqual(sameOnly.pairs.map((pair) => pair.lines.join('-')), ['A-B']);
+});
+
+test('a file is never compared with itself, nor a line repeated in another file', () => {
+  const records = [
+    record('A', '2026-10-13T10:00:00', 29.1, -110.9, { fileIndex: 0, file: 'a1.xlsx' }),
+    record('A', '2026-10-13T10:01:00', 29.1, -110.9, { fileIndex: 0, file: 'a1.xlsx' }),
+    record('A', '2026-10-13T10:02:00', 29.1, -110.9, { fileIndex: 1, file: 'a2.xlsx' }),
+    record('C', '2026-10-13T10:03:00', 29.1, -110.9, { fileIndex: 2, file: 'c.xlsx' }),
+  ];
+  const result = findCoincidences(records);
+  assert.deepEqual(result.pairs.map((pair) => [pair.files, pair.lines, pair.count]), [
+    [['a1.xlsx', 'c.xlsx'], ['A', 'C'], 2],
+    [['a2.xlsx', 'c.xlsx'], ['A', 'C'], 1],
+  ]);
+  assert.equal(result.total, 3);
 });
 
 test('the detail list stops at the limit while the pair totals keep counting', () => {
@@ -66,7 +85,7 @@ test('records take their position from Ubicaciones and skip rows without date or
   assert.equal(result.withoutPosition, 1);
   assert.equal(result.withoutTime, 1);
   assert.deepEqual(result.records, [{ file: 'a.csv', line: '662', row: 1, time: at('2026-10-13T10:00:05'),
-    lat: 29.1, lng: -110.9, ubicacion: 'Centro', lugar: 'Hermosillo' }]);
+    fileIndex: 0, lat: 29.1, lng: -110.9, ubicacion: 'Centro', lugar: 'Hermosillo' }]);
   assert.ok(distanceMetres({ lat: 29.1, lng: -110.9 }, { lat: 29.1, lng: -110.9 }) === 0);
 });
 
@@ -116,5 +135,5 @@ test('the search compares several uploaded files and validates the request', asy
   }
   const sameLineResponse = await fetch(url, { method: 'POST', body: sameLine });
   assert.equal(sameLineResponse.status, 400);
-  assert.match((await sameLineResponse.json()).error, /misma línea/);
+  assert.match((await sameLineResponse.json()).error, /más de un archivo/);
 });

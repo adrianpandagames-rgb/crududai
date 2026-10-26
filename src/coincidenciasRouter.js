@@ -47,8 +47,10 @@ export function createCoincidenciasRouter(pool) {
     if (fileLines.some((line) => !line || line.length > 50)) {
       return res.status(400).json({ error: 'Cada línea debe tener de 1 a 50 caracteres.' });
     }
-    if (new Set(fileLines).size < 2) {
-      return res.status(400).json({ error: 'Todos los archivos tienen la misma línea; asigna al menos dos líneas distintas.' });
+    // A line repeated in two files would only be compared with itself.
+    const repeated = fileLines.find((line, index) => fileLines.indexOf(line) !== index);
+    if (repeated) {
+      return res.status(400).json({ error: `La línea ${repeated} está en más de un archivo; cada archivo debe tener una línea distinta.` });
     }
     let locations;
     try {
@@ -62,7 +64,7 @@ export function createCoincidenciasRouter(pool) {
       try {
         const rows = path.extname(file.originalname).toLowerCase() === '.xlsx'
           ? processRutaXlsx(file.buffer, locations) : processRutaCsv(file.buffer.toString('utf8'), locations);
-        const result = extractLineRecords(rows, { file: file.originalname, line: fileLines[index] });
+        const result = extractLineRecords(rows, { file: file.originalname, line: fileLines[index], fileIndex: index });
         records.push(...result.records);
         summaries.push({ name: file.originalname, line: fileLines[index], total: result.total, usable: result.records.length,
           withoutTime: result.withoutTime, withoutPosition: result.withoutPosition, hasDate: result.hasDate });

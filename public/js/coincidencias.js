@@ -20,7 +20,7 @@ function message(text, error = false) {
 // Same rule as the server: a 10–15 digit run in the name, otherwise the name itself.
 function lineFromFileName(name) {
   const base = String(name).replace(/\.[^.]+$/, '').trim();
-  const digits = base.replace(/[\s()-]/g, '').match(/\d{10,15}/);
+  const digits = base.match(/(?<!\d)\d{10,15}(?!\d)/) || base.replace(/[\s()-]/g, '').match(/\d{10,15}/);
   return (digits ? digits[0] : base).slice(0, 50);
 }
 
@@ -190,7 +190,7 @@ if (!window.L) {
       row.className = 'matches-pair' + (pairFilter === pair.key ? ' matches-pair-selected' : '');
       row.tabIndex = 0;
       row.setAttribute('aria-pressed', String(pairFilter === pair.key));
-      row.append(cell(pair.lines.join(' ↔ ')), cell(pair.count, 'text-end'), cell(pair.sameAntenna, 'text-end'),
+      row.append(cell(pair.lines.map((line, index) => `${line} (${pair.files[index]})`).join(' ↔ ')), cell(pair.count, 'text-end'), cell(pair.sameAntenna, 'text-end'),
         cell(`${pair.minDistance} m`, 'text-end'), cell(`${pair.first} / ${pair.last}`), cell(pair.places.join('; ') || 'Sin ubicación registrada'));
       const toggle = () => {
         pairFilter = pairFilter === pair.key ? null : pair.key;
@@ -226,8 +226,8 @@ if (!window.L) {
     page = Math.min(page, pages);
     const rows = matches.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((match) => {
       const row = document.createElement('tr');
-      row.append(cell(match.a.line), cell(match.a.time), cell(antennaText(match.a)),
-        cell(match.b.line), cell(match.b.time), cell(antennaText(match.b)),
+      row.append(cell(`${match.a.line} (${match.a.file})`), cell(match.a.time), cell(antennaText(match.a)),
+        cell(`${match.b.line} (${match.b.file})`), cell(match.b.time), cell(antennaText(match.b)),
         cell(match.gapMinutes, 'text-end'), cell(match.sameAntenna ? 'Misma antena' : match.distance, 'text-end'));
       return row;
     });
@@ -278,9 +278,9 @@ if (!window.L) {
     if (selected.length < 2 || !minutes.reportValidity() || !metres.reportValidity()) return;
     const emptyLine = selected.find((entry) => !entry.line.trim());
     if (emptyLine) return message(`Escribe la línea de ${emptyLine.file.name}.`, true);
-    if (new Set(selected.map((entry) => entry.line.trim())).size < 2) {
-      return message('Todos los archivos tienen la misma línea; asigna al menos dos líneas distintas.', true);
-    }
+    const lines = selected.map((entry) => entry.line.trim());
+    const repeated = lines.find((line, index) => lines.indexOf(line) !== index);
+    if (repeated) return message(`La línea ${repeated} está en más de un archivo; cada archivo debe tener una línea distinta.`, true);
     const body = new FormData();
     body.append('minutos', minutes.value);
     body.append('metros', metres.value);

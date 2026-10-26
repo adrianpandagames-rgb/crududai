@@ -39,7 +39,7 @@
           </table>
         </div>
       </div>
-      <p class="form-text mb-0">Cada archivo se lee igual que en Ruta: las antenas registradas en Ubicaciones obtienen sus coordenadas. La línea se toma del nombre del archivo; corrígela si hace falta. Se comparan los registros de líneas distintas por fecha y hora completas: coinciden si ocurrieron la misma fecha con la diferencia de minutos indicada o menos (10 por defecto), en la misma antena o en antenas a la distancia indicada o menos. Los archivos no se guardan.</p>
+      <p class="form-text mb-0">Cada archivo se lee igual que en Ruta: las antenas registradas en Ubicaciones obtienen sus coordenadas. La línea se toma del nombre del archivo; corrígela si hace falta. Solo se comparan registros de archivos distintos, nunca un archivo consigo mismo, y cada archivo debe tener una línea distinta. La comparación usa fecha y hora completas: coinciden si ocurrieron la misma fecha con la diferencia de minutos indicada o menos (10 por defecto), en la misma antena o en antenas a la distancia indicada o menos. Los archivos no se guardan.</p>
     </form>
     <div id="matchesStatus" class="alert alert-info" role="status" aria-live="polite">Agrega al menos dos archivos para buscar coincidencias.</div>
     <div id="matchesResults" hidden>
@@ -65,7 +65,7 @@
           <p class="small text-muted mb-2">Pulsa un par para ver solo sus coincidencias; vuelve a pulsarlo para quitar el filtro.</p>
           <div class="table-responsive matches-pairs">
             <table class="table table-sm table-hover mb-0">
-              <thead><tr><th>Líneas</th><th class="text-end">Coincidencias</th><th class="text-end">Misma antena</th><th class="text-end">Menor distancia</th><th>Primera / última</th><th>Lugares</th></tr></thead>
+              <thead><tr><th>Líneas (archivo)</th><th class="text-end">Coincidencias</th><th class="text-end">Misma antena</th><th class="text-end">Menor distancia</th><th>Primera / última</th><th>Lugares</th></tr></thead>
               <tbody id="matchesPairs"></tbody>
             </table>
           </div>
@@ -91,6 +91,6 @@
     </div>
   </main>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <script type="module" src="/public/js/coincidencias.js?v=1" data-max-files="<%= maxFiles %>"></script>
+  <script type="module" src="/public/js/coincidencias.js?v=2" data-max-files="<%= maxFiles %>"></script>
 </body>
 </html>
