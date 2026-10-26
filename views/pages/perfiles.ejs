@@ -6,6 +6,7 @@
       /* Images and the add button sit to the left of the name. */
       .perfil-nombre { display: flex; align-items: center; gap: .75rem; }
       .perfil-imagenes { display: flex; flex-wrap: wrap; gap: .4rem; flex: 0 1 auto; max-width: 60%; }
+      .perfiles-table td { word-break: break-word; }
       .perfil-imagen { position: relative; }
       .perfil-imagen img, .perfil-agregar-imagen { width: 56px; height: 56px; border-radius: 6px; }
       .perfil-imagen img { object-fit: cover; border: 1px solid rgba(0, 0, 0, .15); }
@@ -19,7 +20,7 @@
   <body>
     <%- include('../includes/header') %>
 
-    <main class="container page-offset">
+    <main class="container-fluid px-3 px-xl-4 page-offset">
       <div class="row justify-content-md-center mb-5">
         <div class="col-md-12 mt-5">
           <h2 class="text-center title">PERFILES <hr /></h2>
@@ -31,7 +32,7 @@
       <% } %>
 
       <div class="row justify-content-md-center mb-4">
-        <div class="col-md-5 mb-4">
+        <div class="col-lg-4 col-xl-3 mb-4">
           <div class="card p-4">
             <h3 class="text-center mb-4">Registrar perfil</h3>
             <form action="/perfiles" method="POST" enctype="multipart/form-data" autocomplete="off">
@@ -57,12 +58,15 @@
           </div>
         </div>
 
-        <div class="col-md-7 py-3 custom_table">
+        <div class="col-lg-8 col-xl-9 py-3 custom_table">
           <h3 class="text-center">Perfiles registrados</h3>
           <p class="text-center small text-muted mb-0">También aparecen al buscar el nombre o la línea en RastroX.</p>
           <hr />
           <div class="table-responsive">
-            <table class="table w-100 table-stack">
+            <table class="table w-100 table-stack perfiles-table">
+              <colgroup>
+                <col style="width: 36%" /><col style="width: 26%" /><col style="width: 13%" /><col style="width: 15%" /><col style="width: 10%" />
+              </colgroup>
               <thead>
                 <tr>
                   <th>Nombre</th>
