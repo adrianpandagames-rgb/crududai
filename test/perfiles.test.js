@@ -93,6 +93,12 @@ test('the tab registers a profile, taking Nombre and Dirección from the Excel u
       added.forEach((image) => images.push({ id: images.length + 1, perfilId, ...image }));
       return added.length;
     },
+    get: async (id) => (created[id - 1] ? { id, ...created[id - 1] } : null),
+    update: async (id, perfil) => {
+      if (!created[id - 1]) return false;
+      Object.assign(created[id - 1], perfil);
+      return true;
+    },
     getImage: async (id) => (id === '1' ? { mime: 'image/png', data: images[0].buffer } : null),
     removeImage: async (id) => {
       const index = images.findIndex((image) => String(image.id) === id);
@@ -165,6 +171,21 @@ test('the tab registers a profile, taking Nombre and Dirección from the Excel u
   assert.match(message(blocked), /Elimínalas primero/);
   assert.match(message(await fetch(`${base}/imagenes/1/eliminar`, { method: 'POST', redirect: 'manual', headers: { 'x-role': 'uecs' } })), /Imagen eliminada/);
   assert.equal(images.length, 1);
+
+  assert.ok(page.includes('href="/perfiles/2/editar"'));
+  const editPage = await (await fetch(`${base}/2/editar`, { headers: { 'x-role': 'uecs' } })).text();
+  assert.ok(editPage.includes('value="JUAN PÉREZ"') && editPage.includes('CALLE 5</textarea>'));
+  assert.match(message(await fetch(`${base}/9/editar`, { redirect: 'manual', headers: { 'x-role': 'uecs' } })), /no fue encontrado/);
+  const edit = (id, body) => fetch(`${base}/${id}/editar`, {
+    method: 'POST', redirect: 'manual', body: new URLSearchParams(body),
+    headers: { 'x-role': 'uecs', 'content-type': 'application/x-www-form-urlencoded' },
+  });
+  const invalidEdit = await edit(2, { nombre: '', direccion: 'Otra', linea: '6621234567' });
+  assert.equal(invalidEdit.status, 400);
+  assert.ok((await invalidEdit.text()).includes('Escribe el nombre'));
+  assert.match(message(await edit(2, { nombre: ' Juan  Pérez Ruiz ', direccion: 'Calle 9', linea: '662 123 4567' })), /actualizado/);
+  assert.deepEqual([created[1].nombre, created[1].direccion, created[1].linea], ['Juan Pérez Ruiz', 'Calle 9', '662 123 4567']);
+  assert.match(message(await edit(9, { nombre: 'X', linea: '1' })), /no fue encontrado/);
 });
 
 test('a profile with images is not deleted, and images are only deleted by their id', async () => {

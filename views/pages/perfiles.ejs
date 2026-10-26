@@ -106,12 +106,17 @@
                         <div class="text-muted"><%= perfil.createdBy || '—' %><%= perfil.origen === 'archivo' ? ' · desde Líneas' : '' %></div>
                       </td>
                       <td data-label="Acción">
-                        <form action="/perfiles/eliminar/<%= perfil.id %>" method="POST" class="m-0"
-                          data-confirm="¿Desea eliminar el perfil de &quot;<%= perfil.nombre %>&quot;?<%= perfil.imagenes.length ? ' Primero hay que eliminar sus imágenes.' : '' %>">
-                          <button type="submit" class="btn btn-sm btn-outline-danger" aria-label="Eliminar perfil" title="Eliminar perfil">
-                            <i class="bi bi-trash3" aria-hidden="true"></i>
-                          </button>
-                        </form>
+                        <div class="d-flex align-items-center gap-2 flex-nowrap">
+                          <a class="btn btn-sm btn-outline-primary" href="/perfiles/<%= perfil.id %>/editar" aria-label="Editar perfil" title="Editar perfil">
+                            <i class="bi bi-pencil-square" aria-hidden="true"></i>
+                          </a>
+                          <form action="/perfiles/eliminar/<%= perfil.id %>" method="POST" class="m-0"
+                            data-confirm="¿Desea eliminar el perfil de &quot;<%= perfil.nombre %>&quot;?<%= perfil.imagenes.length ? ' Primero hay que eliminar sus imágenes.' : '' %>">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" aria-label="Eliminar perfil" title="Eliminar perfil">
+                              <i class="bi bi-trash3" aria-hidden="true"></i>
+                            </button>
+                          </form>
+                        </div>
                       </td>
                     </tr>
                   <% }) %>

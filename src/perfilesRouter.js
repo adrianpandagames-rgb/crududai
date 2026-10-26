@@ -73,7 +73,32 @@ export function createPerfilesRouter(pool, { perfiles = createPerfilesStore(pool
     }
   });
 
-  router.post('/:id/imagenes', (req, res, next) => uploadImages(req, res, (error) => {
+  router.get('/:id/editar', async (req, res, next) => {
+    try {
+      const perfil = /^\d+$/.test(req.params.id) ? await perfiles.get(req.params.id, req.session) : null;
+      if (!perfil) return redirect(res, 'El perfil no fue encontrado.');
+      return res.render('pages/editar-perfil', { perfil, error: null });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.post('/:id/editar', async (req, res, next) => {
+    if (!/^\d+$/.test(req.params.id)) return redirect(res, 'El perfil no fue encontrado.');
+    const { perfil, error } = validarPerfil(req.body);
+    try {
+      if (error) {
+        const form = { id: req.params.id, nombre: req.body.nombre ?? '', direccion: req.body.direccion ?? '', linea: req.body.linea ?? '' };
+        return res.status(400).render('pages/editar-perfil', { perfil: form, error });
+      }
+      const updated = await perfiles.update(req.params.id, perfil, req.session);
+      return updated ? redirect(res, 'Perfil actualizado correctamente.', 'success') : redirect(res, 'El perfil no fue encontrado.');
+    } catch (failure) {
+      return next(failure);
+    }
+  });
+
+  router.post('/:id/imagenes',(req, res, next) => uploadImages(req, res, (error) => {
     if (!error) return next();
     return redirect(res, error.code === 'LIMIT_FILE_SIZE' ? 'Cada imagen puede pesar hasta 10 MB.'
       : error.code === 'LIMIT_FILE_COUNT' || error.code === 'LIMIT_UNEXPECTED_FILE' ? `Sube hasta ${MAX_IMAGES_PER_UPLOAD} imágenes a la vez.`

@@ -138,6 +138,22 @@ export function createPerfilesStore(pool) {
     return create(perfil, session, 'archivo');
   };
 
+  const get = async (id, session) => {
+    await initialize();
+    const scope = visibleFiles(session, 'p');
+    const [rows] = await pool.execute(`SELECT p.id, p.nombre, p.direccion, p.linea FROM perfiles p WHERE p.id = ? AND ${scope.where}`,
+      [id, ...scope.values]);
+    return rows[0] || null;
+  };
+
+  const update = async (id, perfil, session) => {
+    await initialize();
+    const scope = visibleFiles(session, 'p');
+    const [result] = await pool.execute(`UPDATE perfiles p SET p.nombre = ?, p.direccion = ?, p.linea = ?, p.linea_digitos = ?
+      WHERE p.id = ? AND ${scope.where}`, [perfil.nombre, perfil.direccion, perfil.linea, lineDigits(perfil.linea), id, ...scope.values]);
+    return result.affectedRows === 1;
+  };
+
   // Images are deleted only one by one with their own button, so a profile that still has any stays.
   const remove = async (id, session) => {
     await initialize();
@@ -197,5 +213,5 @@ export function createPerfilesStore(pool) {
     return result.affectedRows === 1;
   };
 
-  return { initialize, list, create, createFromFile, remove, search, addImages, getImage, removeImage };
+  return { initialize, list, create, createFromFile, get, update, remove, search, addImages, getImage, removeImage };
 }
