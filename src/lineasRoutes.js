@@ -181,7 +181,7 @@ router.post('/Crud/import-csv', requireRecordCreator, contactsUpload, async (req
       return res.redirect('/Crud?message=' + encodeURIComponent('CSV no contiene datos válidos.') + '&type=error');
     }
 
-    // The holder's Nombre or Dirección in the file becomes a profile of the line, unless the carrier found no record.
+    // The holder's Nombre or Dirección in the file becomes a profile of the line; "no record" answers are skipped.
     const titular = extractTitular(contactRows.sheets);
     const validateOnly = req.query.validateOnly === 'true' || req.body.validateOnly === 'true';
     const registrarTitular = async () => {
@@ -198,12 +198,13 @@ router.post('/Crud/import-csv', requireRecordCreator, contactsUpload, async (req
     const headerIndex = rows.findIndex(isContactsHeader);
     const headers = headerIndex === -1 ? [] : rows[headerIndex].map((header) => String(header).trim().toLowerCase());
 
-    // A file with only the holder's data still registers the profile.
-    if (headerIndex === -1 && titular?.nombre) {
+    // A file with the holder's data but no numeric contacts still registers the profile.
+    const soloTitular = async (reason) => {
       if (validateOnly) return res.json({ status: 'ready' });
-      const message = `El archivo no trae la columna contactos.${await registrarTitular()}`;
+      const message = `${reason}${await registrarTitular()}`;
       return res.json({ status: 'success', message, redirect: '/Crud?message=' + encodeURIComponent(message) + '&type=success', partialMatches: [] });
-    }
+    };
+    if (headerIndex === -1 && titular?.nombre) return soloTitular('El archivo no trae la columna contactos.');
 
     if (headerIndex === -1) {
       return res.json({ status: 'error', message: 'El encabezado debe incluir la columna contactos, o el archivo filas de Nombre o Dirección.' });
@@ -224,6 +225,7 @@ router.post('/Crud/import-csv', requireRecordCreator, contactsUpload, async (req
     }
 
     if (contactosCSV.length === 0) {
+      if (titular?.nombre) return soloTitular('El archivo no trae contactos numéricos; no se importaron contactos.');
       return res.json({ status: 'error', message: 'CSV no contiene contactos válidos.' });
     }
 

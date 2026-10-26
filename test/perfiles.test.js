@@ -25,9 +25,17 @@ test('the holder comes from a Nombre or Dirección row, beside, after a colon or
   assert.equal(extractTitular([[['contactos'], ['6621111111']]]), null);
 });
 
-test('the carrier "no record" answer is never taken as the holder', () => {
+test('the carrier "no record" answer is skipped, but the other field is still taken', () => {
   assert.equal(extractTitular([[['Nombre', NO_RECORD], ['Dirección', NO_RECORD]]]), null);
-  assert.equal(extractTitular([[[NO_RECORD], ['Nombre', 'X']]]), null);
+  // Telcel's layout: holder data above the call records, whose "contactos" column holds no numbers.
+  assert.deepEqual(extractTitular([[
+    ['Linea: 6624287887 con periodo de busqueda del 21/10/2026 al 24/10/2026'],
+    ['Nombre:', 'ROBERTO AGUIRRE PRECIADO'],
+    ['Dirección:', NO_RECORD],
+    ['Plataforma:', 'PREPAGO'],
+    ['Telefono', 'Tipo', 'Numero A', 'Numero B', 'Fecha', 'Hora', 'IMEI', 'LATITUD', 'LONGITUD', 'Azimuth', 'contactos'],
+    ['6624287887', 'DATOS', '6624287887', 'ims', '21/10/2026', '00:01:13', '35921865695085', '29°7\'34.89"', '111°2\'26.76W', '155', 'ims'],
+  ]]), { nombre: 'ROBERTO AGUIRRE PRECIADO', direccion: '' });
 });
 
 test('Excel files are read on every sheet and profiles need a name and a line', () => {

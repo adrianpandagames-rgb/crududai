@@ -228,11 +228,7 @@ document.getElementById('importCsvButton').addEventListener('click', function(ev
                       }
                     }
 
-                    if (contactos.length === 0) {
-                      window.noticeToast('CSV no contiene contactos válidos');
-                      return;
-                    }
-
+                    // Without numeric contacts the server may still register the holder's profile.
                     await validateOnServer(form);
                   } catch (error) {
                     console.error(error);

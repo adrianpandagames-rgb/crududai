@@ -12,8 +12,8 @@ export const perfilImageType = (buffer) => {
   return PERFIL_IMAGE_TYPES.includes(type) ? type : null;
 };
 
-// Carriers answer with this text when the line has no subscriber on record.
-export const NO_RECORD_PATTERN = /no se encontro registro relacionado/;
+// Carriers answer with this text, in the Nombre or Dirección cell, when they have no record of that data.
+export const NO_RECORD_PATTERN = /no se encontro registro|^me permito informar/;
 
 const LABELS = {
   nombre: ['nombre', 'nombre del titular', 'nombre del cliente', 'nombre del usuario', 'nombre del suscriptor', 'titular'],
@@ -29,10 +29,9 @@ const isLabel = (value) => ALL_LABELS.includes(plain(value).replace(/:$/, '').tr
 export const lineDigits = (value) => String(value ?? '').replace(/\D/g, '');
 
 // "Nombre: JUAN PÉREZ" in one cell, "Nombre" | "JUAN PÉREZ" in one row, or "Nombre" over its value.
-// Returns null when there is nothing to take, including the carrier's "no record" answer.
+// A cell with the carrier's "no record" answer is skipped, so the other field is still taken.
+// Returns null when there is nothing to take.
 export function extractTitular(sheets) {
-  const allText = plain(sheets.flat(2).join(' '));
-  if (NO_RECORD_PATTERN.test(allText)) return null;
   const found = {};
   for (const rows of sheets) {
     rows.forEach((row, rowIndex) => row.forEach((cell, columnIndex) => {
@@ -46,7 +45,7 @@ export function extractTitular(sheets) {
       // Otherwise the value below counts only in a short row, not under a header of many columns.
       const below = headerRow || row.filter((next) => clean(next)).length <= 3 ? clean(rows[rowIndex + 1]?.[columnIndex]) : '';
       const value = [clean(rest.join(':')), right, below].find((candidate) => candidate && !isLabel(candidate));
-      if (value) found[field] = value;
+      if (value && !NO_RECORD_PATTERN.test(plain(value))) found[field] = value;
     }));
   }
   return found.nombre || found.direccion
@@ -54,7 +53,7 @@ export function extractTitular(sheets) {
     : null;
 }
 
-export const titularHasNoRecord = (sheets) => NO_RECORD_PATTERN.test(plain(sheets.flat(2).join(' ')));
+export const titularHasNoRecord = (sheets) => sheets.flat(2).some((cell) => NO_RECORD_PATTERN.test(plain(cell)));
 
 export function readXlsxSheets(buffer) {
   const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: false });
