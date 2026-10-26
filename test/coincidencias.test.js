@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import express from 'express';
 import ejs from 'ejs';
 import { fileURLToPath } from 'node:url';
-import { distanceMetres, extractLineRecords, findCoincidences, lineFromFileName } from '../src/coincidenciasService.js';
+import { distanceMetres, extractLineRecords, findCoincidences, lineFromFileName, mergeLineRecords } from '../src/coincidenciasService.js';
 import { parsePlanningTime, parsePlanningTimestamp } from '../src/planeacionService.js';
 import { processRutaCsv } from '../src/rutaService.js';
 import { createCoincidenciasRouter } from '../src/coincidenciasRouter.js';
@@ -52,19 +52,21 @@ test('lines meet at the same antenna or a nearby one within the time window', ()
   assert.deepEqual(sameOnly.pairs.map((pair) => pair.lines.join('-')), ['A-B']);
 });
 
-test('a file is never compared with itself, nor a line repeated in another file', () => {
+test('files of the same line merge into one and a row repeated between them counts once', () => {
   const records = [
     record('A', '2026-10-13T10:00:00', 29.1, -110.9, { fileIndex: 0, file: 'a1.xlsx' }),
+    record('A', '2026-10-13T10:00:00', 29.1, -110.9, { fileIndex: 0, file: 'a1.xlsx' }),
     record('A', '2026-10-13T10:01:00', 29.1, -110.9, { fileIndex: 0, file: 'a1.xlsx' }),
+    record('A', '2026-10-13T10:01:00', 29.1, -110.9, { fileIndex: 1, file: 'a2.xlsx' }),
     record('A', '2026-10-13T10:02:00', 29.1, -110.9, { fileIndex: 1, file: 'a2.xlsx' }),
     record('C', '2026-10-13T10:03:00', 29.1, -110.9, { fileIndex: 2, file: 'c.xlsx' }),
   ];
-  const result = findCoincidences(records);
-  assert.deepEqual(result.pairs.map((pair) => [pair.files, pair.lines, pair.count]), [
-    [['a1.xlsx', 'c.xlsx'], ['A', 'C'], 2],
-    [['a2.xlsx', 'c.xlsx'], ['A', 'C'], 1],
-  ]);
-  assert.equal(result.total, 3);
+  const merged = mergeLineRecords(records);
+  // The two identical rows inside a1 stay; the 10:01 row of a2 repeats a1 and is dropped.
+  assert.equal(merged.records.length, 5);
+  assert.deepEqual(merged.duplicates, { A: 1 });
+  const result = findCoincidences(merged.records);
+  assert.deepEqual(result.pairs.map((pair) => [pair.lines, pair.count]), [[['A', 'C'], 4]]);
 });
 
 test('the detail list stops at the limit while the pair totals keep counting', () => {
@@ -135,5 +137,20 @@ test('the search compares several uploaded files and validates the request', asy
   }
   const sameLineResponse = await fetch(url, { method: 'POST', body: sameLine });
   assert.equal(sameLineResponse.status, 400);
-  assert.match((await sameLineResponse.json()).error, /más de un archivo/);
+  assert.match((await sameLineResponse.json()).error, /dos líneas distintas/);
+
+  const mergedBody = new FormData();
+  mergedBody.append('metros', '0');
+  mergedBody.append('archivos', csv('antena,fecha,hora\nABC,13/10/2026,10:00:00\n'), 'a1.csv');
+  mergedBody.append('linea', '661');
+  mergedBody.append('archivos', csv('antena,fecha,hora\nABC,13/10/2026,10:00:00\nABC,13/10/2026,10:05:00\n'), 'a2.csv');
+  mergedBody.append('linea', '661');
+  mergedBody.append('archivos', csv('antena,fecha,hora\nABC,13/10/2026,10:06:00\n'), 'b.csv');
+  mergedBody.append('linea', '662');
+  const merged = await (await fetch(url, { method: 'POST', body: mergedBody })).json();
+  assert.deepEqual(merged.lines, [
+    { line: '661', files: ['a1.csv', 'a2.csv'], usable: 2, duplicates: 1 },
+    { line: '662', files: ['b.csv'], usable: 1, duplicates: 0 },
+  ]);
+  assert.deepEqual(merged.pairs.map((pair) => [pair.lines, pair.count]), [[['661', '662'], 2]]);
 });

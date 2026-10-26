@@ -56,8 +56,9 @@ function renderFiles() {
   byId('matchesFileRows').replaceChildren(...rows);
   byId('matchesFileList').hidden = !selected.length;
   submit.disabled = selected.length < 2;
+  const lines = new Set(selected.map((entry) => entry.line.trim())).size;
   if (selected.length < 2) message(selected.length ? 'Agrega al menos un archivo más para comparar.' : 'Agrega al menos dos archivos para buscar coincidencias.');
-  else message(`${selected.length} archivos listos. Revisa la línea de cada uno y pulsa “Buscar coincidencias”.`);
+  else message(`${selected.length} archivos listos de ${lines} ${lines === 1 ? 'línea' : 'líneas'}; los de la misma línea se juntan. Revisa la línea de cada uno y pulsa “Buscar coincidencias”.`);
 }
 
 function addFiles(files) {
@@ -111,12 +112,14 @@ const cell = (text, className = '') => {
 };
 
 let data = null;
+let lineFilter = null;
 let pairFilter = null;
 let coordinateFilter = null;
 let page = 1;
 const coordinateKey = (record) => `${record.lat.toFixed(6)},${record.lng.toFixed(6)}`;
-const visibleMatches = () => data.matches.filter((match) => (!pairFilter || match.pair === pairFilter)
-  && (!coordinateFilter || coordinateKey(match.a) === coordinateFilter || coordinateKey(match.b) === coordinateFilter));
+const hasLine = (match) => !lineFilter || match.a.line === lineFilter || match.b.line === lineFilter;
+const mapMatches = () => data.matches.filter((match) => hasLine(match) && (!pairFilter || match.pair === pairFilter));
+const visibleMatches = () => mapMatches().filter((match) => (!coordinateFilter || coordinateKey(match.a) === coordinateFilter || coordinateKey(match.b) === coordinateFilter));
 
 if (!window.L) {
   message('No fue posible cargar el mapa. Revisa tu conexión y recarga la página.', true);
@@ -147,7 +150,7 @@ if (!window.L) {
 
   function drawMap() {
     layers.clearLayers();
-    const matches = data.matches.filter((match) => !pairFilter || match.pair === pairFilter);
+    const matches = mapMatches();
     const sites = new Map();
     const links = new Set();
     for (const match of matches) {
@@ -184,13 +187,35 @@ if (!window.L) {
     }
   }
 
+  // The select lists every analysed line; files merged into one line say how many they were.
+  function renderLineOptions() {
+    const all = new Option('Todas las líneas', '');
+    const options = data.lines.map((entry) => new Option(entry.files.length > 1
+      ? `${entry.line} (${entry.files.length} archivos)` : entry.line, entry.line));
+    byId('matchesLine').replaceChildren(all, ...options);
+    byId('matchesLine').value = lineFilter || '';
+  }
+
+  function renderLineInfo() {
+    const info = byId('matchesLineInfo');
+    info.hidden = !lineFilter;
+    if (!lineFilter) return;
+    const others = data.pairs.filter((pair) => pair.lines.includes(lineFilter))
+      .map((pair) => `${pair.lines.find((line) => line !== lineFilter)} (${pair.count})`);
+    info.textContent = others.length
+      ? `La línea ${lineFilter} coincidió con ${others.length} ${others.length === 1 ? 'línea' : 'líneas'}: ${others.join(', ')}.`
+      : `La línea ${lineFilter} no coincidió con ninguna otra línea con estos criterios.`;
+  }
+
   function renderPairs() {
-    const rows = data.pairs.map((pair) => {
+    const rows = data.pairs.filter((pair) => !lineFilter || pair.lines.includes(lineFilter)).map((pair) => {
       const row = document.createElement('tr');
       row.className = 'matches-pair' + (pairFilter === pair.key ? ' matches-pair-selected' : '');
       row.tabIndex = 0;
       row.setAttribute('aria-pressed', String(pairFilter === pair.key));
-      row.append(cell(pair.lines.map((line, index) => `${line} (${pair.files[index]})`).join(' ↔ ')), cell(pair.count, 'text-end'), cell(pair.sameAntenna, 'text-end'),
+      // With a line selected it goes first, so the column reads as "selected ↔ the line it met".
+      const lines = lineFilter ? [lineFilter, pair.lines.find((line) => line !== lineFilter)] : pair.lines;
+      row.append(cell(lines.join(' ↔ ')), cell(pair.count, 'text-end'), cell(pair.sameAntenna, 'text-end'),
         cell(`${pair.minDistance} m`, 'text-end'), cell(`${pair.first} / ${pair.last}`), cell(pair.places.join('; ') || 'Sin ubicación registrada'));
       const toggle = () => {
         pairFilter = pairFilter === pair.key ? null : pair.key;
@@ -212,7 +237,7 @@ if (!window.L) {
     });
     if (!rows.length) {
       const row = document.createElement('tr');
-      const empty = cell('No hubo coincidencias con estos criterios.', 'text-center text-muted py-4');
+      const empty = cell(lineFilter ? `La línea ${lineFilter} no coincidió con ninguna otra.` : 'No hubo coincidencias con estos criterios.', 'text-center text-muted py-4');
       empty.colSpan = 6;
       row.append(empty);
       rows.push(row);
@@ -232,10 +257,10 @@ if (!window.L) {
       return row;
     });
     byId('matchesRows').replaceChildren(...rows);
-    const filters = [pairFilter && 'par seleccionado', coordinateFilter && 'antena seleccionada en el mapa'].filter(Boolean);
+    const filters = [lineFilter && `línea ${lineFilter}`, pairFilter && 'par seleccionado', coordinateFilter && 'antena seleccionada en el mapa'].filter(Boolean);
     byId('matchesDetailInfo').textContent = `${matches.length} coincidencias${filters.length ? ` (${filters.join(', ')})` : ''}.`
       + (data.truncated ? ` El detalle muestra las primeras ${data.matches.length} de ${data.total}; los totales por par sí cuentan todas.` : '');
-    byId('matchesClearFilter').hidden = !pairFilter && !coordinateFilter;
+    byId('matchesClearFilter').hidden = !lineFilter && !pairFilter && !coordinateFilter;
     document.querySelector('.matches-pager').hidden = pages < 2;
     byId('matchesPageInfo').textContent = `Página ${page} de ${pages}`;
     byId('matchesPrev').disabled = page <= 1;
@@ -252,7 +277,21 @@ if (!window.L) {
   }
 
   byId('matchesFit').addEventListener('click', fit);
+  byId('matchesLine').addEventListener('change', (event) => {
+    lineFilter = event.target.value || null;
+    pairFilter = null;
+    coordinateFilter = null;
+    page = 1;
+    renderLineInfo();
+    renderPairs();
+    drawMap();
+    fit();
+    renderDetail();
+  });
   byId('matchesClearFilter').addEventListener('click', () => {
+    lineFilter = null;
+    byId('matchesLine').value = '';
+    renderLineInfo();
     pairFilter = null;
     coordinateFilter = null;
     page = 1;
@@ -278,6 +317,7 @@ if (!window.L) {
     if ((selected.length || data) && !(await window.confirmToast('¿Quitar los archivos y los resultados del tablero?', { action: 'Limpiar' }))) return;
     selected = [];
     data = null;
+    lineFilter = null;
     pairFilter = null;
     coordinateFilter = null;
     page = 1;
@@ -292,9 +332,9 @@ if (!window.L) {
     if (selected.length < 2 || !minutes.reportValidity() || !metres.reportValidity()) return;
     const emptyLine = selected.find((entry) => !entry.line.trim());
     if (emptyLine) return message(`Escribe la línea de ${emptyLine.file.name}.`, true);
-    const lines = selected.map((entry) => entry.line.trim());
-    const repeated = lines.find((line, index) => lines.indexOf(line) !== index);
-    if (repeated) return message(`La línea ${repeated} está en más de un archivo; cada archivo debe tener una línea distinta.`, true);
+    if (new Set(selected.map((entry) => entry.line.trim())).size < 2) {
+      return message('Todos los archivos tienen la misma línea; asigna al menos dos líneas distintas.', true);
+    }
     const body = new FormData();
     body.append('minutos', minutes.value);
     body.append('metros', metres.value);
@@ -310,18 +350,23 @@ if (!window.L) {
       const result = await response.json().catch(() => ({}));
       if (!response.ok || !Array.isArray(result.pairs)) throw new Error(result.error || 'No fue posible analizar los archivos.');
       data = result;
+      lineFilter = null;
       pairFilter = null;
       coordinateFilter = null;
       page = 1;
       byId('matchesResults').hidden = false;
       renderFileSummary();
+      renderLineOptions();
+      renderLineInfo();
       renderPairs();
       drawMap();
       renderDetail();
       requestAnimationFrame(fit);
-      message(data.total
+      const duplicates = data.lines.reduce((sum, entry) => sum + entry.duplicates, 0);
+      message((data.total
         ? `${data.total} coincidencias entre ${data.pairs.length} pares de líneas a ${data.minutes} minutos o menos y ${data.metres} metros o menos.`
-        : `No hubo registros de líneas distintas a ${data.minutes} minutos o menos y ${data.metres} metros o menos.`);
+        : `No hubo registros de líneas distintas a ${data.minutes} minutos o menos y ${data.metres} metros o menos.`)
+        + (duplicates ? ` Se omitieron ${duplicates} registros repetidos entre archivos de la misma línea.` : ''));
     } catch (error) {
       message(error.message, true);
     } finally {

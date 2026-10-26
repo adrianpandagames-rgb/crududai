@@ -34,7 +34,7 @@ export function formatTimestamp(ms) {
 
 // `rows` come from processRutaCsv/processRutaXlsx, so antennas found in Ubicaciones already have coordinates.
 // Records without a readable date or a valid position cannot be compared and are only counted.
-// `fileIndex` tells apart two uploads with the same name; records of one file never pair with each other.
+// `fileIndex` tells apart two uploads with the same name, so mergeLineRecords can spot rows repeated between them.
 export function extractLineRecords(rows, { file, line, fileIndex = 0 }) {
   const headers = (rows[0] || []).map(normalizeRutaValue);
   const latIndex = findHeaderColumn(headers, LATITUDE_HEADERS);
@@ -72,14 +72,34 @@ export function extractLineRecords(rows, { file, line, fileIndex = 0 }) {
   return { records, total: rows.length - 1, withoutTime, withoutPosition, hasDate: dateIndex >= 0 };
 }
 
+// Files of the same line are read as one: a row repeated in another file of that line (same time and
+// position) counts once, while repeated rows inside a single file stay, since each one was its own event.
+export function mergeLineRecords(records) {
+  const kept = new Map();
+  const seen = new Map();
+  const merged = [];
+  const duplicates = {};
+  for (const record of records) {
+    const key = JSON.stringify([record.line, record.time, record.lat, record.lng]);
+    const occurrence = (seen.get(`${record.fileIndex}|${key}`) || 0) + 1;
+    seen.set(`${record.fileIndex}|${key}`, occurrence);
+    if (occurrence <= (kept.get(key) || 0)) {
+      duplicates[record.line] = (duplicates[record.line] || 0) + 1;
+      continue;
+    }
+    kept.set(key, occurrence);
+    merged.push(record);
+  }
+  return { records: merged, duplicates };
+}
+
 const recordView = (record) => ({
   line: record.line, file: record.file, row: record.row, time: formatTimestamp(record.time),
   lat: record.lat, lng: record.lng, ubicacion: record.ubicacion, lugar: record.lugar,
 });
 
-// Every pair of records from different files (and different lines) no more than `minutes` apart
-// and `metres` away; a file is never compared with itself. Sorting by time keeps the scan to the
-// records inside each window.
+// Every pair of records from different lines no more than `minutes` apart and `metres` away;
+// a line is never compared with itself. Sorting by time keeps the scan to the records inside each window.
 export function findCoincidences(records, { minutes = DEFAULT_MINUTES, metres = DEFAULT_METRES, maxDetail = MAX_DETAIL } = {}) {
   const windowMs = minutes * 60 * 1000;
   const sorted = [...records].sort((a, b) => a.time - b.time);
@@ -90,17 +110,16 @@ export function findCoincidences(records, { minutes = DEFAULT_MINUTES, metres = 
     const a = sorted[i];
     for (let j = i + 1; j < sorted.length && sorted[j].time - a.time <= windowMs; j++) {
       const b = sorted[j];
-      if (a.fileIndex === b.fileIndex || a.line === b.line) continue;
+      if (a.line === b.line) continue;
       const distance = distanceMetres(a, b);
       if (distance > metres) continue;
       total++;
       const sameAntenna = distance <= SAME_ANTENNA_METRES;
       const gapMinutes = (b.time - a.time) / 60000;
-      const files = [a, b].sort((x, y) => x.fileIndex - y.fileIndex);
-      const key = JSON.stringify(files.map((record) => record.fileIndex));
+      const lines = [a.line, b.line].sort((x, y) => x.localeCompare(y, 'es', { numeric: true }));
+      const key = JSON.stringify(lines);
       if (!pairs.has(key)) {
-        pairs.set(key, { lines: files.map((record) => record.line), files: files.map((record) => record.file),
-          count: 0, sameAntenna: 0, minDistance: Infinity, minGap: Infinity,
+        pairs.set(key, { lines, count: 0, sameAntenna: 0, minDistance: Infinity, minGap: Infinity,
           first: a.time, last: b.time, places: new Set() });
       }
       const pair = pairs.get(key);
@@ -121,7 +140,7 @@ export function findCoincidences(records, { minutes = DEFAULT_MINUTES, metres = 
     }
   }
   const summary = [...pairs.entries()].map(([key, pair]) => ({
-    key, lines: pair.lines, files: pair.files, count: pair.count, sameAntenna: pair.sameAntenna,
+    key, lines: pair.lines, count: pair.count, sameAntenna: pair.sameAntenna,
     minDistance: Math.round(pair.minDistance), minGap: Math.round(pair.minGap * 100) / 100,
     first: formatTimestamp(pair.first), last: formatTimestamp(pair.last), places: [...pair.places].slice(0, 5),
   })).sort((x, y) => y.count - x.count || x.key.localeCompare(y.key));

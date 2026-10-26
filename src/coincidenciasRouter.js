@@ -2,7 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import path from 'node:path';
 import { processRutaCsv, processRutaXlsx } from './rutaService.js';
-import { DEFAULT_METRES, DEFAULT_MINUTES, extractLineRecords, findCoincidences, lineFromFileName } from './coincidenciasService.js';
+import { DEFAULT_METRES, DEFAULT_MINUTES, extractLineRecords, findCoincidences, lineFromFileName, mergeLineRecords } from './coincidenciasService.js';
 
 export const MAX_FILES = 20;
 
@@ -47,10 +47,9 @@ export function createCoincidenciasRouter(pool) {
     if (fileLines.some((line) => !line || line.length > 50)) {
       return res.status(400).json({ error: 'Cada línea debe tener de 1 a 50 caracteres.' });
     }
-    // A line repeated in two files would only be compared with itself.
-    const repeated = fileLines.find((line, index) => fileLines.indexOf(line) !== index);
-    if (repeated) {
-      return res.status(400).json({ error: `La línea ${repeated} está en más de un archivo; cada archivo debe tener una línea distinta.` });
+    // Files that share a line are merged, so the comparison needs two lines, not just two files.
+    if (new Set(fileLines).size < 2) {
+      return res.status(400).json({ error: 'Todos los archivos tienen la misma línea; asigna al menos dos líneas distintas.' });
     }
     let locations;
     try {
@@ -72,7 +71,12 @@ export function createCoincidenciasRouter(pool) {
         return res.status(400).json({ error: `No fue posible procesar ${file.originalname}. Verifica el formato y el límite de 100000 filas.` });
       }
     }
-    return res.json({ minutes, metres, files: summaries, ...findCoincidences(records, { minutes, metres }) });
+    const merged = mergeLineRecords(records);
+    const lineSummaries = [...new Set(fileLines)].map((line) => ({
+      line, files: summaries.filter((file) => file.line === line).map((file) => file.name),
+      usable: merged.records.filter((record) => record.line === line).length, duplicates: merged.duplicates[line] || 0,
+    }));
+    return res.json({ minutes, metres, files: summaries, lines: lineSummaries, ...findCoincidences(merged.records, { minutes, metres }) });
   });
   return router;
 }
