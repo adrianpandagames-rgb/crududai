@@ -23,8 +23,6 @@ Como alternativa para una ejecución manual única en MySQL, selecciona la base
 correcta y ejecuta el contenido de BD/lineas_delito.sql; no es necesario usar
 ambos métodos.
 
-Para publicar desde GitHub en GoDaddy, consulta [GODADDY.md](GODADDY.md).
-
 ## Entrecalles en Georreferenciación
 
 Al importar un CSV o XLSX con latitud y longitud, se obtiene la dirección con
