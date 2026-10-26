@@ -1,4 +1,5 @@
-const SESSION_TIMEOUT_MS = 10 * 60 * 1000;
+// Keep in step with IDLE_TIMEOUT_MS in views/includes/scripts.ejs, which logs out the open page.
+const SESSION_TIMEOUT_MS = 20 * 60 * 1000;
 const REMEMBERED_SESSION_TIMEOUT_MS = 30 * 24 * 60 * 60 * 1000;
 
 const buildSessionCookieOptions = (rememberMe = false) => ({

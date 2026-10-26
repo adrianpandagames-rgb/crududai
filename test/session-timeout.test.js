@@ -12,9 +12,9 @@ test('buildSessionCookieOptions creates a session cookie when credentials are no
   assert.equal(options.secure, true);
 });
 
-test('isSessionExpired marks sessions older than 10 minutes as expired', () => {
+test('isSessionExpired marks sessions older than 20 minutes as expired', () => {
   const now = Date.now();
 
-  assert.equal(isSessionExpired({ lastActivity: now - (11 * 60 * 1000) }, now), true);
-  assert.equal(isSessionExpired({ lastActivity: now - (5 * 60 * 1000) }, now), false);
+  assert.equal(isSessionExpired({ lastActivity: now - (21 * 60 * 1000) }, now), true);
+  assert.equal(isSessionExpired({ lastActivity: now - (15 * 60 * 1000) }, now), false);
 });
