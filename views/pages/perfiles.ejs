@@ -3,12 +3,17 @@
   <head>
     <%- include('../includes/head') %>
     <style>
-      .perfil-imagenes { display: flex; flex-wrap: wrap; gap: .5rem; margin: .5rem 0; }
+      /* Images and the add button sit to the left of the name. */
+      .perfil-nombre { display: flex; align-items: center; gap: .75rem; }
+      .perfil-imagenes { display: flex; flex-wrap: wrap; gap: .4rem; flex: 0 1 auto; max-width: 60%; }
       .perfil-imagen { position: relative; }
-      .perfil-imagen img { width: 72px; height: 72px; object-fit: cover; border-radius: 6px; border: 1px solid rgba(0, 0, 0, .15); }
+      .perfil-imagen img, .perfil-agregar-imagen { width: 56px; height: 56px; border-radius: 6px; }
+      .perfil-imagen img { object-fit: cover; border: 1px solid rgba(0, 0, 0, .15); }
       .perfil-imagen form { position: absolute; top: 2px; right: 2px; }
       .perfil-imagen .btn { padding: 0 .3rem; line-height: 1.4; background: rgba(255, 255, 255, .9); }
-      .perfil-imagenes-form { margin-top: .35rem; }
+      .perfil-agregar-imagen { display: flex; align-items: center; justify-content: center; margin: 0; cursor: pointer;
+        border: 2px dashed currentColor; color: #0d6efd; font-size: 1.25rem; opacity: .75; }
+      .perfil-agregar-imagen:hover, .perfil-agregar-imagen:focus-within { opacity: 1; }
     </style>
   </head>
   <body>
@@ -74,8 +79,7 @@
                   <% perfiles.forEach((perfil) => { %>
                     <tr>
                       <td data-label="Nombre">
-                        <div class="fw-semibold"><%= perfil.nombre %></div>
-                        <% if (perfil.imagenes.length > 0) { %>
+                        <div class="perfil-nombre">
                           <div class="perfil-imagenes">
                             <% perfil.imagenes.forEach((imagenId) => { %>
                               <div class="perfil-imagen">
@@ -89,15 +93,17 @@
                                 </form>
                               </div>
                             <% }) %>
+                            <form action="/perfiles/<%= perfil.id %>/imagenes" method="POST" enctype="multipart/form-data" class="m-0">
+                              <label class="perfil-agregar-imagen" title="Agregar imágenes (JPG, PNG, GIF o WebP; hasta 10 a la vez)">
+                                <i class="bi bi-plus-lg" aria-hidden="true"></i>
+                                <span class="visually-hidden">Agregar imágenes</span>
+                                <input type="file" name="imagenes" accept="image/jpeg,image/png,image/gif,image/webp" multiple hidden
+                                  onchange="if (this.files.length) this.form.submit()" />
+                              </label>
+                            </form>
                           </div>
-                        <% } %>
-                        <form action="/perfiles/<%= perfil.id %>/imagenes" method="POST" enctype="multipart/form-data" class="perfil-imagenes-form">
-                          <label class="btn btn-sm btn-outline-primary m-0" title="JPG, PNG, GIF o WebP; hasta 10 a la vez">
-                            <i class="bi bi-image" aria-hidden="true"></i> Agregar imágenes
-                            <input type="file" name="imagenes" accept="image/jpeg,image/png,image/gif,image/webp" multiple hidden
-                              onchange="if (this.files.length) this.form.submit()" />
-                          </label>
-                        </form>
+                          <div class="fw-semibold"><%= perfil.nombre %></div>
+                        </div>
                       </td>
                       <td data-label="Dirección"><%= perfil.direccion || '—' %></td>
                       <td data-label="Línea"><%= perfil.linea %></td>
