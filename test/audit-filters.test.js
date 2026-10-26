@@ -144,7 +144,7 @@ test('the menu is grouped and each role keeps exactly its links', async () => {
   assert.deepEqual(await menu({ isAdmin: true, role: 'admin' }), [
     'Métricas',
     '[Datos conservados]', 'Líneas', 'IMEI',
-    '[Mapeo]', 'Ubicaciones', 'Georeferenciación', 'Planeación geográfica', 'Ruta',
+    '[Mapeo]', 'Ubicaciones', 'Georeferenciación', 'Planeación geográfica', 'Ruta', 'Coincidencias de antenas',
     '[OSINT]', 'Líneas Internacionales', 'Maigret', 'RastroX', 'Búsqueda por imagen',
     '[Administración]', 'Usuarios', 'Auditoría', 'Medidores', 'Red telefónica',
     'Cerrar sesión',

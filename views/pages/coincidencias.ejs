@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <%- include('../includes/head') %>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <link rel="stylesheet" href="/public/css/coincidencias.css?v=1" />
+</head>
+<body>
+  <%- include('../includes/header') %>
+  <main class="container-fluid page-offset matches-page">
+    <h2 class="text-center title mt-5 mb-4">Coincidencias de antenas<hr /></h2>
+    <form id="matchesForm" class="card p-4 mb-4" novalidate>
+      <div class="row">
+        <div class="col-lg-6 mb-3">
+          <label for="matchesFiles" class="form-label">Archivos CSV o Excel (.xlsx), uno por línea</label>
+          <div id="matchesDropZone" class="csv-drop-zone">
+            <p id="matchesDropHint" class="small text-muted mb-2">Arrastra los archivos aquí o selecciónalos. Puedes agregar hasta <%= maxFiles %>.</p>
+            <input type="file" id="matchesFiles" class="form-control" accept=".csv,text/csv,.xlsx" multiple aria-describedby="matchesDropHint" />
+          </div>
+        </div>
+        <div class="col-sm-6 col-lg-2 mb-3">
+          <label for="matchesMinutes" class="form-label">Diferencia máxima (minutos)</label>
+          <input id="matchesMinutes" type="number" class="form-control" min="1" max="1440" step="1" value="<%= DEFAULT_MINUTES %>" required />
+        </div>
+        <div class="col-sm-6 col-lg-2 mb-3">
+          <label for="matchesMetres" class="form-label">Distancia entre antenas (metros)</label>
+          <input id="matchesMetres" type="number" class="form-control" min="0" max="50000" step="1" value="<%= DEFAULT_METRES %>" required aria-describedby="matchesMetresHelp" />
+          <small id="matchesMetresHelp" class="form-text">0 = solo la misma antena.</small>
+        </div>
+        <div class="col-lg-2 mb-3 d-flex align-items-end">
+          <button id="matchesSubmit" class="btn btn-primary w-100" type="submit" disabled>Buscar coincidencias</button>
+        </div>
+      </div>
+      <div id="matchesFileList" class="matches-file-list" hidden>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-2">
+            <thead><tr><th>Archivo</th><th>Línea</th><th class="text-end"><span class="visually-hidden">Quitar</span></th></tr></thead>
+            <tbody id="matchesFileRows"></tbody>
+          </table>
+        </div>
+      </div>
+      <p class="form-text mb-0">Cada archivo se lee igual que en Ruta: las antenas registradas en Ubicaciones obtienen sus coordenadas. La línea se toma del nombre del archivo; corrígela si hace falta. Se comparan los registros de líneas distintas por fecha y hora completas: coinciden si ocurrieron la misma fecha con la diferencia de minutos indicada o menos (10 por defecto), en la misma antena o en antenas a la distancia indicada o menos. Los archivos no se guardan.</p>
+    </form>
+    <div id="matchesStatus" class="alert alert-info" role="status" aria-live="polite">Agrega al menos dos archivos para buscar coincidencias.</div>
+    <div id="matchesResults" hidden>
+      <section class="card p-3 mb-4" aria-labelledby="matchesFilesTitle">
+        <h3 id="matchesFilesTitle" class="h6">Archivos analizados</h3>
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead><tr><th>Línea</th><th>Archivo</th><th class="text-end">Registros</th><th class="text-end">Comparados</th><th class="text-end">Sin fecha u hora</th><th class="text-end">Sin coordenadas</th></tr></thead>
+            <tbody id="matchesFileSummary"></tbody>
+          </table>
+        </div>
+      </section>
+      <div class="matches-workspace">
+        <section class="card p-3 matches-map-panel" aria-label="Mapa de coincidencias">
+          <div class="d-flex flex-wrap gap-2 mb-2">
+            <button id="matchesFit" class="btn btn-sm btn-outline-primary" type="button">Ver todas</button>
+          </div>
+          <div id="matchesMap" aria-label="Mapa con las antenas donde coincidieron las líneas"></div>
+          <p class="small text-muted mt-2 mb-0">Cada punto es una antena con coincidencias; la línea punteada une antenas cercanas distintas. Haz clic en un punto para ver sus coincidencias.</p>
+        </section>
+        <section class="card p-3 matches-data-panel">
+          <h3 class="h6">Líneas que coincidieron</h3>
+          <p class="small text-muted mb-2">Pulsa un par para ver solo sus coincidencias; vuelve a pulsarlo para quitar el filtro.</p>
+          <div class="table-responsive matches-pairs">
+            <table class="table table-sm table-hover mb-0">
+              <thead><tr><th>Líneas</th><th class="text-end">Coincidencias</th><th class="text-end">Misma antena</th><th class="text-end">Menor distancia</th><th>Primera / última</th><th>Lugares</th></tr></thead>
+              <tbody id="matchesPairs"></tbody>
+            </table>
+          </div>
+          <div class="d-flex flex-wrap gap-2 align-items-center mt-3 mb-2">
+            <h3 class="h6 mb-0 me-auto">Detalle</h3>
+            <button id="matchesClearFilter" type="button" class="btn btn-sm btn-outline-secondary" hidden>Ver todas las coincidencias</button>
+            <button id="matchesExport" class="btn btn-sm btn-outline-secondary" type="button">Exportar CSV</button>
+          </div>
+          <p id="matchesDetailInfo" class="small text-muted mb-2"></p>
+          <div class="table-responsive matches-table">
+            <table class="table table-sm table-striped mb-0">
+              <thead><tr><th>Línea A</th><th>Fecha y hora A</th><th>Antena A</th><th>Línea B</th><th>Fecha y hora B</th><th>Antena B</th><th class="text-end">Minutos</th><th class="text-end">Metros</th></tr></thead>
+              <tbody id="matchesRows"></tbody>
+            </table>
+          </div>
+          <nav class="matches-pager" aria-label="Páginas de coincidencias" hidden>
+            <button id="matchesPrev" type="button" class="btn btn-sm btn-outline-secondary">Anterior</button>
+            <span id="matchesPageInfo" class="small"></span>
+            <button id="matchesNext" type="button" class="btn btn-sm btn-outline-secondary">Siguiente</button>
+          </nav>
+        </section>
+      </div>
+    </div>
+  </main>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script type="module" src="/public/js/coincidencias.js?v=1" data-max-files="<%= maxFiles %>"></script>
+</body>
+</html>

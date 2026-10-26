@@ -2,26 +2,27 @@ import { findHeaderColumn, firstListedValue, LATITUDE_HEADERS, LONGITUDE_HEADERS
 
 const pad = (value) => String(value).padStart(2, '0');
 
-// "HH:MM[:SS] [a. m.|p. m.]" → [hours, minutes], or null.
+// "HH:MM[:SS] [a. m.|p. m.]" → [hours, minutes, seconds], or null.
 const parseClock = (text) => {
   const match = String(text ?? '').trim().toLowerCase()
-    .match(/(\d{1,2}):(\d{2})(?::\d{2}(?:\.\d+)?)?\s*(a\.?\s*m\.?|p\.?\s*m\.?)?/);
+    .match(/(\d{1,2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?\s*(a\.?\s*m\.?|p\.?\s*m\.?)?/);
   if (!match) return null;
   let hours = Number(match[1]);
   const minutes = Number(match[2]);
-  const meridiem = match[3]?.[0];
-  if (minutes > 59) return null;
+  const seconds = Number(match[3] || 0);
+  const meridiem = match[4]?.[0];
+  if (minutes > 59 || seconds > 59) return null;
   if (meridiem) {
     if (hours < 1 || hours > 12) return null;
     if (meridiem === 'a' && hours === 12) hours = 0;
     if (meridiem === 'p' && hours < 12) hours += 12;
   } else if (hours > 23) return null;
-  return [hours, minutes];
+  return [hours, minutes, seconds];
 };
 
 // Dates come as dd/mm/yyyy (Mexican files and the Excel import) or yyyy-mm-dd, optionally with the time.
-// Returns "YYYY-MM-DDTHH:MM" so the browser can compare it directly with datetime-local inputs.
-export function parsePlanningTime(dateValue, timeValue = '') {
+// Returns [year, month, day, hours, minutes, seconds], or null.
+function parseDateTimeParts(dateValue, timeValue = '') {
   const text = String(dateValue ?? '').trim();
   let year;
   let month;
@@ -34,8 +35,25 @@ export function parsePlanningTime(dateValue, timeValue = '') {
   } else return null;
   const date = new Date(Date.UTC(year, month - 1, day));
   if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
-  const clock = parseClock(String(timeValue ?? '').trim() || text.slice(match[0].length)) || [0, 0];
-  return `${year}-${pad(month)}-${pad(day)}T${pad(clock[0])}:${pad(clock[1])}`;
+  const clock = parseClock(String(timeValue ?? '').trim() || text.slice(match[0].length)) || [0, 0, 0];
+  return [year, month, day, ...clock];
+}
+
+// "YYYY-MM-DDTHH:MM" so the browser can compare it directly with datetime-local inputs.
+export function parsePlanningTime(dateValue, timeValue = '') {
+  const parts = parseDateTimeParts(dateValue, timeValue);
+  if (!parts) return null;
+  const [year, month, day, hours, minutes] = parts;
+  return `${year}-${pad(month)}-${pad(day)}T${pad(hours)}:${pad(minutes)}`;
+}
+
+// Milliseconds with the seconds kept, read as UTC so files from the same carrier compare without
+// any shift; the result is only meant for differences and for formatting back.
+export function parsePlanningTimestamp(dateValue, timeValue = '') {
+  const parts = parseDateTimeParts(dateValue, timeValue);
+  if (!parts) return null;
+  const [year, month, day, hours, minutes, seconds] = parts;
+  return Date.UTC(year, month - 1, day, hours, minutes, seconds);
 }
 
 export function extractPlanningPoints(rows) {

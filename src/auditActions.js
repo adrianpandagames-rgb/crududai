@@ -8,6 +8,7 @@ export const auditResources = {
   GEOREFERENCIACION: 'Georreferenciación', PLANEACION: 'Planeación geográfica',
   TELEFONO: 'Teléfono', RED: 'Red telefónica', AUDITORIA: 'Auditoría', METRICAS: 'Métricas',
   MAIGRET: 'Maigret', IMAGEN: 'Búsqueda por imagen', NOMBRE: 'RastroX',
+  COINCIDENCIA: 'Coincidencias de antenas',
 };
 
 const metricTypes = {
@@ -42,6 +43,7 @@ export const auditResourceSql = `CASE
   WHEN LOWER(request_path) REGEXP '^/api/bot/cobertura(/|$)' THEN 'PLANEACION'
   WHEN LOWER(request_path) REGEXP '^/georeferenciacion(/|$)' THEN 'GEOREFERENCIACION'
   WHEN LOWER(request_path) REGEXP '^/planeacion-geografica(/|$)' THEN 'PLANEACION'
+  WHEN LOWER(request_path) REGEXP '^/coincidencias(/|$)' THEN 'COINCIDENCIA'
   WHEN LOWER(request_path) REGEXP '^/(api/)?telefono(/|$)' THEN 'TELEFONO'
   WHEN LOWER(request_path) REGEXP '^/red-telefonica(/|$)' THEN 'RED'
   WHEN LOWER(request_path) REGEXP '^/maigret(/|$)' THEN 'MAIGRET'
