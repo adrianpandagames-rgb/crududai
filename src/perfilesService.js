@@ -173,6 +173,7 @@ export function createPerfilesStore(pool) {
   };
 
   // By phone number, or by name with the same matching rules as the official lists.
+  // A name query also finds the profiles whose OSINT alias contains it, listed first.
   const search = async (query, session) => {
     await initialize();
     const scope = visibleFiles(session, 'p');
@@ -184,8 +185,14 @@ export function createPerfilesStore(pool) {
     }
     const [rows] = await pool.execute(`${select} WHERE ${scope.where}`, scope.values);
     const byId = new Map(withImages(rows).map((row) => [String(row.id), row]));
+    const aliasQuery = plain(query);
+    const byAlias = aliasQuery.length >= 3
+      ? [...byId.values()].filter((row) => plain(row.alias).includes(aliasQuery)).map((row) => ({ ...row, exact: true }))
+      : [];
     const index = buildNameIndex(rows.map((row) => ({ source: 'perfil', sourceId: String(row.id), name: row.nombre, details: {} })));
-    return searchNameIndex(index, query).map((hit) => ({ ...byId.get(hit.sourceId), exact: hit.exact }));
+    const byName = searchNameIndex(index, query).filter((hit) => !byAlias.some((row) => String(row.id) === hit.sourceId))
+      .map((hit) => ({ ...byId.get(hit.sourceId), exact: hit.exact }));
+    return [...byAlias, ...byName];
   };
 
   // Adds images to a profile the user can see; returns how many were saved, or null without access.

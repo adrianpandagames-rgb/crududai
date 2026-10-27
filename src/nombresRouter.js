@@ -168,7 +168,12 @@ export function createNombresRouter(pool, {
         else if (phone) {
           // A phone number is looked up only among the registered profiles.
           search = { name, city, phone, results: [], perfiles: await perfiles.search(name, req.session), denue: null, links: [], variants: [] };
-        } else if (!identifier && normalizeName(name).split(' ').filter(Boolean).length < 2) error = 'Escribe al menos nombre y apellido, un RFC o CURP completo, o un número telefónico.';
+        } else if (!identifier && normalizeName(name).split(' ').filter(Boolean).length < 2) {
+          // A single word may still be the OSINT alias of a registered profile.
+          const porAlias = await perfiles.search(name, req.session);
+          if (porAlias.length > 0) search = { name, city, alias: true, results: [], perfiles: porAlias, denue: null, links: [], variants: [] };
+          else error = 'Escribe al menos nombre y apellido, un RFC o CURP completo, un número telefónico o el alias OSINT de un perfil.';
+        }
         else {
           // If DENUE fails, the rest of the search is still shown.
           const lookupDenue = identifier ? null : denue.search(name, city).then((results) => ({ results }), (lookupError) => {

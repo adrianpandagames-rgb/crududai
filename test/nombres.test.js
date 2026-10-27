@@ -137,8 +137,9 @@ test('the tab searches the lists without saving a history and sends variants to 
     initialize: async () => {},
     search: async (query, session) => {
       perfilSearches.push([query, session.role]);
-      return /gusman|662/i.test(query)
-        ? [{ id: 1, nombre: 'JOAQUIN GUZMAN', direccion: 'CALLE 5 #10, CULIACAN', linea: '6621234567', createdAt: '2026-10-26 10:00', imagenes: [7], exact: false }]
+      return /gusman|662|chapo/i.test(query)
+        ? [{ id: 1, nombre: 'JOAQUIN GUZMAN', direccion: 'CALLE 5 #10, CULIACAN', alias: '@elchapo701 Telegram', linea: '6621234567',
+          createdAt: '2026-10-26 10:00', imagenes: [7], exact: false }]
         : [];
     },
   };
@@ -179,6 +180,12 @@ test('the tab searches the lists without saving a history and sends variants to 
 
   const short = await (await fetch(`${base}?q=Joaquin`, { headers: { 'x-role': 'usuario' } })).text();
   assert.ok(short.includes('Escribe al menos nombre y apellido'));
+
+  // A single word that matches an OSINT alias shows only the registered profiles.
+  const byAlias = await (await fetch(`${base}?q=%40elchapo`, { headers: { 'x-role': 'uecs' } })).text();
+  assert.ok(byAlias.includes('JOAQUIN GUZMAN') && byAlias.includes('@elchapo701 Telegram'));
+  assert.ok(!byAlias.includes('Listas oficiales <span') && !byAlias.includes('Escribe al menos'));
+  assert.equal(denueCalls.length, 2);
 
   assert.equal((await fetch(`${base}/actualizar`, { method: 'POST', headers: { 'x-role': 'usuario' } })).status, 403);
   assert.equal((await fetch(`${base}/actualizar-denue`, { method: 'POST', headers: { 'x-role': 'usuario' } })).status, 403);

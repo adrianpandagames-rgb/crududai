@@ -78,7 +78,7 @@
           <% } else if (!search) { %>
             <div class="card p-4 text-muted">
               Escribe un nombre completo para buscarlo en listas oficiales y en el directorio de negocios DENUE, y obtener búsquedas preparadas en Google y redes sociales.
-              También puedes buscar un RFC o CURP en las listas, o un número telefónico en los perfiles registrados.
+              También puedes buscar un RFC o CURP en las listas, o un número telefónico o alias OSINT en los perfiles registrados.
             </div>
           <% } else { %>
             <% if (search.perfiles.length > 0 || !search.identifier) { %>
@@ -119,7 +119,7 @@
               </section>
             <% } %>
 
-            <% if (!search.phone) { %>
+            <% if (!search.phone && !search.alias) { %>
             <section class="card p-3 mb-4">
               <h3 class="h5">Listas oficiales <span class="text-muted fw-normal">· <%= search.results.length %> coincidencia(s)</span></h3>
               <% if (listStatus.every((list) => !list.updatedAt)) { %>

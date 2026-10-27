@@ -57,8 +57,8 @@ test('profiles are kept per group, searched by name or line and not repeated fro
     query: async () => [[]],
     execute: async (sql, values) => {
       if (sql.startsWith('INSERT')) {
-        const [nombre, direccion, linea, lineaDigitos, origen, userId, group] = values;
-        rows.push({ id: rows.length + 1, nombre, direccion, linea, lineaDigitos, origen, userId, group });
+        const [nombre, direccion, linea, lineaDigitos, origen, userId, group, alias] = values;
+        rows.push({ id: rows.length + 1, nombre, direccion, alias, linea, lineaDigitos, origen, userId, group });
         return [{ insertId: rows.length }];
       }
       if (sql.startsWith('SELECT nombre')) return [rows.filter((row) => row.lineaDigitos === values[0] && row.group === values[1])];
@@ -70,11 +70,14 @@ test('profiles are kept per group, searched by name or line and not repeated fro
   const store = createPerfilesStore(pool);
   const uecs = { userId: 3, role: 'uecs' };
   const general = { userId: 4, role: 'usuario' };
-  await store.create({ nombre: 'Joaquín Guzmán Loera', direccion: 'Culiacán', linea: '662 123 4567' }, uecs);
+  await store.create({ nombre: 'Joaquín Guzmán Loera', direccion: 'Culiacán', alias: '@ElChapo701 (Telegram)', linea: '662 123 4567' }, uecs);
   assert.equal(await store.createFromFile({ nombre: 'JOAQUIN GUZMAN LOERA', direccion: '', linea: '6621234567' }, uecs), null);
   assert.equal(await store.createFromFile({ nombre: 'Otra Persona', direccion: '', linea: '6621234567' }, general), 2);
   assert.deepEqual((await store.search('Joakin Gusman', uecs)).map((row) => [row.nombre, row.exact]), [['Joaquín Guzmán Loera', false]]);
   assert.deepEqual(await store.search('Joaquin Guzman', general), []);
+  assert.deepEqual((await store.search('@elchapo', uecs)).map((row) => [row.nombre, row.exact]), [['Joaquín Guzmán Loera', true]]);
+  assert.deepEqual(await store.search('@elchapo', general), []);
+  assert.deepEqual(await store.search('el', uecs), []);
   assert.deepEqual((await store.search('+52 662 123 4567', general)).map((row) => row.nombre), ['Otra Persona']);
   assert.equal((await store.search('Joaquin Guzman', { userId: 1, role: 'admin', isAdmin: true })).length, 1);
 });
