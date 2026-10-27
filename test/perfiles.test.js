@@ -44,8 +44,9 @@ test('Excel files are read on every sheet and profiles need a name and a line', 
   assert.deepEqual(extractTitular(sheets), { nombre: 'Juan Pérez', direccion: '' });
   assert.match(validarPerfil({ nombre: ' ', linea: '662' }).error, /nombre/);
   assert.match(validarPerfil({ nombre: 'Juan', linea: '' }).error, /línea/);
-  assert.deepEqual(validarPerfil({ nombre: ' Juan  Pérez ', direccion: '', linea: '662 123 4567' }).perfil,
-    { nombre: 'Juan Pérez', direccion: '', linea: '662 123 4567' });
+  assert.deepEqual(validarPerfil({ nombre: ' Juan  Pérez ', direccion: '', alias: ' @juanp  Telegram ', linea: '662 123 4567' }).perfil,
+    { nombre: 'Juan Pérez', direccion: '', alias: '@juanp Telegram', linea: '662 123 4567' });
+  assert.match(validarPerfil({ nombre: 'Juan', alias: 'x'.repeat(501), linea: '662' }).error, /alias OSINT/);
   assert.ok(isPhoneQuery('(662) 123-4567'));
   assert.ok(!isPhoneQuery('Juan Pérez') && !isPhoneQuery('123'));
 });
@@ -130,7 +131,7 @@ test('the tab registers a profile, taking Nombre and Dirección from the Excel u
 
   assert.equal((await fetch(base, { redirect: 'manual' })).headers.get('location'), '/');
 
-  const typed = await post({ nombre: 'Luis Ramírez', direccion: 'Centro', linea: '6620000000' });
+  const typed = await post({ nombre: 'Luis Ramírez', direccion: 'Centro', alias: '@luisr en Telegram', linea: '6620000000' });
   assert.match(new URL(typed.headers.get('location'), base).searchParams.get('message'), /registrado/);
 
   const fromFile = await post({ nombre: 'Escrito', linea: '6621234567' }, xlsxOf([['Nombre', 'JUAN PÉREZ'], ['Dirección', 'CALLE 5']]));
@@ -146,7 +147,7 @@ test('the tab registers a profile, taking Nombre and Dirección from the Excel u
     ['Luis Ramírez', 'Centro', 'uecs'], ['JUAN PÉREZ', 'CALLE 5', 'uecs'], ['Escrito a mano', '', 'uecs'],
   ]);
   const page = await (await fetch(base, { headers: { 'x-role': 'uecs' } })).text();
-  assert.ok(page.includes('JUAN PÉREZ') && page.includes('CALLE 5'));
+  assert.ok(page.includes('JUAN PÉREZ') && page.includes('CALLE 5') && page.includes('@luisr en Telegram'));
 
   const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(16)]);
   const postImages = (id, files) => {
@@ -183,8 +184,10 @@ test('the tab registers a profile, taking Nombre and Dirección from the Excel u
   const invalidEdit = await edit(2, { nombre: '', direccion: 'Otra', linea: '6621234567' });
   assert.equal(invalidEdit.status, 400);
   assert.ok((await invalidEdit.text()).includes('Escribe el nombre'));
-  assert.match(message(await edit(2, { nombre: ' Juan  Pérez Ruiz ', direccion: 'Calle 9', linea: '662 123 4567' })), /actualizado/);
-  assert.deepEqual([created[1].nombre, created[1].direccion, created[1].linea], ['Juan Pérez Ruiz', 'Calle 9', '662 123 4567']);
+  assert.match(message(await edit(2, { nombre: ' Juan  Pérez Ruiz ', direccion: 'Calle 9', alias: 'Juan P (WhatsApp)', linea: '662 123 4567' })), /actualizado/);
+  assert.deepEqual([created[1].nombre, created[1].direccion, created[1].alias, created[1].linea],
+    ['Juan Pérez Ruiz', 'Calle 9', 'Juan P (WhatsApp)', '662 123 4567']);
+  assert.ok((await (await fetch(`${base}/2/editar`, { headers: { 'x-role': 'uecs' } })).text()).includes('value="Juan P (WhatsApp)"'));
   assert.match(message(await edit(9, { nombre: 'X', linea: '1' })), /no fue encontrado/);
 });
 

@@ -37,7 +37,7 @@ export function createPerfilesRouter(pool, { perfiles = createPerfilesStore(pool
     if (!error) return next();
     return redirect(res, error.code === 'LIMIT_FILE_SIZE' ? 'El archivo supera el límite de 20 MB.' : 'No fue posible leer el archivo enviado.');
   }), async (req, res, next) => {
-    const form = { nombre: req.body.nombre, direccion: req.body.direccion, linea: req.body.linea };
+    const form = { nombre: req.body.nombre, direccion: req.body.direccion, alias: req.body.alias, linea: req.body.linea };
     let note = '';
     if (req.file) {
       if (path.extname(req.file.originalname).toLowerCase() !== '.xlsx') return redirect(res, 'El archivo debe ser Excel (.xlsx).');
@@ -88,7 +88,9 @@ export function createPerfilesRouter(pool, { perfiles = createPerfilesStore(pool
     const { perfil, error } = validarPerfil(req.body);
     try {
       if (error) {
-        const form = { id: req.params.id, nombre: req.body.nombre ?? '', direccion: req.body.direccion ?? '', linea: req.body.linea ?? '' };
+        const form = {
+          id: req.params.id, nombre: req.body.nombre ?? '', direccion: req.body.direccion ?? '', alias: req.body.alias ?? '', linea: req.body.linea ?? '',
+        };
         return res.status(400).render('pages/editar-perfil', { perfil: form, error });
       }
       const updated = await perfiles.update(req.params.id, perfil, req.session);

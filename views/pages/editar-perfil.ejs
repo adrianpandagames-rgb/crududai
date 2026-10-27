@@ -21,6 +21,11 @@
                 <textarea id="direccion" name="direccion" class="form-control" rows="3" maxlength="500"><%= perfil.direccion %></textarea>
               </div>
               <div class="mb-3">
+                <label for="alias" class="form-label">Alias OSINT</label>
+                <input type="text" id="alias" name="alias" class="form-control" maxlength="500" value="<%= perfil.alias || '' %>" />
+                <div class="form-text">Cómo aparece en Telegram, WhatsApp u otras apps.</div>
+              </div>
+              <div class="mb-3">
                 <label for="linea" class="form-label">Línea telefónica</label>
                 <input type="text" id="linea" name="linea" class="form-control" maxlength="50" required value="<%= perfil.linea %>" />
               </div>

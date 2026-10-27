@@ -3,7 +3,8 @@ import { fileGroupOf, visibleFiles } from './fileGroups.js';
 import { IMAGE_TYPES, detectImageType } from './imageService.js';
 import { buildNameIndex, normalizeName, searchNameIndex } from './nameSearchService.js';
 
-export const MAX_LENGTHS = { nombre: 200, direccion: 500, linea: 50 };
+export const MAX_LENGTHS = { nombre: 200, direccion: 500, alias: 500, linea: 50 };
+const FIELD_NAMES = { nombre: 'nombre', direccion: 'dirección', alias: 'alias OSINT', linea: 'línea' };
 export const MAX_IMAGES_PER_PERFIL = 30;
 // Only formats every browser can show; the type comes from the file signature.
 const PERFIL_IMAGE_TYPES = ['jpeg', 'png', 'gif', 'webp'];
@@ -62,12 +63,13 @@ export function readXlsxSheets(buffer) {
   }));
 }
 
-export function validarPerfil({ nombre, direccion, linea }) {
-  const perfil = { nombre: clean(nombre), direccion: clean(direccion), linea: clean(linea) };
+// The OSINT alias is how the person shows up on Telegram, WhatsApp and similar apps.
+export function validarPerfil({ nombre, direccion, alias, linea }) {
+  const perfil = { nombre: clean(nombre), direccion: clean(direccion), alias: clean(alias), linea: clean(linea) };
   if (!perfil.nombre) return { error: 'Escribe el nombre o sube un Excel que lo incluya.' };
   if (!perfil.linea) return { error: 'Escribe la línea telefónica.' };
   const tooLong = Object.keys(MAX_LENGTHS).find((field) => perfil[field].length > MAX_LENGTHS[field]);
-  if (tooLong) return { error: `El campo ${tooLong === 'direccion' ? 'dirección' : tooLong === 'linea' ? 'línea' : tooLong} es demasiado largo.` };
+  if (tooLong) return { error: `El campo ${FIELD_NAMES[tooLong]} es demasiado largo.` };
   return { perfil };
 }
 
@@ -89,7 +91,12 @@ export function createPerfilesStore(pool) {
       owner_group VARCHAR(10) NOT NULL DEFAULT 'general',
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       INDEX perfiles_linea_digitos (linea_digitos)
-    )`).then(() => pool.query(`CREATE TABLE IF NOT EXISTS perfil_imagenes (
+    )`).then(async () => {
+      const [columns] = await pool.query('SHOW COLUMNS FROM perfiles');
+      if (!columns.some((column) => column.Field === 'alias_osint')) {
+        await pool.query("ALTER TABLE perfiles ADD COLUMN alias_osint VARCHAR(500) NOT NULL DEFAULT '' AFTER direccion");
+      }
+    }).then(() => pool.query(`CREATE TABLE IF NOT EXISTS perfil_imagenes (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
       perfil_id BIGINT UNSIGNED NOT NULL,
       image_type VARCHAR(10) NOT NULL,
@@ -102,7 +109,7 @@ export function createPerfilesStore(pool) {
     return storage;
   };
 
-  const select = `SELECT p.id, p.nombre, p.direccion, p.linea, p.origen, u.email AS createdBy,
+  const select = `SELECT p.id, p.nombre, p.direccion, p.alias_osint AS alias, p.linea, p.origen, u.email AS createdBy,
     DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i') AS createdAt,
     (SELECT GROUP_CONCAT(i.id ORDER BY i.id) FROM perfil_imagenes i WHERE i.perfil_id = p.id) AS imagenIds
     FROM perfiles p LEFT JOIN users u ON u.id = p.user_id`;
@@ -120,9 +127,9 @@ export function createPerfilesStore(pool) {
   const create = async (perfil, session, origen = 'manual') => {
     await initialize();
     const [result] = await pool.execute(
-      `INSERT INTO perfiles (nombre, direccion, linea, linea_digitos, origen, user_id, owner_group)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [perfil.nombre, perfil.direccion, perfil.linea, lineDigits(perfil.linea), origen, session?.userId ?? null, fileGroupOf(session)],
+      `INSERT INTO perfiles (nombre, direccion, linea, linea_digitos, origen, user_id, owner_group, alias_osint)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [perfil.nombre, perfil.direccion, perfil.linea, lineDigits(perfil.linea), origen, session?.userId ?? null, fileGroupOf(session), perfil.alias || ''],
     );
     return result.insertId;
   };
@@ -141,7 +148,7 @@ export function createPerfilesStore(pool) {
   const get = async (id, session) => {
     await initialize();
     const scope = visibleFiles(session, 'p');
-    const [rows] = await pool.execute(`SELECT p.id, p.nombre, p.direccion, p.linea FROM perfiles p WHERE p.id = ? AND ${scope.where}`,
+    const [rows] = await pool.execute(`SELECT p.id, p.nombre, p.direccion, p.alias_osint AS alias, p.linea FROM perfiles p WHERE p.id = ? AND ${scope.where}`,
       [id, ...scope.values]);
     return rows[0] || null;
   };
@@ -149,8 +156,8 @@ export function createPerfilesStore(pool) {
   const update = async (id, perfil, session) => {
     await initialize();
     const scope = visibleFiles(session, 'p');
-    const [result] = await pool.execute(`UPDATE perfiles p SET p.nombre = ?, p.direccion = ?, p.linea = ?, p.linea_digitos = ?
-      WHERE p.id = ? AND ${scope.where}`, [perfil.nombre, perfil.direccion, perfil.linea, lineDigits(perfil.linea), id, ...scope.values]);
+    const [result] = await pool.execute(`UPDATE perfiles p SET p.nombre = ?, p.direccion = ?, p.alias_osint = ?, p.linea = ?, p.linea_digitos = ?
+      WHERE p.id = ? AND ${scope.where}`, [perfil.nombre, perfil.direccion, perfil.alias, perfil.linea, lineDigits(perfil.linea), id, ...scope.values]);
     return result.affectedRows === 1;
   };
 

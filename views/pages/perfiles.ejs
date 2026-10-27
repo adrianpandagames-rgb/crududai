@@ -45,6 +45,11 @@
                 <textarea id="direccion" name="direccion" class="form-control" rows="2" maxlength="500"><%= form.direccion || '' %></textarea>
               </div>
               <div class="mb-3">
+                <label for="alias" class="form-label">Alias OSINT</label>
+                <input type="text" id="alias" name="alias" class="form-control" maxlength="500" value="<%= form.alias || '' %>" />
+                <div class="form-text">Cómo aparece en Telegram, WhatsApp u otras apps.</div>
+              </div>
+              <div class="mb-3">
                 <label for="linea" class="form-label">Línea telefónica</label>
                 <input type="text" id="linea" name="linea" class="form-control" maxlength="50" required value="<%= form.linea || '' %>" />
               </div>
@@ -65,12 +70,13 @@
           <div class="table-responsive">
             <table class="table w-100 table-stack perfiles-table">
               <colgroup>
-                <col style="width: 36%" /><col style="width: 26%" /><col style="width: 13%" /><col style="width: 15%" /><col style="width: 10%" />
+                <col style="width: 30%" /><col style="width: 21%" /><col style="width: 14%" /><col style="width: 12%" /><col style="width: 14%" /><col style="width: 9%" />
               </colgroup>
               <thead>
                 <tr>
                   <th>Nombre</th>
                   <th>Dirección</th>
+                  <th>Alias OSINT</th>
                   <th>Línea</th>
                   <th>Registrado</th>
                   <th>Acción</th>
@@ -78,7 +84,7 @@
               </thead>
               <tbody>
                 <% if (perfiles.length === 0) { %>
-                  <tr><td colspan="5" class="text-center">No hay perfiles registrados</td></tr>
+                  <tr><td colspan="6" class="text-center">No hay perfiles registrados</td></tr>
                 <% } else { %>
                   <% perfiles.forEach((perfil) => { %>
                     <tr>
@@ -110,6 +116,7 @@
                         </div>
                       </td>
                       <td data-label="Dirección"><%= perfil.direccion || '—' %></td>
+                      <td data-label="Alias OSINT"><%= perfil.alias || '—' %></td>
                       <td data-label="Línea"><%= perfil.linea %></td>
                       <td data-label="Registrado" class="small">
                         <div><%= perfil.createdAt %></div>

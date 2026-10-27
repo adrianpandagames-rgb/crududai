@@ -89,7 +89,7 @@
                 <% } else { %>
                   <div class="table-responsive">
                     <table class="table nombres-table table-stack mb-0">
-                      <thead><tr><th>Nombre</th><th>Dirección</th><th>Línea</th></tr></thead>
+                      <thead><tr><th>Nombre</th><th>Dirección</th><th>Alias OSINT</th><th>Línea</th></tr></thead>
                       <tbody>
                         <% search.perfiles.forEach((perfil) => { %>
                           <tr>
@@ -108,6 +108,7 @@
                               <% } %>
                             </td>
                             <td data-label="Dirección" class="nombres-details"><%= perfil.direccion || '—' %></td>
+                            <td data-label="Alias OSINT" class="nombres-details"><%= perfil.alias || '—' %></td>
                             <td data-label="Línea" class="nombres-details"><%= perfil.linea %></td>
                           </tr>
                         <% }) %>
