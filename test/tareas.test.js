@@ -2,23 +2,38 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
 import { fileURLToPath } from 'node:url';
-import { createTareasStore, puedeEliminar, validarTarea } from '../src/tareasService.js';
+import {
+  antiguedadOf, createTareasStore, diasDesde, haceDias, hoyLocal, puedeEliminar, validarLlegada, validarTarea,
+} from '../src/tareasService.js';
 import { createTareasEvents, createTareasRouter } from '../src/tareasRouter.js';
 
-test('a task needs a title, a real date and each slot filled from its own job title', () => {
+test('a task needs a title and each slot filled from its own job title', () => {
   const allowed = { licenciado: [1], ingeniero: [2] };
   assert.match(validarTarea({ titulo: '  ' }).error, /título/);
   assert.match(validarTarea({ titulo: 'Oficio', licenciado: '2' }, allowed).error, /licenciado/);
   assert.match(validarTarea({ titulo: 'Oficio', ingeniero: '1' }, allowed).error, /ingeniero/);
-  assert.match(validarTarea({ titulo: 'Oficio', fechaLimite: '2026-02-30' }).error, /fecha/);
   assert.deepEqual(validarTarea({
-    titulo: ' Revisar  sábana ', descripcion: ' línea 1\r\nlínea 2 ', licenciado: '1', ingeniero: '2', fechaLimite: '2026-11-03', estado: 'en_proceso',
+    titulo: ' Revisar  sábana ', descripcion: ' línea 1\r\nlínea 2 ', licenciado: '1', ingeniero: '2', estado: 'en_proceso', fechaLlegada: '2026-10-01',
   }, allowed).tarea, {
-    titulo: 'Revisar sábana', descripcion: 'línea 1\nlínea 2', licenciadoId: 1, ingenieroId: 2, fechaLimite: '2026-11-03', estado: 'en_proceso',
+    titulo: 'Revisar sábana', descripcion: 'línea 1\nlínea 2', licenciadoId: 1, ingenieroId: 2, estado: 'en_proceso',
   });
   // Both slots are optional.
   assert.deepEqual(validarTarea({ titulo: 'Sin asignar', licenciado: '', estado: 'otra' }, allowed).tarea,
-    { titulo: 'Sin asignar', descripcion: '', licenciadoId: null, ingenieroId: null, fechaLimite: null, estado: 'pendiente' });
+    { titulo: 'Sin asignar', descripcion: '', licenciadoId: null, ingenieroId: null, estado: 'pendiente' });
+});
+
+test('the arrival date is required, real and not in the future, and sets the age frame by whole days', () => {
+  const hoy = '2026-10-29';
+  assert.match(validarLlegada('', hoy).error, /Escriba/);
+  assert.match(validarLlegada('2026-02-30', hoy).error, /no es válida/);
+  assert.match(validarLlegada('2026-10-30', hoy).error, /posterior/);
+  assert.deepEqual(validarLlegada(' 2026-10-29 ', hoy), { fecha: '2026-10-29' });
+  assert.deepEqual(['2026-10-29', '2026-10-28', '2026-10-27', '2026-10-26', '2026-10-25', '2026-09-30'].map((fecha) => diasDesde(fecha, hoy)),
+    [0, 1, 2, 3, 4, 29]);
+  assert.deepEqual([0, 1, 2, 3, 4].map(antiguedadOf), ['', '', 'amarilla', 'amarilla', 'roja']);
+  assert.deepEqual([0, 1, 5].map(haceDias), ['hoy', 'hace 1 día', 'hace 5 días']);
+  // The day turns at midnight in Sonora, not in UTC: 23:30 on the 28th there is already the 29th in UTC.
+  assert.equal(hoyLocal(new Date('2026-10-29T06:30:00Z')), '2026-10-28');
 });
 
 test('the single responsable of the first version moves to the slot of their job title', async () => {
@@ -34,11 +49,15 @@ test('the single responsable of the first version moves to the slot of their job
   await createTareasStore(pool).initialize();
   assert.ok(!sql.some((statement) => statement.startsWith('ALTER TABLE users')));
   const migration = sql.filter((statement) => /^(ALTER TABLE tareas|UPDATE tareas)/.test(statement));
-  assert.equal(migration.length, 4);
+  assert.equal(migration.length, 7);
   assert.match(migration[0], /ADD COLUMN licenciado_id/);
   assert.match(migration[1], /ADD COLUMN ingeniero_id/);
   assert.match(migration[2], /SET t.ingeniero_id = IF\(u.puesto = 'ingeniero'/);
   assert.match(migration[3], /DROP COLUMN responsable_id/);
+  // Tasks registered before the arrival date existed take the day they were created.
+  assert.match(migration[4], /ADD COLUMN fecha_llegada DATE NULL/);
+  assert.match(migration[5], /SET fecha_llegada = DATE\(created_at\)/);
+  assert.match(migration[6], /MODIFY fecha_llegada DATE NOT NULL/);
 });
 
 test('only the creator, an administrator or a semiadministrator may delete a task', () => {
@@ -49,45 +68,43 @@ test('only the creator, an administrator or a semiadministrator may delete a tas
   assert.ok(!puedeEliminar(tarea, { userId: 5, role: 'usuario' }));
 });
 
-test('moving a task places it before its new neighbour and renumbers the column', async () => {
-  const rows = [
-    { id: 1, estado: 'pendiente', posicion: 0 }, { id: 2, estado: 'pendiente', posicion: 1 },
-    { id: 3, estado: 'en_proceso', posicion: 0 }, { id: 4, estado: 'en_proceso', posicion: 1 },
-  ];
-  const connection = {
-    beginTransaction: async () => {}, commit: async () => {}, rollback: async () => {}, release: () => {},
+test('columns list the oldest arrival first and editing never writes the arrival date', async () => {
+  const calls = [];
+  const pool = {
+    query: async () => [[]],
     execute: async (sql, values) => {
-      if (sql.startsWith('SELECT id FROM tareas WHERE id')) return [rows.filter((row) => row.id === Number(values[0]))];
-      if (sql.startsWith('SELECT id FROM tareas WHERE estado')) {
-        return [rows.filter((row) => row.estado === values[0] && row.id !== Number(values[1])).sort((a, b) => a.posicion - b.posicion)];
+      calls.push({ sql, values });
+      if (sql.startsWith('SELECT t.id')) {
+        return [[{ id: 4, titulo: 'Vieja', estado: 'pendiente', fechaLlegada: '2026-10-20' }, { id: 9, titulo: 'Rara', estado: 'otra', fechaLlegada: null }]];
       }
-      const row = rows.find((candidate) => candidate.id === Number(values[1]));
-      if (sql.includes('SET estado')) row.estado = values[0];
-      else row.posicion = values[0];
-      return [{ affectedRows: 1 }];
+      return [{ affectedRows: Number(values.at(-1)) === 7 ? 0 : 1, insertId: 12 }];
     },
   };
-  const store = createTareasStore({ query: async () => [[]], getConnection: async () => connection });
-  const order = (estado) => rows.filter((row) => row.estado === estado).sort((a, b) => a.posicion - b.posicion).map((row) => row.id);
+  const store = createTareasStore(pool);
+  const columns = await store.board();
+  assert.match(calls.at(-1).sql, /ORDER BY t.fecha_llegada, t.created_at, t.id$/);
+  // An unknown column falls back to Pendiente; the date is shown day first.
+  assert.deepEqual(columns.pendiente.map((row) => [row.id, row.llegada]), [[4, '20/10/2026'], [9, '']]);
 
-  assert.ok(await store.move(1, 'en_proceso', 4));
-  assert.deepEqual([order('pendiente'), order('en_proceso')], [[2], [3, 1, 4]]);
-  // A neighbour that is not in the column, as when the board is filtered, sends the task to the end.
-  assert.ok(await store.move(2, 'en_proceso', 99));
-  assert.deepEqual(order('en_proceso'), [3, 1, 4, 2]);
-  assert.equal(await store.move(7, 'en_proceso', null), false);
-  assert.equal(await store.move(1, 'archivada', null), false);
+  await store.create({ titulo: 'Nueva', descripcion: '', estado: 'pendiente', licenciadoId: null, ingenieroId: 8, fechaLlegada: '2026-10-28' }, { userId: 5 });
+  assert.match(calls.at(-1).sql, /fecha_llegada/);
+  assert.deepEqual(calls.at(-1).values.slice(-2), ['2026-10-28', 5]);
+  await store.update(4, { titulo: 'Vieja', descripcion: '', estado: 'terminada', licenciadoId: 5, ingenieroId: null, fechaLlegada: '2000-01-01' });
+  assert.ok(!calls.at(-1).sql.includes('fecha_llegada') && !calls.at(-1).values.includes('2000-01-01'));
+  assert.ok(await store.move(4, 'en_proceso'));
+  assert.equal(await store.move(7, 'en_proceso'), false);
+  assert.equal(await store.move(4, 'archivada'), false);
 });
 
 test('the board is closed to UECS and moves cards by drag or by arrow', async (t) => {
   const tasks = [
     {
       id: 1, titulo: 'Contestar oficio', descripcion: '', estado: 'pendiente', licenciadoId: 5, licenciado: 'ana@udai.mx',
-      ingenieroId: 8, ingeniero: 'beto@udai.mx', fechaLimite: '2020-01-01', creadorId: 5,
+      ingenieroId: 8, ingeniero: 'beto@udai.mx', fechaLlegada: '2026-10-20', llegada: '20/10/2026', dias: 4, creadorId: 5,
     },
     {
       id: 2, titulo: 'Analizar sábana', descripcion: '', estado: 'en_proceso', licenciadoId: null, licenciado: null,
-      ingenieroId: null, ingeniero: null, fechaLimite: null, creadorId: 8,
+      ingenieroId: null, ingeniero: null, fechaLlegada: '2026-10-27', llegada: '27/10/2026', dias: 2, creadorId: 8,
     },
   ];
   const users = [{ id: 5, email: 'ana@udai.mx', puesto: 'licenciado' }, { id: 8, email: 'beto@udai.mx', puesto: 'ingeniero' }];
@@ -103,8 +120,8 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
     get: async (id) => tasks.find((task) => String(task.id) === String(id)) || null,
     create: async (tarea) => { created.push(tarea); return 3; },
     update: async (id, tarea) => { updated.push([Number(id), tarea]); return true; },
-    move: async (id, estado, antesDe) => {
-      moves.push([Number(id), estado, antesDe]);
+    move: async (id, estado) => {
+      moves.push([Number(id), estado]);
       const task = tasks.find((candidate) => String(candidate.id) === String(id));
       if (task) task.estado = estado;
       return Boolean(task);
@@ -136,7 +153,13 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
   assert.equal((await fetch(base, as('uecs'))).headers.get('location'), '/Crud');
 
   const page = await (await fetch(base, as('usuario'))).text();
-  assert.ok(page.includes('Contestar oficio') && page.includes('Analizar sábana') && page.includes('vencida'));
+  assert.ok(page.includes('Contestar oficio') && page.includes('Analizar sábana'));
+  // Four days is red, two is yellow, and each card says how long ago it arrived.
+  assert.match(page, /class="tarea-card is-roja" id="tarea-1"/);
+  assert.match(page, /class="tarea-card is-amarilla" id="tarea-2"/);
+  assert.ok(page.includes('Llegó 20/10/2026') && page.includes('<span class="tarea-dias">hace 4 días</span>'));
+  // The new-task form starts on today and cannot pick a later day.
+  assert.match(page, new RegExp(`id="fechaLlegada" name="fechaLlegada"[^>]*required max="${hoyLocal()}"[^>]*value="${hoyLocal()}"`));
   // Task 2 was created by someone else, so this user sees no delete button for it.
   assert.ok(page.includes('/tareas/eliminar/1') && !page.includes('/tareas/eliminar/2'));
   assert.ok(page.includes('<span class="tarea-chip-puesto">Lic.</span> ana') && page.includes('<span class="tarea-chip-puesto">Ing.</span> beto'));
@@ -148,25 +171,32 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
   const filtered = await (await fetch(`${base}?responsable=8`, as('usuario'))).text();
   assert.ok(filtered.includes('Contestar oficio') && !filtered.includes('Analizar sábana'));
 
-  const invalid = await fetch(base, as('usuario', form({ titulo: 'Revisar', licenciado: '8' })));
+  const invalid = await fetch(base, as('usuario', form({ titulo: 'Revisar', licenciado: '8', fechaLlegada: '2026-10-01' })));
   assert.equal(invalid.status, 400);
   assert.ok((await invalid.text()).includes('Seleccione un licenciado'));
-  const ok = await fetch(base, as('usuario', form({ titulo: 'Revisar', licenciado: '5', ingeniero: '8', volver: '5' })));
+  const noDate = await fetch(base, as('usuario', form({ titulo: 'Revisar', fechaLlegada: '' })));
+  assert.equal(noDate.status, 400);
+  assert.match(await noDate.text(), /Escriba la fecha de llegada[\s\S]*id="fechaLlegada" name="fechaLlegada" class="form-control is-invalid"/);
+  const ok = await fetch(base, as('usuario', form({ titulo: 'Revisar', licenciado: '5', ingeniero: '8', fechaLlegada: '2026-10-01', volver: '5' })));
   assert.match(message(ok), /registrada/);
   assert.match(ok.headers.get('location'), /responsable=5.*#tarea-3$/);
-  assert.deepEqual([created[0].licenciadoId, created[0].ingenieroId], [5, 8]);
+  assert.deepEqual([created[0].licenciadoId, created[0].ingenieroId, created[0].fechaLlegada], [5, 8, '2026-10-01']);
 
   // Ana stops being a licenciada: the task she already has keeps her when it is edited, new tasks no longer offer her.
   users[0].puesto = 'ingeniero';
   const editPage = await (await fetch(`${base}/1/editar`, as('usuario'))).text();
   assert.match(select(editPage, 'licenciado'), /<option value="5" selected>ana@udai.mx/);
-  assert.match(message(await fetch(`${base}/1/editar`, as('usuario', form({ titulo: 'Contestar oficio', licenciado: '5', ingeniero: '8' })))), /actualizada/);
-  assert.deepEqual([updated[0][1].licenciadoId, updated[0][1].ingenieroId], [5, 8]);
-  assert.equal((await fetch(base, as('usuario', form({ titulo: 'Otra', licenciado: '5' })))).status, 400);
+  // The arrival date shows read-only, with no field the form would send.
+  assert.match(editPage, /id="llegada" class="form-control" readonly[^>]*value="20\/10\/2026 · hace 4 días"/);
+  assert.ok(!editPage.includes('name="fechaLlegada"'));
+  const edited = form({ titulo: 'Contestar oficio', licenciado: '5', ingeniero: '8', fechaLlegada: '2000-01-01' });
+  assert.match(message(await fetch(`${base}/1/editar`, as('usuario', edited))), /actualizada/);
+  assert.deepEqual([updated[0][1].licenciadoId, updated[0][1].ingenieroId, updated[0][1].fechaLlegada], [5, 8, undefined]);
+  assert.equal((await fetch(base, as('usuario', form({ titulo: 'Otra', licenciado: '5', fechaLlegada: '2026-10-01' })))).status, 400);
   users[0].puesto = 'licenciado';
 
   const dragged = await fetch(`${base}/2/mover`, as('usuario', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado: 'terminada', antesDe: 1 }),
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado: 'terminada' }),
   }));
   assert.deepEqual(await dragged.json(), { ok: true });
   const badColumn = await fetch(`${base}/2/mover`, as('usuario', {
@@ -178,7 +208,9 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
   // There is no column left of the first one.
   const pastEdge = await fetch(`${base}/1/mover`, as('usuario', form({ direccion: 'izquierda', estado: 'terminada' })));
   assert.ok(message(pastEdge).includes('no existe'));
-  assert.deepEqual(moves, [[2, 'terminada', 1], [1, 'en_proceso', null], [1, 'pendiente', null]]);
+  assert.deepEqual(moves, [[2, 'terminada'], [1, 'en_proceso'], [1, 'pendiente']]);
+  // In Terminada the frame is dropped by the column's style, so a card dragged there needs no redraw.
+  assert.ok(page.includes('.tareas-lista:not([data-estado="terminada"]) .tarea-card.is-roja'));
 
   assert.match(message(await fetch(`${base}/eliminar/2`, as('usuario', form({})))), /Solo quien creó/);
   assert.match(message(await fetch(`${base}/eliminar/1`, as('usuario', form({})))), /eliminada/);

@@ -27,8 +27,11 @@
               </div>
               <div class="row">
                 <div class="col-sm-6 mb-3">
-                  <label for="fechaLimite" class="form-label">Fecha límite</label>
-                  <input type="date" id="fechaLimite" name="fechaLimite" class="form-control" value="<%= tarea.fechaLimite || '' %>" />
+                  <%# Typed when the task was registered; shown for reference only, the form never sends it. %>
+                  <label for="llegada" class="form-label">Fecha de llegada</label>
+                  <input type="text" id="llegada" class="form-control" readonly aria-describedby="llegadaAyuda"
+                    value="<%= tarea.llegada ? `${tarea.llegada} · ${haceDias(tarea.dias)}` : '' %>" />
+                  <div id="llegadaAyuda" class="form-text">Se captura al crear la tarea y no se puede cambiar.</div>
                 </div>
                 <div class="col-sm-6 mb-3">
                   <label for="estado" class="form-label">Columna</label>

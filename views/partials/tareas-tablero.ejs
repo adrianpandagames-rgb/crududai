@@ -6,8 +6,9 @@
     <div class="tareas-lista" data-estado="<%= estado %>">
       <p class="tareas-vacia">Sin tareas</p>
       <% columnas[estado].forEach((tarea) => { %>
-        <% const vencida = tarea.fechaLimite && tarea.fechaLimite < hoy; %>
-        <article class="tarea-card" id="tarea-<%= tarea.id %>" data-id="<%= tarea.id %>">
+        <% const antiguedad = antiguedadOf(tarea.dias); %>
+        <article class="tarea-card<%= antiguedad ? ` is-${antiguedad}` : '' %>" id="tarea-<%= tarea.id %>" data-id="<%= tarea.id %>"
+          data-llegada="<%= tarea.fechaLlegada %>">
           <h3 class="tarea-titulo h6"><%= tarea.titulo %></h3>
           <% if (tarea.descripcion) { %><p class="tarea-descripcion"><%= tarea.descripcion %></p><% } %>
           <div class="tarea-meta">
@@ -20,11 +21,11 @@
             <% if (!tarea.licenciado && !tarea.ingeniero) { %>
               <span class="tarea-chip is-sin-asignar">Sin asignar</span>
             <% } %>
-            <% if (tarea.fechaLimite) { %>
-              <span class="tarea-chip<%= vencida ? ' is-vencida' : '' %>"><i class="bi bi-calendar-event" aria-hidden="true"></i>
-                <%= tarea.fechaLimite.split('-').reverse().join('/') %><% if (vencida) { %><span class="tarea-vencida-texto"> · vencida</span><% } %></span>
-            <% } %>
           </div>
+          <p class="tarea-llegada" title="Fecha de llegada">
+            <i class="bi bi-inbox" aria-hidden="true"></i> Llegó <%= tarea.llegada %>
+            · <span class="tarea-dias"><%= haceDias(tarea.dias) %></span>
+          </p>
           <div class="tarea-acciones">
             <form action="/tareas/<%= tarea.id %>/mover" method="POST" data-direccion="izquierda">
               <input type="hidden" name="volver" value="<%= filtro %>" />

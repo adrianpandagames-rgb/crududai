@@ -14,12 +14,13 @@
   });
   const enableDrag = () => board.querySelectorAll('.tarea-card').forEach((card) => { card.draggable = true; });
 
-  // The card the dragged one lands before: the first whose middle is below the pointer.
-  const cardAfter = (list, y) => [...list.querySelectorAll('.tarea-card:not(.is-arrastrando)')]
-    .find((card) => {
-      const box = card.getBoundingClientRect();
-      return y < box.top + box.height / 2;
-    }) || null;
+  // Columns are ordered by arrival date, oldest first, as the server lists them; ties go by id, the order they were registered.
+  const arrivesAfter = (a, b) => a.dataset.llegada > b.dataset.llegada
+    || (a.dataset.llegada === b.dataset.llegada && Number(a.dataset.id) > Number(b.dataset.id));
+  const placeInOrder = (list, card) => {
+    const next = [...list.querySelectorAll('.tarea-card')].find((other) => other !== card && arrivesAfter(other, card)) || null;
+    if (card.parentElement !== list || card.nextElementSibling !== next) list.insertBefore(card, next);
+  };
 
   // The board is redrawn on refresh, so the listeners sit on it rather than on each card.
   board.addEventListener('dragstart', (event) => {
@@ -52,8 +53,7 @@
     if (!dragged || !list) return;
     event.preventDefault();
     lists().forEach((other) => other.classList.toggle('is-destino', other === list));
-    const next = cardAfter(list, event.clientY);
-    if (next !== dragged.nextElementSibling || dragged.parentElement !== list) list.insertBefore(dragged, next);
+    placeInOrder(list, dragged);
   });
 
   board.addEventListener('dragleave', (event) => {
@@ -71,16 +71,15 @@
     dragged = null;
     list.classList.remove('is-destino');
     updateCounts();
-    // Unchanged place: nothing to save.
-    if (back.list === list && back.next === card.nextElementSibling) return;
-    const next = card.nextElementSibling?.closest('.tarea-card');
+    // Same column: nothing to save.
+    if (back.list === list) return;
     saving += 1;
     try {
       const response = await fetch(`/tareas/${card.dataset.id}/mover`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ estado: list.dataset.estado, antesDe: next ? Number(next.dataset.id) : null }),
+        body: JSON.stringify({ estado: list.dataset.estado }),
       });
       // An expired session answers with a redirect to the login page instead of JSON.
       if (response.redirected) throw new Error('La sesión expiró. Recargue la página e inicie sesión de nuevo.');
@@ -149,6 +148,9 @@
   };
 
   enableDrag();
+  // The days since arrival, and with them the yellow and red frames, change with the date and not with any edit,
+  // so a board left open redraws itself every half hour.
+  setInterval(requestRefresh, 30 * 60 * 1000);
   if ('EventSource' in window) {
     const events = new EventSource('/tareas/eventos');
     events.addEventListener('cambio', requestRefresh);

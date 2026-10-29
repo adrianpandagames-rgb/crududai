@@ -1,6 +1,8 @@
 import express from 'express';
 import { isSessionExpired } from './sessionUtils.js';
-import { ESTADOS, ESTADO_LABELS, createTareasStore, puedeEliminar, validarTarea } from './tareasService.js';
+import {
+  ESTADOS, ESTADO_LABELS, antiguedadOf, createTareasStore, haceDias, hoyLocal, puedeEliminar, validarLlegada, validarTarea,
+} from './tareasService.js';
 import { puestoLabels, userPuestos } from './usuariosService.js';
 
 // Proxies close a stream that stays silent; a comment line every 25 s keeps it open.
@@ -59,8 +61,7 @@ export function createTareasRouter(pool, { tareas = createTareasStore(pool), eve
 
   const boardLocals = async (req, filtro) => ({
     columnas: await tareas.board({ responsable: filtro }), filtro, ESTADOS, ESTADO_LABELS,
-    puedeEliminar: (tarea) => puedeEliminar(tarea, req.session),
-    hoy: new Date().toLocaleDateString('en-CA', { timeZone: process.env.TZ || 'America/Hermosillo' }),
+    puedeEliminar: (tarea) => puedeEliminar(tarea, req.session), antiguedadOf, haceDias,
   });
 
   // The people each slot offers: users with that job title, plus whoever already fills it on the task being edited,
@@ -81,12 +82,13 @@ export function createTareasRouter(pool, { tareas = createTareasStore(pool), eve
     const [locals, opciones] = await Promise.all([boardLocals(req, filtro), opcionesOf()]);
     // The filter lists everyone who can be assigned, in either slot.
     const responsables = [...opciones.licenciado, ...opciones.ingeniero].sort((a, b) => a.email.localeCompare(b.email));
+    const hoy = hoyLocal();
     return res.status(status).render('pages/tareas', {
-      ...locals, opciones, responsables, puestoLabels, form: {}, formError: null, message: '', messageType: '', ...extra,
+      ...locals, opciones, responsables, puestoLabels, hoy, form: { fechaLlegada: hoy }, formError: null, message: '', messageType: '', ...extra,
     });
   };
   const renderEdit = (res, { tarea, opciones, error = null, volver = '' }, status = 200) => res.status(status).render('pages/editar-tarea', {
-    tarea, opciones, puestoLabels, ESTADOS, ESTADO_LABELS, error, volver,
+    tarea, opciones, puestoLabels, haceDias, ESTADOS, ESTADO_LABELS, error, volver,
   });
 
   router.get('/eventos', (req, res) => eventos.subscribe(req, res));
@@ -114,8 +116,10 @@ export function createTareasRouter(pool, { tareas = createTareasStore(pool), eve
   router.post('/', async (req, res, next) => {
     try {
       const { tarea, error, field } = validarTarea(req.body, allowedOf(await opcionesOf()));
-      if (error) return await renderBoard(req, res, { form: req.body, formError: { message: error, field } }, 400);
-      const tareaId = await tareas.create(tarea, req.session);
+      const llegada = validarLlegada(req.body.fechaLlegada);
+      const failure = error ? { message: error, field } : llegada.error ? { message: llegada.error, field: 'fechaLlegada' } : null;
+      if (failure) return await renderBoard(req, res, { form: req.body, formError: failure }, 400);
+      const tareaId = await tareas.create({ ...tarea, fechaLlegada: llegada.fecha }, req.session);
       eventos.notify();
       return redirect(res, 'Tarea registrada correctamente.', 'success', { filtro: filtroOf(req.body.volver), tareaId });
     } catch (failure) {
@@ -144,7 +148,8 @@ export function createTareasRouter(pool, { tareas = createTareasStore(pool), eve
       if (!actual) return redirect(res, 'La tarea no fue encontrada.', 'error', { filtro });
       const opciones = await opcionesOf(actual);
       const { tarea, error } = validarTarea(req.body, allowedOf(opciones));
-      if (error) return renderEdit(res, { tarea: { ...req.body, id: req.params.id }, opciones, error, volver: filtro }, 400);
+      // What was typed, over the saved task so the arrival date and creator still show.
+      if (error) return renderEdit(res, { tarea: { ...actual, ...req.body, id: req.params.id }, opciones, error, volver: filtro }, 400);
       const updated = await tareas.update(req.params.id, tarea);
       if (updated) eventos.notify();
       return updated ? redirect(res, 'Tarea actualizada correctamente.', 'success', { filtro, tareaId: req.params.id })
@@ -154,15 +159,14 @@ export function createTareasRouter(pool, { tareas = createTareasStore(pool), eve
     }
   });
 
-  // Dragging a card sends JSON with the column and the card it was dropped before (none for the end); the arrow
-  // buttons send a form with direccion, which moves the task one column left or right and puts it at the end.
+  // Dragging a card sends JSON with the new column; the arrow buttons send a form with direccion, which moves the
+  // task one column left or right. Either way the task takes its place in the new column by arrival date.
   router.post('/:id/mover', async (req, res, next) => {
     const json = req.is('application/json');
     const fail = (status, message) => (json ? res.status(status).json({ error: message }) : redirect(res, message, 'error', { filtro: filtroOf(req.body.volver) }));
     if (!isId(req.params.id)) return fail(404, 'La tarea no fue encontrada.');
     try {
       let { estado } = req.body;
-      const antesDe = json && isId(String(req.body.antesDe ?? '')) ? Number(req.body.antesDe) : null;
       if (!json) {
         const current = await tareas.get(req.params.id);
         if (!current) return fail(404, 'La tarea no fue encontrada.');
@@ -170,7 +174,7 @@ export function createTareasRouter(pool, { tareas = createTareasStore(pool), eve
         estado = ESTADOS[ESTADOS.indexOf(current.estado) + step];
       }
       if (!ESTADOS.includes(estado)) return fail(400, 'La columna indicada no existe.');
-      const moved = await tareas.move(req.params.id, estado, antesDe);
+      const moved = await tareas.move(req.params.id, estado);
       if (!moved) return fail(404, 'La tarea no fue encontrada.');
       eventos.notify();
       return json ? res.json({ ok: true })

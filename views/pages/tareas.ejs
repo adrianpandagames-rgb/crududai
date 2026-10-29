@@ -33,11 +33,14 @@
       .tarea-chip { display: inline-flex; align-items: center; gap: .25rem; padding: .1rem .45rem; border-radius: 999px; background: rgba(127, 127, 127, .15); }
       .tarea-chip.is-sin-asignar { font-style: italic; opacity: .75; }
       .tarea-chip-puesto { font-weight: 700; }
-      .tarea-chip.is-vencida { background: #f8d7da; color: #842029; font-weight: 600; }
-      html[data-theme="dark"] .tarea-chip.is-vencida { background: rgba(220, 53, 69, .25); color: #f1aeb5; }
-      /* Finished tasks are not overdue. Keyed on the column, so a card dragged there updates without a reload. */
-      .tareas-lista[data-estado="terminada"] .tarea-chip.is-vencida { background: rgba(127, 127, 127, .15); color: inherit; font-weight: inherit; }
-      .tareas-lista[data-estado="terminada"] .tarea-vencida-texto { display: none; }
+      .tarea-llegada { font-size: .8rem; margin: 0 0 .5rem; opacity: .85; }
+      .tarea-dias { font-weight: 700; font-variant-numeric: tabular-nums; }
+      /* Age frame: yellow from 2 to 3 days since arrival, red after 3. The shadow thickens the 1px border without moving the layout.
+         Finished tasks are left plain; keyed on the column, so a card dragged there updates without a reload. */
+      .tareas-lista:not([data-estado="terminada"]) .tarea-card.is-amarilla { border-color: #ffc107; box-shadow: 0 0 0 2px #ffc107; }
+      .tareas-lista:not([data-estado="terminada"]) .tarea-card.is-roja { border-color: #dc3545; box-shadow: 0 0 0 2px #dc3545; }
+      .tareas-lista:not([data-estado="terminada"]) .tarea-card.is-roja .tarea-dias { color: #b02a37; }
+      html[data-theme="dark"] .tareas-lista:not([data-estado="terminada"]) .tarea-card.is-roja .tarea-dias { color: #f1aeb5; }
       /* The arrows likewise follow the card's column: no left arrow in the first, no right arrow in the last. */
       .tareas-lista[data-estado="<%= ESTADOS[0] %>"] [data-direccion="izquierda"],
       .tareas-lista[data-estado="<%= ESTADOS.at(-1) %>"] [data-direccion="derecha"] { display: none; }
@@ -90,8 +93,10 @@
             <textarea id="descripcion" name="descripcion" class="form-control<%- invalid('descripcion') %>" rows="2" maxlength="2000"><%= form.descripcion || '' %></textarea>
           </div>
           <div class="col-md-6 col-lg-3">
-            <label for="fechaLimite" class="form-label">Fecha límite</label>
-            <input type="date" id="fechaLimite" name="fechaLimite" class="form-control<%- invalid('fechaLimite') %>" value="<%= form.fechaLimite || '' %>" />
+            <label for="fechaLlegada" class="form-label">Fecha de llegada <span class="text-danger" aria-hidden="true">*</span></label>
+            <input type="date" id="fechaLlegada" name="fechaLlegada" class="form-control<%- invalid('fechaLlegada') %>" required max="<%= hoy %>"
+              value="<%= form.fechaLlegada || '' %>" aria-describedby="fechaLlegadaAyuda" />
+            <div id="fechaLlegadaAyuda" class="form-text">No se puede cambiar después.</div>
           </div>
           <div class="col-md-6 col-lg-3">
             <label for="estado" class="form-label">Columna</label>
