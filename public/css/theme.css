@@ -182,3 +182,87 @@ html[data-theme="dark"] .header ul.menu-submenu { background: transparent !impor
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06), 0 12px 32px rgba(0, 0, 0, .35);
   }
 }
+/* Vidrio esmerilado en tarjetas, tablas, paneles y modales. El fondo lleva formas grandes con los colores de
+   la marca (verde, turquesa y azul), fijas a la ventana, para que el vidrio tenga algo que desenfocar y se note. */
+html body {
+  background-color: #eef6f1;
+  background-image:
+    radial-gradient(30rem 24rem at 6% 8%, rgba(63, 148, 53, .55), transparent 65%),
+    radial-gradient(34rem 26rem at 96% 22%, rgba(8, 127, 140, .5), transparent 65%),
+    radial-gradient(36rem 26rem at 40% 105%, rgba(50, 115, 168, .45), transparent 65%),
+    radial-gradient(22rem 18rem at 75% 85%, rgba(53, 182, 172, .4), transparent 65%);
+  background-attachment: fixed;
+}
+html :is(.card, .custom_table, .metric-card, .chart-panel, .network-shell, .network-panel, .planning-antennas,
+  .login-container, .not-found) {
+  background: linear-gradient(145deg, rgba(255, 255, 255, .5), rgba(255, 255, 255, .26));
+  -webkit-backdrop-filter: blur(28px) saturate(1.5);
+  backdrop-filter: blur(28px) saturate(1.5);
+  border-radius: 20px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .8), 0 12px 40px rgba(15, 23, 42, .12);
+}
+html :is(.card, .custom_table, .chart-panel, .network-shell, .network-panel, .planning-antennas, .login-container, .not-found) {
+  border: 1px solid rgba(255, 255, 255, .7);
+}
+/* Las tarjetas de métricas conservan su franja de color arriba. */
+html .metric-card { border-right-color: rgba(255, 255, 255, .7); border-bottom-color: rgba(255, 255, 255, .7); border-left-color: rgba(255, 255, 255, .7); }
+/* Una tarjeta dentro de otra no necesita desenfocar otra vez: basta un vidrio más tenue. */
+html :is(.card, .custom_table) :is(.card, .custom_table) { background: rgba(255, 255, 255, .35); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; }
+/* Lo que desenfoca encierra a los elementos fijos; el mapa a pantalla completa debe poder salirse de su tarjeta. */
+.card:has(.planning-map-expanded) { -webkit-backdrop-filter: none; backdrop-filter: none; }
+html :is(.modal-content, .editar-carpeta-modal, .ruta-delete-modal) {
+  background: linear-gradient(145deg, rgba(255, 255, 255, .9), rgba(255, 255, 255, .78));
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  backdrop-filter: blur(24px) saturate(1.6);
+  border: 1px solid rgba(255, 255, 255, .7);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .8), 0 24px 64px rgba(15, 23, 42, .25);
+}
+html :is(.modal-header, .modal-footer, .card-header, .card-footer) { background-color: transparent; border-color: rgba(15, 23, 42, .08); }
+/* Las tablas dejan ver el vidrio; las líneas, rayas y el resaltado son translúcidos. */
+html .table {
+  --bs-table-striped-bg: rgba(255, 255, 255, .35);
+  --bs-table-hover-bg: rgba(255, 255, 255, .55);
+  --bs-table-active-bg: rgba(255, 255, 255, .6);
+  border-color: rgba(15, 23, 42, .08);
+}
+html .table-light { --bs-table-bg: rgba(255, 255, 255, .5); border-color: rgba(15, 23, 42, .08); }
+html .list-group-item { background-color: rgba(255, 255, 255, .45); border-color: rgba(15, 23, 42, .08); }
+
+html[data-theme="dark"] body {
+  background-color: #0b111c !important;
+  background-image:
+    radial-gradient(30rem 24rem at 6% 8%, rgba(63, 148, 53, .4), transparent 65%),
+    radial-gradient(34rem 26rem at 96% 22%, rgba(8, 127, 140, .55), transparent 65%),
+    radial-gradient(36rem 26rem at 40% 105%, rgba(50, 115, 168, .45), transparent 65%),
+    radial-gradient(22rem 18rem at 75% 85%, rgba(53, 182, 172, .3), transparent 65%) !important;
+  background-attachment: fixed !important;
+}
+html[data-theme="dark"] body :is(.card, .custom_table, .metric-card, .chart-panel, .network-shell, .network-panel,
+  .planning-antennas, .login-container, .not-found) {
+  background: linear-gradient(145deg, rgba(255, 255, 255, .1), rgba(255, 255, 255, .04)) !important;
+  border-color: rgba(255, 255, 255, .16) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), 0 12px 40px rgba(0, 0, 0, .35);
+}
+html[data-theme="dark"] body .metric-card { border-top-color: var(--teal) !important; }
+html[data-theme="dark"] body .metric-card:nth-child(2) { border-top-color: var(--orange) !important; }
+html[data-theme="dark"] body .metric-card:nth-child(3) { border-top-color: var(--blue) !important; }
+html[data-theme="dark"] body .metric-card:nth-child(4) { border-top-color: var(--green) !important; }
+html[data-theme="dark"] body .metric-card:nth-child(5) { border-top-color: #b35c92 !important; }
+html[data-theme="dark"] body .metric-card:nth-child(6) { border-top-color: #8d7a3b !important; }
+html[data-theme="dark"] body :is(.card, .custom_table) :is(.card, .custom_table) { background: rgba(255, 255, 255, .04) !important; box-shadow: none; }
+html[data-theme="dark"] body :is(.modal-content, dialog, .card-header, .card-footer) { border-color: rgba(255, 255, 255, .08) !important; }
+html[data-theme="dark"] body :is(.modal-content, .editar-carpeta-modal, .ruta-delete-modal) {
+  background: linear-gradient(145deg, rgba(37, 49, 66, .92), rgba(31, 41, 55, .85)) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06), 0 24px 64px rgba(0, 0, 0, .5);
+}
+html[data-theme="dark"] body :is(.card-header, .card-footer) { background: transparent !important; }
+html[data-theme="dark"] .table {
+  --bs-table-bg: transparent;
+  --bs-table-striped-bg: rgba(255, 255, 255, .04);
+  --bs-table-hover-bg: rgba(255, 255, 255, .08);
+  --bs-table-active-bg: rgba(255, 255, 255, .1);
+  border-color: rgba(255, 255, 255, .08);
+}
+html[data-theme="dark"] .table-light { --bs-table-bg: rgba(255, 255, 255, .06); color: var(--dark-text); }
+html[data-theme="dark"] { color-scheme: dark; }
+html[data-theme="dark"] body .list-group-item { background: rgba(255, 255, 255, .04) !important; border-color: rgba(255, 255, 255, .08) !important; }
