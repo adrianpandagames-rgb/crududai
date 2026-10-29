@@ -138,9 +138,8 @@ router.get('/ruta', (req, res, next) => {
       const scope = visibleFiles(req.session, 'r');
       const [files] = await pool.query(
         `SELECT r.file_uuid AS id, r.line_number AS lineNumber, r.original_name AS name,
-                r.status, r.row_count AS \`rows\`, r.error_message AS error, u.email AS uploadedBy
+                r.status, r.row_count AS \`rows\`, r.error_message AS error
          FROM ruta_archivos r
-         LEFT JOIN users u ON u.id = r.user_id
          WHERE ${scope.where}
          ORDER BY r.created_at DESC, r.id DESC`,
         scope.values,
