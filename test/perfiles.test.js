@@ -82,14 +82,37 @@ test('profiles are kept per group, searched by name or line and not repeated fro
   assert.equal((await store.search('Joaquin Guzman', { userId: 1, role: 'admin', isAdmin: true })).length, 1);
 });
 
+test('the list is filtered by name, alias or line and paged in SQL', async () => {
+  const calls = [];
+  const pool = {
+    query: async () => [[]],
+    execute: async (sql, values) => {
+      calls.push({ sql, values });
+      return sql.startsWith('SELECT COUNT') ? [[{ total: 23 }]] : [[{ id: 1, nombre: 'Ana', imagenIds: '4,5' }]];
+    },
+  };
+  const store = createPerfilesStore(pool);
+  const admin = { userId: 1, role: 'admin', isAdmin: true };
+  assert.deepEqual(await store.list(admin, { search: ' 50%_ 662-12 ', page: 3, pageSize: 10 }),
+    { rows: [{ id: 1, nombre: 'Ana', imagenes: [4, 5] }], total: 23 });
+  const [count, page] = calls.slice(-2);
+  assert.deepEqual(count.values.slice(-3), ['%50\\%\\_ 662-12%', '%50\\%\\_ 662-12%', '%5066212%']);
+  assert.match(page.sql, /LIMIT 10 OFFSET 20$/);
+  await store.list(admin, { search: 'Ana' });
+  assert.ok(!calls.at(-1).sql.includes('linea_digitos LIKE') && calls.at(-1).sql.endsWith('LIMIT 10 OFFSET 0'));
+});
+
 test('the tab registers a profile, taking Nombre and Dirección from the Excel unless it reports no record', async (t) => {
   const created = [];
   const images = [];
   const perfiles = {
-    list: async () => created.map((perfil, index) => ({
-      id: index + 1, ...perfil, createdAt: '2026-10-26 10:00',
-      imagenes: images.filter((image) => image.perfilId === String(index + 1)).map((image) => image.id),
-    })),
+    list: async (session, { search = '', page = 1, pageSize = 10 } = {}) => {
+      const rows = created.map((perfil, index) => ({
+        id: index + 1, ...perfil, createdAt: '2026-10-26 10:00',
+        imagenes: images.filter((image) => image.perfilId === String(index + 1)).map((image) => image.id),
+      })).filter((perfil) => perfil.nombre.toLowerCase().includes(search.toLowerCase()));
+      return { rows: rows.slice((page - 1) * pageSize, page * pageSize), total: rows.length };
+    },
     create: async (perfil, session) => { created.push({ ...perfil, group: session.role }); return created.length; },
     remove: async (id) => (images.some((image) => image.perfilId === id) ? 'con-imagenes' : id === '1' ? 'eliminado' : 'no-encontrado'),
     addImages: async (perfilId, added) => {
@@ -106,8 +129,15 @@ test('the tab registers a profile, taking Nombre and Dirección from the Excel u
     getImage: async (id) => (id === '1' ? { mime: 'image/png', data: images[0].buffer } : null),
     removeImage: async (id) => {
       const index = images.findIndex((image) => String(image.id) === id);
-      if (index >= 0) images.splice(index, 1);
-      return index >= 0;
+      if (index < 0) return null;
+      const [removed] = images.splice(index, 1);
+      return Number(removed.perfilId);
+    },
+    removeAllImages: async (perfilId) => {
+      if (!created[perfilId - 1]) return null;
+      const before = images.length;
+      images.splice(0, images.length, ...images.filter((image) => image.perfilId !== perfilId));
+      return before - images.length;
     },
   };
   const app = express();
@@ -145,12 +175,26 @@ test('the tab registers a profile, taking Nombre and Dirección from the Excel u
 
   const missing = await post({ linea: '6628888888' }, xlsxOf([[NO_RECORD]]));
   assert.equal(missing.status, 400);
+  assert.match(await missing.text(), /id="nombre" name="nombre" class="form-control is-invalid"[^>]*aria-invalid="true"/);
+
+  // A file that is not Excel keeps what was typed instead of redirecting and losing it.
+  const notExcel = new FormData();
+  Object.entries({ nombre: 'Tecleado', linea: '6627777777' }).forEach(([key, value]) => notExcel.append(key, value));
+  notExcel.append('archivo', new Blob(['texto']), 'notas.txt');
+  const rejected = await fetch(base, { method: 'POST', body: notExcel, redirect: 'manual', headers: { 'x-role': 'uecs' } });
+  assert.equal(rejected.status, 400);
+  const rejectedPage = await rejected.text();
+  assert.ok(rejectedPage.includes('debe ser Excel') && rejectedPage.includes('value="Tecleado"') && rejectedPage.includes('value="6627777777"'));
 
   assert.deepEqual(created.map(({ nombre, direccion, group }) => [nombre, direccion, group]), [
     ['Luis Ramírez', 'Centro', 'uecs'], ['JUAN PÉREZ', 'CALLE 5', 'uecs'], ['Escrito a mano', '', 'uecs'],
   ]);
   const page = await (await fetch(base, { headers: { 'x-role': 'uecs' } })).text();
   assert.ok(page.includes('JUAN PÉREZ') && page.includes('CALLE 5') && page.includes('@luisr en Telegram'));
+  const searched = await (await fetch(`${base}?search=nadie`, { headers: { 'x-role': 'uecs' } })).text();
+  assert.ok(searched.includes('Ningún perfil coincide con «nadie»') && !searched.includes('CALLE 5'));
+  const pastEnd = await fetch(`${base}?page=9&pageSize=10`, { redirect: 'manual', headers: { 'x-role': 'uecs' } });
+  assert.equal(pastEnd.headers.get('location'), '/perfiles?page=1&pageSize=10');
 
   const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(16)]);
   const postImages = (id, files) => {
@@ -170,13 +214,27 @@ test('the tab registers a profile, taking Nombre and Dirección from the Excel u
   assert.equal(served.headers.get('x-content-type-options'), 'nosniff');
   assert.equal((await fetch(`${base}/imagenes/5`, { headers: { 'x-role': 'uecs' } })).status, 404);
 
-  // A profile with images stays until each image is deleted with its own button.
+  // A profile with images stays until they are deleted; its trash button is disabled meanwhile.
+  const listPage = await (await fetch(base, { headers: { 'x-role': 'uecs' } })).text();
+  assert.match(listPage, /aria-label="Eliminar perfil de JUAN PÉREZ: primero elimine sus fotos"/);
   const blocked = await fetch(`${base}/eliminar/2`, { method: 'POST', redirect: 'manual', headers: { 'x-role': 'uecs' } });
-  assert.match(message(blocked), /Elimínalas primero/);
-  assert.match(message(await fetch(`${base}/imagenes/1/eliminar`, { method: 'POST', redirect: 'manual', headers: { 'x-role': 'uecs' } })), /Imagen eliminada/);
+  assert.match(message(blocked), /Elimínelas primero/);
+  // Actions return to the profile's row with its photos open, keeping the list's search and page.
+  const removed = await fetch(`${base}/imagenes/1/eliminar`, {
+    method: 'POST', redirect: 'manual', body: new URLSearchParams({ volver: 'search=juan&page=2&pageSize=20&message=x' }),
+    headers: { 'x-role': 'uecs', 'content-type': 'application/x-www-form-urlencoded' },
+  });
+  assert.match(message(removed), /Imagen eliminada/);
+  const back = new URL(removed.headers.get('location'), base);
+  assert.deepEqual([back.searchParams.get('search'), back.searchParams.get('page'), back.searchParams.get('pageSize'), back.searchParams.get('abierto'), back.hash],
+    ['juan', '2', '20', '2', '#perfil-2']);
   assert.equal(images.length, 1);
+  assert.ok((await (await fetch(`${base}?abierto=2`, { headers: { 'x-role': 'uecs' } })).text()).includes('<details class="perfil-galeria" open>'));
+  assert.match(message(await fetch(`${base}/2/imagenes/eliminar`, { method: 'POST', redirect: 'manual', headers: { 'x-role': 'uecs' } })),
+    /Se eliminó 1 imagen/);
+  assert.equal(images.length, 0);
 
-  assert.ok(page.includes('href="/perfiles/2/editar"'));
+  assert.ok(page.includes('href="/perfiles/2/editar?'));
   const editPage = await (await fetch(`${base}/2/editar`, { headers: { 'x-role': 'uecs' } })).text();
   assert.ok(editPage.includes('value="JUAN PÉREZ"') && editPage.includes('CALLE 5</textarea>'));
   assert.match(message(await fetch(`${base}/9/editar`, { redirect: 'manual', headers: { 'x-role': 'uecs' } })), /no fue encontrado/);
@@ -186,7 +244,7 @@ test('the tab registers a profile, taking Nombre and Dirección from the Excel u
   });
   const invalidEdit = await edit(2, { nombre: '', direccion: 'Otra', linea: '6621234567' });
   assert.equal(invalidEdit.status, 400);
-  assert.ok((await invalidEdit.text()).includes('Escribe el nombre'));
+  assert.ok((await invalidEdit.text()).includes('Escriba el nombre'));
   assert.match(message(await edit(2, { nombre: ' Juan  Pérez Ruiz ', direccion: 'Calle 9', alias: 'Juan P (WhatsApp)', linea: '662 123 4567' })), /actualizado/);
   assert.deepEqual([created[1].nombre, created[1].direccion, created[1].alias, created[1].linea],
     ['Juan Pérez Ruiz', 'Calle 9', 'Juan P (WhatsApp)', '662 123 4567']);
@@ -202,12 +260,17 @@ test('a profile with images is not deleted, and images are only deleted by their
       executed.push(sql.replace(/\s+/g, ' '));
       if (sql.startsWith('DELETE p')) return [{ affectedRows: 0 }];
       if (sql.startsWith('SELECT p.id FROM')) return [[{ id: values[0] }]];
+      if (sql.startsWith('SELECT i.perfil_id')) return [[{ perfilId: 4 }]];
+      if (sql.startsWith('DELETE FROM perfil_imagenes')) return [{ affectedRows: 3 }];
       return [{ affectedRows: 1 }];
     },
   };
   const store = createPerfilesStore(pool);
   assert.equal(await store.remove('4', { userId: 3, role: 'uecs' }), 'con-imagenes');
   assert.match(executed[0], /NOT EXISTS \(SELECT 1 FROM perfil_imagenes/);
-  assert.equal(await store.removeImage('8', { userId: 3, role: 'uecs' }), true);
+  assert.equal(await store.removeImage('8', { userId: 3, role: 'uecs' }), 4);
   assert.match(executed.at(-1), /DELETE i FROM perfil_imagenes i JOIN perfiles p .* WHERE i.id = \? AND p.owner_group = \?/);
+  // Deleting all of a profile's images checks access to the profile first.
+  assert.equal(await store.removeAllImages('4', { userId: 3, role: 'uecs' }), 3);
+  assert.match(executed.at(-2), /SELECT p.id FROM perfiles p WHERE p.id = \? AND p.owner_group = \?/);
 });

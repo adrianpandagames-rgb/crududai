@@ -3,60 +3,133 @@
   <head>
     <%- include('../includes/head') %>
     <style>
-      /* Images and the add button sit to the left of the name. */
-      .perfil-nombre { display: flex; align-items: center; gap: .75rem; }
-      .perfil-imagenes { display: flex; flex-wrap: wrap; gap: .4rem; flex: 0 1 auto; max-width: 60%; }
+      /* Leave room below the last row for the fixed theme toggle. */
+      .perfiles-page { padding-bottom: 5rem; }
+      .perfiles-busqueda { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-bottom: .75rem; }
+      .perfiles-busqueda input[type="search"] { flex: 0 1 320px; min-width: 0; }
+      .perfiles-total { margin-left: auto; font-variant-numeric: tabular-nums; }
+      .perfiles-paginacion { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; margin-top: .75rem; }
+      @media (max-width: 575.98px) {
+        .perfiles-busqueda input[type="search"] { flex: 1 1 100%; }
+        .perfiles-total { margin-left: 0; }
+      }
+      /* A fixed-width cover photo sits left of the name so every name starts at the same x;
+         the full gallery opens on demand below the name. */
+      .perfil-nombre { display: flex; align-items: flex-start; gap: .75rem; }
+      .perfil-nombre-texto { flex: 1 1 auto; min-width: 0; }
       .perfiles-table td { word-break: break-word; }
+      .perfil-portada { position: relative; flex: 0 0 56px; display: block; width: 56px; height: 56px; border-radius: 6px; }
+      .perfil-portada img { display: block; width: 100%; height: 100%; border-radius: inherit; object-fit: cover;
+        outline: 1px solid rgba(0, 0, 0, .1); outline-offset: -1px; }
+      .perfil-portada-vacia { display: flex; align-items: center; justify-content: center; font-size: 1.5rem;
+        color: #6b7280; background: rgba(127, 127, 127, .12); }
+      .perfil-portada-mas { position: absolute; right: 3px; bottom: 3px; padding: 0 .3rem; border-radius: 4px;
+        background: rgba(17, 24, 39, .8); color: #fff; font-size: .7rem; font-weight: 600; line-height: 1.4;
+        font-variant-numeric: tabular-nums; }
+      .perfil-galeria { margin-top: .25rem; }
+      .perfil-galeria summary { display: inline-flex; align-items: center; gap: .35rem; min-height: 32px;
+        color: #0d6efd; font-size: .875rem; cursor: pointer; list-style: none; }
+      .perfil-galeria summary::-webkit-details-marker { display: none; }
+      .perfil-galeria summary .bi-chevron-down { font-size: .7rem; transition: rotate .15s ease-out; }
+      .perfil-galeria[open] summary .bi-chevron-down { rotate: 180deg; }
+      .perfil-imagenes { display: flex; flex-wrap: wrap; gap: .4rem; padding-top: .35rem; }
       .perfil-imagen { position: relative; }
       .perfil-imagen img, .perfil-agregar-imagen { width: 56px; height: 56px; border-radius: 6px; }
-      .perfil-imagen img { object-fit: cover; border: 1px solid rgba(0, 0, 0, .15); }
+      .perfil-imagen img { display: block; object-fit: cover; outline: 1px solid rgba(0, 0, 0, .1); outline-offset: -1px; }
+      html[data-theme="dark"] :is(.perfil-imagen, .perfil-portada) img { outline-color: rgba(255, 255, 255, .1); }
+      html[data-theme="dark"] .perfil-portada-vacia { color: var(--dark-muted); }
+      html[data-theme="dark"] .perfil-galeria summary { color: #8dc5ff; }
+      /* Stacked on phones, the name cell is the card's header: full width, no repeated "Nombre" label. */
+      @media (max-width: 767.98px) {
+        /* Without this the colgroup squeezes every stacked row into the first column's 30%. */
+        .perfiles-table colgroup { display: none; }
+        .perfiles-table td.perfil-celda-nombre { justify-content: flex-start; text-align: left !important; }
+        .perfiles-table td.perfil-celda-nombre::before { content: none; }
+      }
+      /* btn-sm is ~32x31px; stretch the hit area to 40px without reaching the neighbour across the 8px gap. */
+      .perfil-acciones .btn { position: relative; }
+      .perfil-acciones .btn::after { content: ""; position: absolute; inset: -5px -4px; }
       .perfil-imagen form { position: absolute; top: 2px; right: 2px; }
-      .perfil-imagen .btn { padding: 0 .3rem; line-height: 1.4; background: rgba(255, 255, 255, .9); }
+      .perfil-imagen .btn { display: inline-flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem;
+        padding: 0; font-size: .75rem; border-radius: 4px; background: #fff; }
+      .perfil-imagen .btn:hover, .perfil-imagen .btn:focus-visible { background: #dc3545; }
       .perfil-agregar-imagen { display: flex; align-items: center; justify-content: center; margin: 0; cursor: pointer;
-        border: 2px dashed currentColor; color: #0d6efd; font-size: 1.25rem; opacity: .75; }
-      .perfil-agregar-imagen:hover, .perfil-agregar-imagen:focus-within { opacity: 1; }
+        border: 2px dashed currentColor; color: #0d6efd; font-size: 1.25rem; transition: background-color .15s ease-out; }
+      .perfil-agregar-imagen:hover, .perfil-agregar-imagen:focus-within { background: rgba(13, 110, 253, .08); }
+      .perfil-agregar-imagen:has(input:focus-visible) { outline: 2px solid currentColor; outline-offset: 2px; }
+      /* Rows reached by #perfil-<id> clear the fixed header. */
+      .perfiles-table tr { scroll-margin-top: 96px; }
+      html[data-theme="dark"] .perfil-imagen .btn:not(:hover):not(:focus-visible) { background: var(--dark-panel); }
+      html[data-theme="dark"] .perfil-agregar-imagen { color: #8dc5ff; }
+      html[data-theme="dark"] .perfil-agregar-imagen:hover,
+      html[data-theme="dark"] .perfil-agregar-imagen:focus-within { background: rgba(141, 197, 255, .12); }
     </style>
   </head>
   <body>
     <%- include('../includes/header') %>
 
-    <main class="container-fluid px-3 px-xl-4 page-offset">
+    <main class="container-fluid px-3 px-xl-4 page-offset perfiles-page">
       <div class="row justify-content-md-center mb-5">
         <div class="col-md-12 mt-5">
-          <h2 class="text-center title">PERFILES <hr /></h2>
+          <h1 class="text-center title">PERFILES</h1>
+          <hr />
         </div>
       </div>
 
       <% if (message) { %>
-        <div class="alert <%= messageType === 'error' ? 'alert-danger' : 'alert-success' %>"><%= message %></div>
+        <div class="alert <%= messageType === 'error' ? 'alert-danger' : 'alert-success' %>" role="<%= messageType === 'error' ? 'alert' : 'status' %>"><%= message %></div>
+        <script>
+          // The message travels in the URL; drop it so reloading or going back does not show it again.
+          (() => {
+            const url = new URL(location.href);
+            url.searchParams.delete('message');
+            url.searchParams.delete('type');
+            history.replaceState(null, '', url);
+          })();
+        </script>
       <% } %>
 
       <div class="row justify-content-md-center mb-4">
         <div class="col-lg-4 col-xl-3 mb-4">
           <div class="card p-4">
-            <h3 class="text-center mb-4">Registrar perfil</h3>
+            <h2 class="h3 text-center mb-4">Registrar perfil</h2>
+            <%
+              // Registration errors show inside this form and mark the field they are about.
+              const invalidClass = (field) => (formError?.field === field ? ' is-invalid' : '');
+              // Links the field to its help text and, when it is the one in error, to the message above the form.
+              const invalidAttrs = (field, help = '') => {
+                const invalid = formError?.field === field;
+                const ids = [help, invalid ? 'perfilFormError' : ''].filter(Boolean).join(' ');
+                return (invalid ? ' aria-invalid="true"' : '') + (ids ? ` aria-describedby="${ids}"` : '');
+              };
+            %>
+            <p class="small text-muted mb-3"><span class="text-danger" aria-hidden="true">*</span> Campo obligatorio</p>
+            <% if (formError) { %>
+              <div id="perfilFormError" class="alert alert-danger" role="alert"><%= formError.message %></div>
+            <% } %>
             <form action="/perfiles" method="POST" enctype="multipart/form-data" autocomplete="off">
               <div class="mb-3">
-                <label for="nombre" class="form-label">Nombre</label>
-                <input type="text" id="nombre" name="nombre" class="form-control" maxlength="200" value="<%= form.nombre || '' %>" />
-              </div>
-              <div class="mb-3">
-                <label for="direccion" class="form-label">Dirección</label>
-                <textarea id="direccion" name="direccion" class="form-control" rows="2" maxlength="500"><%= form.direccion || '' %></textarea>
-              </div>
-              <div class="mb-3">
-                <label for="alias" class="form-label">Alias OSINT</label>
-                <input type="text" id="alias" name="alias" class="form-control" maxlength="500" value="<%= form.alias || '' %>" />
-                <div class="form-text">Cómo aparece en Telegram, WhatsApp u otras apps.</div>
-              </div>
-              <div class="mb-3">
-                <label for="linea" class="form-label">Línea telefónica</label>
-                <input type="text" id="linea" name="linea" class="form-control" maxlength="50" required value="<%= form.linea || '' %>" />
+                <label for="linea" class="form-label">Línea telefónica <span class="text-danger" aria-hidden="true">*</span></label>
+                <input type="text" id="linea" name="linea" class="form-control<%= invalidClass('linea') %>" maxlength="50" required value="<%= form.linea || '' %>"<%- invalidAttrs('linea') %> />
               </div>
               <div class="mb-3">
                 <label for="archivo" class="form-label">Respuesta en Excel (.xlsx, opcional)</label>
-                <input type="file" id="archivo" name="archivo" class="form-control" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
-                <div class="form-text">Si el archivo tiene una fila de Nombre o Dirección, se usan esos datos. Si indica que no se encontró registro de la línea, se usan los datos escritos.</div>
+                <input type="file" id="archivo" name="archivo" class="form-control<%= invalidClass('archivo') %>" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"<%- invalidAttrs('archivo', 'archivoAyuda') %> />
+                <div id="archivoAyuda" class="form-text">Si el archivo trae Nombre o Dirección, estos reemplazan lo escrito abajo, salvo que indique que no hay registro de la línea.</div>
+              </div>
+              <div class="mb-3">
+                <label for="nombre" class="form-label">Nombre <span class="text-danger" aria-hidden="true">*</span></label>
+                <input type="text" id="nombre" name="nombre" class="form-control<%= invalidClass('nombre') %>" maxlength="200" value="<%= form.nombre || '' %>"<%- invalidAttrs('nombre', 'nombreAyuda') %> />
+                <div id="nombreAyuda" class="form-text">Puede dejarlo vacío si el Excel incluye el nombre.</div>
+              </div>
+              <div class="mb-3">
+                <label for="direccion" class="form-label">Dirección</label>
+                <textarea id="direccion" name="direccion" class="form-control<%= invalidClass('direccion') %>" rows="2" maxlength="500"<%- invalidAttrs('direccion') %>><%= form.direccion || '' %></textarea>
+              </div>
+              <div class="mb-3">
+                <label for="alias" class="form-label">Alias OSINT</label>
+                <input type="text" id="alias" name="alias" class="form-control<%= invalidClass('alias') %>" maxlength="500" value="<%= form.alias || '' %>"<%- invalidAttrs('alias', 'aliasAyuda') %> />
+                <div id="aliasAyuda" class="form-text">Cómo aparece en Telegram, WhatsApp u otras apps.</div>
               </div>
               <button type="submit" class="btn btn-primary w-100">Registrar perfil</button>
             </form>
@@ -64,11 +137,30 @@
         </div>
 
         <div class="col-lg-8 col-xl-9 py-3 custom_table">
-          <h3 class="text-center">Perfiles registrados</h3>
+          <h2 class="h3 text-center">Perfiles registrados</h2>
           <p class="text-center small text-muted mb-0">También aparecen al buscar el nombre o la línea en RastroX.</p>
           <hr />
+          <%
+            const pageLink = (n, size = pageSize) => '/perfiles?' + new URLSearchParams({
+              ...(search ? { search } : {}), page: String(n), pageSize: String(size),
+            });
+            // Row actions send this back so they return to the same search and page.
+            const volver = pageLink(currentPage).slice('/perfiles?'.length);
+          %>
+          <form action="/perfiles" method="GET" class="perfiles-busqueda" role="search">
+            <input type="hidden" name="pageSize" value="<%= pageSize %>" />
+            <label for="perfilesSearch" class="visually-hidden">Buscar perfiles</label>
+            <input type="search" id="perfilesSearch" name="search" class="form-control form-control-sm" maxlength="100"
+              placeholder="Buscar por nombre, alias o línea" value="<%= search %>" autocomplete="off" />
+            <button type="submit" class="btn btn-sm btn-primary">Buscar</button>
+            <% if (search) { %><a class="btn btn-sm btn-outline-secondary" href="/perfiles?pageSize=<%= pageSize %>">Limpiar</a><% } %>
+            <span class="perfiles-total small text-muted" aria-live="polite">
+              <%= total === 1 ? '1 perfil' : `${total} perfiles` %><%= search ? ` para «${search}»` : '' %>
+            </span>
+          </form>
           <div class="table-responsive">
             <table class="table w-100 table-stack perfiles-table">
+              <caption class="visually-hidden">Perfiles registrados<%= totalPages > 1 ? `, página ${currentPage} de ${totalPages}` : '' %></caption>
               <colgroup>
                 <col style="width: 30%" /><col style="width: 21%" /><col style="width: 14%" /><col style="width: 12%" /><col style="width: 14%" /><col style="width: 9%" />
               </colgroup>
@@ -79,40 +171,75 @@
                   <th>Alias OSINT</th>
                   <th>Línea</th>
                   <th>Registrado</th>
-                  <th>Acción</th>
+                  <th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 <% if (perfiles.length === 0) { %>
-                  <tr><td colspan="6" class="text-center">No hay perfiles registrados</td></tr>
+                  <tr><td colspan="6" class="text-center">
+                    <% if (search) { %>
+                      Ningún perfil coincide con «<%= search %>». <a href="/perfiles?pageSize=<%= pageSize %>">Ver todos</a>
+                    <% } else { %>
+                      Aún no hay perfiles. <a href="#linea">Registre el primero</a> con el formulario.
+                    <% } %>
+                  </td></tr>
                 <% } else { %>
                   <% perfiles.forEach((perfil) => { %>
-                    <tr>
-                      <td data-label="Nombre">
+                    <% const nombre = perfil.nombre || 'sin nombre', fotos = perfil.imagenes.length; %>
+                    <tr id="perfil-<%= perfil.id %>">
+                      <td data-label="Nombre" class="perfil-celda-nombre">
+                        <% const [portada, ...resto] = perfil.imagenes; %>
                         <div class="perfil-nombre">
-                          <div class="perfil-imagenes">
-                            <% perfil.imagenes.forEach((imagenId) => { %>
-                              <div class="perfil-imagen">
-                                <a href="/perfiles/imagenes/<%= imagenId %>" target="_blank" rel="noopener">
-                                  <img src="/perfiles/imagenes/<%= imagenId %>" alt="Imagen del perfil de <%= perfil.nombre %>" loading="lazy" />
-                                </a>
-                                <form action="/perfiles/imagenes/<%= imagenId %>/eliminar" method="POST" class="m-0" data-confirm="¿Desea eliminar esta imagen del perfil?">
-                                  <button type="submit" class="btn btn-sm btn-outline-danger" aria-label="Eliminar imagen" title="Eliminar imagen">
-                                    <i class="bi bi-x-lg" aria-hidden="true"></i>
-                                  </button>
+                          <% if (portada) { %>
+                            <a class="perfil-portada" href="/perfiles/imagenes/<%= portada %>" target="_blank" rel="noopener">
+                              <img src="/perfiles/imagenes/<%= portada %>" alt="Foto de <%= nombre %> (se abre en otra pestaña)" loading="lazy" />
+                              <% if (resto.length) { %><span class="perfil-portada-mas" aria-hidden="true">+<%= resto.length %></span><% } %>
+                            </a>
+                          <% } else { %>
+                            <span class="perfil-portada perfil-portada-vacia" aria-hidden="true"><i class="bi bi-person"></i></span>
+                          <% } %>
+                          <div class="perfil-nombre-texto">
+                            <div class="fw-semibold"><%= perfil.nombre %></div>
+                            <details class="perfil-galeria"<%- abierto === String(perfil.id) ? ' open' : '' %>>
+                              <summary>
+                                <i class="bi bi-images" aria-hidden="true"></i>
+                                <%= fotos ? `Fotos (${fotos})` : 'Agregar fotos' %>
+                                <i class="bi bi-chevron-down" aria-hidden="true"></i>
+                              </summary>
+                              <div class="perfil-imagenes">
+                                <% perfil.imagenes.forEach((imagenId, index) => { %>
+                                  <div class="perfil-imagen">
+                                    <a href="/perfiles/imagenes/<%= imagenId %>" target="_blank" rel="noopener">
+                                      <img src="/perfiles/imagenes/<%= imagenId %>" alt="Foto <%= index + 1 %> de <%= nombre %> (se abre en otra pestaña)" loading="lazy" />
+                                    </a>
+                                    <form action="/perfiles/imagenes/<%= imagenId %>/eliminar" method="POST" class="m-0"
+                                      data-confirm="¿Desea eliminar la foto <%= index + 1 %> de &quot;<%= nombre %>&quot;?" data-confirm-action="Eliminar foto">
+                                      <input type="hidden" name="volver" value="<%= volver %>" />
+                                      <button type="submit" class="btn btn-sm btn-outline-danger" aria-label="Eliminar foto <%= index + 1 %> de <%= nombre %>" title="Eliminar foto">
+                                        <i class="bi bi-x-lg" aria-hidden="true"></i>
+                                      </button>
+                                    </form>
+                                  </div>
+                                <% }) %>
+                                <form action="/perfiles/<%= perfil.id %>/imagenes" method="POST" enctype="multipart/form-data" class="m-0">
+                                  <input type="hidden" name="volver" value="<%= volver %>" />
+                                  <label class="perfil-agregar-imagen" title="Agregar fotos (JPG, PNG, GIF o WebP; hasta 10 a la vez)">
+                                    <i class="bi bi-plus-lg" aria-hidden="true"></i>
+                                    <span class="visually-hidden">Agregar fotos a <%= nombre %></span>
+                                    <input type="file" name="imagenes" class="visually-hidden" accept="image/jpeg,image/png,image/gif,image/webp" multiple
+                                      onchange="if (this.files.length) this.form.submit()" />
+                                  </label>
                                 </form>
                               </div>
-                            <% }) %>
-                            <form action="/perfiles/<%= perfil.id %>/imagenes" method="POST" enctype="multipart/form-data" class="m-0">
-                              <label class="perfil-agregar-imagen" title="Agregar imágenes (JPG, PNG, GIF o WebP; hasta 10 a la vez)">
-                                <i class="bi bi-plus-lg" aria-hidden="true"></i>
-                                <span class="visually-hidden">Agregar imágenes</span>
-                                <input type="file" name="imagenes" accept="image/jpeg,image/png,image/gif,image/webp" multiple hidden
-                                  onchange="if (this.files.length) this.form.submit()" />
-                              </label>
-                            </form>
+                              <% if (fotos > 1) { %>
+                                <form action="/perfiles/<%= perfil.id %>/imagenes/eliminar" method="POST" class="m-0 mt-2"
+                                  data-confirm="¿Desea eliminar las <%= fotos %> fotos de &quot;<%= nombre %>&quot;? No se pueden recuperar." data-confirm-action="Eliminar fotos">
+                                  <input type="hidden" name="volver" value="<%= volver %>" />
+                                  <button type="submit" class="btn btn-sm btn-link link-danger p-0">Eliminar todas las fotos</button>
+                                </form>
+                              <% } %>
+                            </details>
                           </div>
-                          <div class="fw-semibold"><%= perfil.nombre %></div>
                         </div>
                       </td>
                       <td data-label="Dirección"><%= perfil.direccion || '—' %></td>
@@ -122,17 +249,28 @@
                         <div><%= perfil.createdAt %></div>
                         <div class="text-muted"><%= perfil.createdBy || '—' %><%= perfil.origen === 'archivo' ? ' · desde Líneas' : '' %></div>
                       </td>
-                      <td data-label="Acción">
-                        <div class="d-flex align-items-center gap-2 flex-nowrap">
-                          <a class="btn btn-sm btn-outline-primary" href="/perfiles/<%= perfil.id %>/editar" aria-label="Editar perfil" title="Editar perfil">
+                      <td data-label="Acciones">
+                        <div class="perfil-acciones d-flex align-items-center gap-2 flex-nowrap">
+                          <a class="btn btn-sm btn-outline-primary" href="/perfiles/<%= perfil.id %>/editar?<%= volver %>" aria-label="Editar perfil de <%= nombre %>" title="Editar perfil">
                             <i class="bi bi-pencil-square" aria-hidden="true"></i>
                           </a>
-                          <form action="/perfiles/eliminar/<%= perfil.id %>" method="POST" class="m-0"
-                            data-confirm="¿Desea eliminar el perfil de &quot;<%= perfil.nombre %>&quot;?<%= perfil.imagenes.length ? ' Primero hay que eliminar sus imágenes.' : '' %>">
-                            <button type="submit" class="btn btn-sm btn-outline-danger" aria-label="Eliminar perfil" title="Eliminar perfil">
-                              <i class="bi bi-trash3" aria-hidden="true"></i>
-                            </button>
-                          </form>
+                          <% if (fotos) { %>
+                            <%# A profile with photos cannot be deleted; the tooltip sits on a wrapper because disabled buttons get no hover. %>
+                            <span class="d-inline-block" title="Elimine primero sus fotos para poder eliminar el perfil">
+                              <button type="button" class="btn btn-sm btn-outline-danger" disabled
+                                aria-label="Eliminar perfil de <%= nombre %>: primero elimine sus fotos">
+                                <i class="bi bi-trash3" aria-hidden="true"></i>
+                              </button>
+                            </span>
+                          <% } else { %>
+                            <form action="/perfiles/eliminar/<%= perfil.id %>" method="POST" class="m-0"
+                              data-confirm="¿Desea eliminar el perfil de &quot;<%= nombre %>&quot;?" data-confirm-action="Eliminar perfil">
+                              <input type="hidden" name="volver" value="<%= volver %>" />
+                              <button type="submit" class="btn btn-sm btn-outline-danger" aria-label="Eliminar perfil de <%= nombre %>" title="Eliminar perfil">
+                                <i class="bi bi-trash3" aria-hidden="true"></i>
+                              </button>
+                            </form>
+                          <% } %>
                         </div>
                       </td>
                     </tr>
@@ -141,6 +279,36 @@
               </tbody>
             </table>
           </div>
+          <% if (total > 10) { %>
+            <% const first = Math.max(1, Math.min(currentPage - 2, totalPages - 4)), last = Math.min(totalPages, first + 4); %>
+            <nav class="perfiles-paginacion" aria-label="Páginas de perfiles">
+              <% if (totalPages > 1) { %>
+                <ul class="pagination pagination-sm mb-0">
+                  <li class="page-item <%= currentPage === 1 ? 'disabled' : '' %>">
+                    <a class="page-link" href="<%= pageLink(currentPage - 1) %>"<%- currentPage === 1 ? ' aria-disabled="true" tabindex="-1"' : '' %>>Anterior</a>
+                  </li>
+                  <% for (let n = first; n <= last; n += 1) { %>
+                    <li class="page-item <%= n === currentPage ? 'active' : '' %>">
+                      <a class="page-link" href="<%= pageLink(n) %>"<%- n === currentPage ? ' aria-current="page"' : '' %>><%= n %></a>
+                    </li>
+                  <% } %>
+                  <li class="page-item <%= currentPage === totalPages ? 'disabled' : '' %>">
+                    <a class="page-link" href="<%= pageLink(currentPage + 1) %>"<%- currentPage === totalPages ? ' aria-disabled="true" tabindex="-1"' : '' %>>Siguiente</a>
+                  </li>
+                </ul>
+              <% } %>
+              <form action="/perfiles" method="GET" class="d-flex align-items-center gap-2 m-0">
+                <% if (search) { %><input type="hidden" name="search" value="<%= search %>" /><% } %>
+                <label for="perfilesPageSize" class="small mb-0">Filas por página</label>
+                <select id="perfilesPageSize" name="pageSize" class="form-select form-select-sm w-auto" onchange="this.form.submit()">
+                  <% [10, 20, 50].forEach((size) => { %>
+                    <option value="<%= size %>" <%= pageSize === size ? 'selected' : '' %>><%= size %></option>
+                  <% }) %>
+                </select>
+                <noscript><button type="submit" class="btn btn-sm btn-outline-secondary">Aplicar</button></noscript>
+              </form>
+            </nav>
+          <% } %>
         </div>
       </div>
     </main>

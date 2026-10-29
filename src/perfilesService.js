@@ -66,10 +66,10 @@ export function readXlsxSheets(buffer) {
 // The OSINT alias is how the person shows up on Telegram, WhatsApp and similar apps.
 export function validarPerfil({ nombre, direccion, alias, linea }) {
   const perfil = { nombre: clean(nombre), direccion: clean(direccion), alias: clean(alias), linea: clean(linea) };
-  if (!perfil.nombre) return { error: 'Escribe el nombre o sube un Excel que lo incluya.' };
-  if (!perfil.linea) return { error: 'Escribe la línea telefónica.' };
+  if (!perfil.nombre) return { error: 'Escriba el nombre o suba un Excel que lo incluya.', field: 'nombre' };
+  if (!perfil.linea) return { error: 'Escriba la línea telefónica.', field: 'linea' };
   const tooLong = Object.keys(MAX_LENGTHS).find((field) => perfil[field].length > MAX_LENGTHS[field]);
-  if (tooLong) return { error: `El campo ${FIELD_NAMES[tooLong]} es demasiado largo.` };
+  if (tooLong) return { error: `El campo ${FIELD_NAMES[tooLong]} es demasiado largo.`, field: tooLong };
   return { perfil };
 }
 
@@ -117,11 +117,25 @@ export function createPerfilesStore(pool) {
     ...row, imagenes: imagenIds ? String(imagenIds).split(',').map(Number) : [],
   }));
 
-  const list = async (session) => {
+  // One page of the visible profiles, optionally filtered by a fragment of the name, alias or line.
+  const list = async (session, { search = '', page = 1, pageSize = 10 } = {}) => {
     await initialize();
     const scope = visibleFiles(session, 'p');
-    const [rows] = await pool.execute(`${select} WHERE ${scope.where} ORDER BY p.created_at DESC, p.id DESC`, scope.values);
-    return withImages(rows);
+    let where = scope.where;
+    const values = [...scope.values];
+    const term = clean(search);
+    if (term) {
+      const like = `%${term.replace(/[\\%_]/g, '\\$&')}%`;
+      const digits = lineDigits(term);
+      where += ` AND (p.nombre LIKE ? OR p.alias_osint LIKE ?${digits.length >= 3 ? ' OR p.linea_digitos LIKE ?' : ''})`;
+      values.push(like, like, ...(digits.length >= 3 ? [`%${digits}%`] : []));
+    }
+    const [[{ total }]] = await pool.execute(`SELECT COUNT(*) AS total FROM perfiles p WHERE ${where}`, values);
+    // LIMIT and OFFSET are inlined because prepared statements reject them as parameters; both are integers.
+    const limit = Math.max(1, Math.trunc(pageSize));
+    const offset = (Math.max(1, Math.trunc(page)) - 1) * limit;
+    const [rows] = await pool.execute(`${select} WHERE ${where} ORDER BY p.created_at DESC, p.id DESC LIMIT ${limit} OFFSET ${offset}`, values);
+    return { rows: withImages(rows), total: Number(total) };
   };
 
   const create = async (perfil, session, origen = 'manual') => {
@@ -161,7 +175,7 @@ export function createPerfilesStore(pool) {
     return result.affectedRows === 1;
   };
 
-  // Images are deleted only one by one with their own button, so a profile that still has any stays.
+  // A profile that still has images stays; they are deleted first, one by one or all at once.
   const remove = async (id, session) => {
     await initialize();
     const scope = visibleFiles(session, 'p');
@@ -219,13 +233,27 @@ export function createPerfilesStore(pool) {
     return rows[0] && IMAGE_TYPES[rows[0].type] ? { mime: IMAGE_TYPES[rows[0].type].mime, data: rows[0].data } : null;
   };
 
+  // Returns the id of the profile the image belonged to, so the list can return to it, or null without access.
   const removeImage = async (id, session) => {
     await initialize();
     const scope = visibleFiles(session, 'p');
+    const [rows] = await pool.execute(`SELECT i.perfil_id AS perfilId FROM perfil_imagenes i JOIN perfiles p ON p.id = i.perfil_id
+      WHERE i.id = ? AND ${scope.where}`, [id, ...scope.values]);
+    if (!rows[0]) return null;
     const [result] = await pool.execute(`DELETE i FROM perfil_imagenes i JOIN perfiles p ON p.id = i.perfil_id
       WHERE i.id = ? AND ${scope.where}`, [id, ...scope.values]);
-    return result.affectedRows === 1;
+    return result.affectedRows === 1 ? Number(rows[0].perfilId) : null;
   };
 
-  return { initialize, list, create, createFromFile, get, update, remove, search, addImages, getImage, removeImage };
+  // Clears every image of a profile the user can see; returns how many were deleted, or null without access.
+  const removeAllImages = async (perfilId, session) => {
+    await initialize();
+    const scope = visibleFiles(session, 'p');
+    const [rows] = await pool.execute(`SELECT p.id FROM perfiles p WHERE p.id = ? AND ${scope.where}`, [perfilId, ...scope.values]);
+    if (!rows[0]) return null;
+    const [result] = await pool.execute('DELETE FROM perfil_imagenes WHERE perfil_id = ?', [perfilId]);
+    return result.affectedRows;
+  };
+
+  return { initialize, list, create, createFromFile, get, update, remove, search, addImages, getImage, removeImage, removeAllImages };
 }
