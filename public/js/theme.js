@@ -39,3 +39,11 @@
     apply(preference || (system.matches ? 'dark' : 'light'));
   });
 })();
+
+// Every page loads this file, so it also brings in the page-change loading bar.
+(() => {
+  const script = document.createElement('script');
+  script.src = '/public/js/page-transitions.js';
+  script.defer = true;
+  document.head.appendChild(script);
+})();
