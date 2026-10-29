@@ -43,14 +43,17 @@
 // Every page loads this file, so it also sets up page changes: the slide direction must be read here,
 // before the page is first drawn, and the loading bar script is brought in.
 (() => {
-  window.addEventListener('pagereveal', (event) => {
-    let saved = null;
-    try {
-      saved = JSON.parse(sessionStorage.getItem('page-direction'));
-      sessionStorage.removeItem('page-direction');
-    } catch { /* Without storage the page just fades. */ }
-    if (event.viewTransition && saved?.to?.toLowerCase() === location.pathname.toLowerCase()) event.viewTransition.types.add(saved.type);
-  });
+  let saved = null;
+  try {
+    saved = JSON.parse(sessionStorage.getItem('page-direction'));
+    sessionStorage.removeItem('page-direction');
+  } catch { /* Without storage the page just rises in. */ }
+  if (saved?.to?.toLowerCase() === location.pathname.toLowerCase()) {
+    const root = document.documentElement;
+    root.dataset.entrada = saved.type;
+    root.classList.add('entrando-de-lado');
+    setTimeout(() => root.classList.remove('entrando-de-lado'), 1000);
+  }
 
   const script = document.createElement('script');
   script.src = '/public/js/page-transitions.js';

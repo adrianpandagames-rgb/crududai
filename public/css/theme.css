@@ -149,13 +149,20 @@ html.is-navigating .page-progress { opacity: 1; animation: page-progreso 4s cubi
   :is(main, body > .container, body > .container-fluid) > * { animation: none; }
   html.is-navigating .page-progress { animation: none; scale: .9 1; }
 }
-/* Al elegir en el menú una página que está a la derecha, todo se desliza hacia la izquierda (y al revés). */
-:root:active-view-transition-type(adelante, atras) :is(main, body > .container, body > .container-fluid) > * { animation: none; }
-:root:active-view-transition-type(adelante)::view-transition-old(root) { animation: page-sale-izquierda .32s cubic-bezier(.4, 0, 1, 1) both; }
-:root:active-view-transition-type(adelante)::view-transition-new(root) { animation: page-entra-derecha .42s cubic-bezier(.2, 0, 0, 1) both; }
-:root:active-view-transition-type(atras)::view-transition-old(root) { animation: page-sale-derecha .32s cubic-bezier(.4, 0, 1, 1) both; }
-:root:active-view-transition-type(atras)::view-transition-new(root) { animation: page-entra-izquierda .42s cubic-bezier(.2, 0, 0, 1) both; }
-@keyframes page-sale-izquierda { to { opacity: 0; translate: -18% 0; filter: blur(2px); } }
-@keyframes page-sale-derecha { to { opacity: 0; translate: 18% 0; filter: blur(2px); } }
-@keyframes page-entra-derecha { from { opacity: 0; translate: 22% 0; } }
-@keyframes page-entra-izquierda { from { opacity: 0; translate: -22% 0; } }
+/* Al elegir en el menú una página que está a la derecha, el contenido sale hacia la izquierda mientras carga
+   y la nueva página entra desde la derecha (y al revés). No depende de las transiciones del navegador, que
+   Chrome cancela cuando la página tarda en cargar. */
+:root.sale-izquierda :is(main, body > .container, body > .container-fluid) { animation: page-sale-izquierda .3s cubic-bezier(.4, 0, 1, 1) forwards; }
+:root.sale-derecha :is(main, body > .container, body > .container-fluid) { animation: page-sale-derecha .3s cubic-bezier(.4, 0, 1, 1) forwards; }
+:root[data-entrada="adelante"] :is(main, body > .container, body > .container-fluid) > * { animation-name: page-desde-derecha; }
+:root[data-entrada="atras"] :is(main, body > .container, body > .container-fluid) > * { animation-name: page-desde-izquierda; }
+/* Mientras algo se desliza de lado no debe aparecer la barra de desplazamiento horizontal. */
+:root:is(.sale-izquierda, .sale-derecha, .entrando-de-lado) body { overflow-x: clip; }
+@keyframes page-sale-izquierda { to { opacity: 0; translate: -60px 0; filter: blur(3px); } }
+@keyframes page-sale-derecha { to { opacity: 0; translate: 60px 0; filter: blur(3px); } }
+@keyframes page-desde-derecha { from { opacity: 0; translate: 60px 0; filter: blur(4px); } }
+@keyframes page-desde-izquierda { from { opacity: 0; translate: -60px 0; filter: blur(4px); } }
+@media (prefers-reduced-motion: reduce) {
+  :root:is(.sale-izquierda, .sale-derecha) :is(main, body > .container, body > .container-fluid) { animation: none; }
+  :root[data-entrada] :is(main, body > .container, body > .container-fluid) > * { animation: none; }
+}

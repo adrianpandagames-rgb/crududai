@@ -6,7 +6,7 @@
 
   const stop = () => {
     clearTimeout(fallback);
-    root.classList.remove('is-navigating');
+    root.classList.remove('is-navigating', 'sale-izquierda', 'sale-derecha');
   };
 
   const start = () => {
@@ -24,15 +24,17 @@
   };
 
   // Menu links run left to right; going to one further right slides the page left, and the other way round.
-  // The next page reads this in theme.js before it is drawn.
+  // The next page reads this in theme.js before it is drawn. Returns the direction, or null.
   const rememberDirection = (link, url) => {
     const links = [...document.querySelectorAll('.header .menu a.menu-item:not(.logout-btn)')];
     const from = links.findIndex((item) => item.getAttribute('aria-current') === 'page');
     const to = links.findIndex((item) => item === link || new URL(item.href).pathname.toLowerCase() === url.pathname.toLowerCase());
+    const type = from < 0 || to < 0 || from === to ? null : to > from ? 'adelante' : 'atras';
     try {
-      if (from < 0 || to < 0 || from === to) sessionStorage.removeItem('page-direction');
-      else sessionStorage.setItem('page-direction', JSON.stringify({ to: url.pathname, type: to > from ? 'adelante' : 'atras' }));
-    } catch { /* Without storage the page just fades. */ }
+      if (type) sessionStorage.setItem('page-direction', JSON.stringify({ to: url.pathname, type }));
+      else sessionStorage.removeItem('page-direction');
+    } catch { return null; /* Without storage the next page could not slide in to match. */ }
+    return type;
   };
 
   document.addEventListener('click', (event) => {
@@ -45,8 +47,9 @@
     if (url.origin !== location.origin) return;
     // Same page, different hash: the browser only scrolls.
     if (url.pathname === location.pathname && url.search === location.search && url.hash) return;
-    rememberDirection(link, url);
+    const type = rememberDirection(link, url);
     start();
+    if (type) root.classList.add(type === 'adelante' ? 'sale-izquierda' : 'sale-derecha');
   });
 
   // Runs after other submit handlers (confirmation dialogs) have had their chance to cancel.
