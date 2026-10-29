@@ -145,7 +145,7 @@ test('the menu is grouped and each role keeps exactly its links', async () => {
       .map(([, group, link]) => (group ? `[${group}]` : link));
   };
   assert.deepEqual(await menu({ isAdmin: true, role: 'admin' }), [
-    'Métricas',
+    'Métricas', 'Tareas',
     '[Datos conservados]', 'Líneas', 'IMEI', 'Perfiles',
     '[Mapeo]', 'Ubicaciones', 'Georeferenciación', 'Planeación geográfica', 'Ruta', 'Coincidencias de antenas',
     '[OSINT]', 'Líneas Internacionales', 'Maigret', 'RastroX', 'Búsqueda por imagen',
@@ -153,7 +153,7 @@ test('the menu is grouped and each role keeps exactly its links', async () => {
     'Cerrar sesión',
   ]);
   const user = await menu({ isAdmin: false, role: 'usuario' });
-  assert.ok(user.includes('Métricas') && !user.includes('Georeferenciación') && !user.includes('[Administración]'));
+  assert.ok(user.includes('Métricas') && user.includes('Tareas') && !user.includes('Georeferenciación') && !user.includes('[Administración]'));
   const uecs = await menu({ isAdmin: false, role: 'uecs' });
-  assert.ok(!uecs.includes('Métricas') && uecs.includes('Georeferenciación') && !uecs.includes('[Administración]'));
+  assert.ok(!uecs.includes('Métricas') && !uecs.includes('Tareas') && uecs.includes('Georeferenciación') && !uecs.includes('[Administración]'));
 });

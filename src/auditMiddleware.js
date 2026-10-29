@@ -3,7 +3,8 @@ import { buildAuditDetails } from './auditDetails.js';
 import { automaticAuditPaths } from './auditFilters.js';
 
 const mutations = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
-const backgroundPaths = new Set(['/health', '/health/ready', '/api/route-toast', ...automaticAuditPaths]);
+// The task board's live stream and the column refreshes it triggers are not the user's actions.
+const backgroundPaths = new Set(['/health', '/health/ready', '/api/route-toast', '/tareas/eventos', '/tareas/tablero', ...automaticAuditPaths]);
 const presentationParameters = new Set(['page', 'pagina', 'pageSize', 'partial', 'message', 'type', 'toastMessage']);
 
 // Inside a mounted router req.path loses its prefix ("/planeacion-geografica/importar" reads "/importar"),

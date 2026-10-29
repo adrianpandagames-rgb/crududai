@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <%- include('../includes/head') %>
+    <style>
+      /* Leave room below the board for the fixed theme toggle. */
+      .tareas-page { padding-bottom: 5rem; }
+      .tareas-barra { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-bottom: 1rem; }
+      .tareas-barra label { margin: 0; }
+      .tareas-barra select { flex: 0 1 280px; min-width: 0; }
+      .tareas-nueva { margin-bottom: 1rem; }
+      .tareas-nueva summary { display: inline-flex; align-items: center; gap: .4rem; min-height: 40px; cursor: pointer; font-weight: 600; color: #0d6efd; }
+      html[data-theme="dark"] .tareas-nueva summary { color: #8dc5ff; }
+      .tareas-tablero { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; align-items: start; }
+      @media (max-width: 991.98px) { .tareas-tablero { grid-template-columns: minmax(0, 1fr); } }
+      .tareas-columna { border-radius: 10px; background: rgba(127, 127, 127, .1); padding: .75rem; }
+      .tareas-columna h2 { display: flex; align-items: center; justify-content: space-between; font-size: 1rem; font-weight: 700; margin: 0 0 .75rem; }
+      .tareas-contador { font-variant-numeric: tabular-nums; font-weight: 600; font-size: .85rem; opacity: .75; }
+      /* The empty list keeps a drop target. */
+      .tareas-lista { display: flex; flex-direction: column; gap: .5rem; min-height: 64px; border-radius: 8px; transition: background-color .15s ease-out; }
+      .tareas-lista.is-destino { background: rgba(13, 110, 253, .1); }
+      .tareas-vacia { margin: auto; font-size: .85rem; opacity: .6; }
+      .tareas-lista:has(.tarea-card) .tareas-vacia { display: none; }
+      .tarea-card { padding: .75rem; border-radius: 8px; background: #fff; border: 1px solid rgba(0, 0, 0, .1); box-shadow: 0 1px 2px rgba(0, 0, 0, .06); scroll-margin-top: 96px; }
+      html[data-theme="dark"] .tarea-card { background: var(--dark-panel); border-color: var(--dark-border); }
+      .tarea-card[draggable="true"] { cursor: grab; }
+      .tarea-card.is-arrastrando { opacity: .4; }
+      .tarea-card:target { outline: 2px solid #0d6efd; outline-offset: 2px; }
+      .tarea-titulo { font-weight: 600; margin: 0 0 .25rem; word-break: break-word; }
+      .tarea-descripcion { font-size: .875rem; margin: 0 0 .5rem; white-space: pre-line; word-break: break-word;
+        display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+      .tarea-meta { display: flex; flex-wrap: wrap; gap: .35rem; font-size: .8rem; margin-bottom: .5rem; }
+      .tarea-chip { display: inline-flex; align-items: center; gap: .25rem; padding: .1rem .45rem; border-radius: 999px; background: rgba(127, 127, 127, .15); }
+      .tarea-chip.is-sin-asignar { font-style: italic; opacity: .75; }
+      .tarea-chip.is-vencida { background: #f8d7da; color: #842029; font-weight: 600; }
+      html[data-theme="dark"] .tarea-chip.is-vencida { background: rgba(220, 53, 69, .25); color: #f1aeb5; }
+      /* Finished tasks are not overdue. Keyed on the column, so a card dragged there updates without a reload. */
+      .tareas-lista[data-estado="terminada"] .tarea-chip.is-vencida { background: rgba(127, 127, 127, .15); color: inherit; font-weight: inherit; }
+      .tareas-lista[data-estado="terminada"] .tarea-vencida-texto { display: none; }
+      /* The arrows likewise follow the card's column: no left arrow in the first, no right arrow in the last. */
+      .tareas-lista[data-estado="<%= ESTADOS[0] %>"] [data-direccion="izquierda"],
+      .tareas-lista[data-estado="<%= ESTADOS.at(-1) %>"] [data-direccion="derecha"] { display: none; }
+      .tarea-acciones { display: flex; align-items: center; gap: .35rem; }
+      .tarea-acciones form { margin: 0; }
+      .tarea-acciones .ms-auto { margin-left: auto; }
+      /* btn-sm is ~32px tall; stretch the hit area toward 40px without reaching the neighbour. */
+      .tarea-acciones .btn { position: relative; }
+      .tarea-acciones .btn::after { content: ""; position: absolute; inset: -4px -2px; }
+    </style>
+  </head>
+  <body>
+    <%- include('../includes/header') %>
+    <% const yo = typeof currentUser !== 'undefined' && currentUser ? String(currentUser.id) : ''; %>
+
+    <main class="container-fluid px-3 px-xl-4 page-offset tareas-page">
+      <div class="row justify-content-md-center mb-4">
+        <div class="col-md-12 mt-5">
+          <h1 class="text-center title">TAREAS</h1>
+          <hr />
+        </div>
+      </div>
+
+      <% if (message) { %>
+        <div class="alert <%= messageType === 'error' ? 'alert-danger' : 'alert-success' %>" role="<%= messageType === 'error' ? 'alert' : 'status' %>"><%= message %></div>
+        <script>
+          // The message travels in the URL; drop it so reloading or going back does not show it again.
+          (() => {
+            const url = new URL(location.href);
+            url.searchParams.delete('message');
+            url.searchParams.delete('type');
+            history.replaceState(null, '', url);
+          })();
+        </script>
+      <% } %>
+
+      <details class="card p-3 tareas-nueva"<%= formError ? ' open' : '' %>>
+        <summary><i class="bi bi-plus-lg" aria-hidden="true"></i> Nueva tarea</summary>
+        <% if (formError) { %><div class="alert alert-danger mt-2" role="alert" id="tareaFormError"><%= formError.message %></div><% } %>
+        <% const invalid = (field) => (formError?.field === field ? ' is-invalid" aria-invalid="true" aria-describedby="tareaFormError' : ''); %>
+        <form action="/tareas" method="POST" autocomplete="off" class="row g-3 mt-1">
+          <input type="hidden" name="volver" value="<%= filtro %>" />
+          <div class="col-md-6">
+            <label for="titulo" class="form-label">Título <span class="text-danger" aria-hidden="true">*</span></label>
+            <input type="text" id="titulo" name="titulo" class="form-control<%- invalid('titulo') %>" maxlength="200" required value="<%= form.titulo || '' %>" />
+          </div>
+          <div class="col-md-6 col-lg-3">
+            <label for="responsable" class="form-label">Responsable</label>
+            <select id="responsable" name="responsable" class="form-select<%- invalid('responsable') %>">
+              <option value="">Sin asignar</option>
+              <% responsables.forEach((user) => { %>
+                <option value="<%= user.id %>"<%= String(form.responsable ?? '') === String(user.id) ? ' selected' : '' %>><%= user.email %></option>
+              <% }) %>
+            </select>
+          </div>
+          <div class="col-md-6 col-lg-3">
+            <label for="fechaLimite" class="form-label">Fecha límite</label>
+            <input type="date" id="fechaLimite" name="fechaLimite" class="form-control<%- invalid('fechaLimite') %>" value="<%= form.fechaLimite || '' %>" />
+          </div>
+          <div class="col-md-9">
+            <label for="descripcion" class="form-label">Descripción</label>
+            <textarea id="descripcion" name="descripcion" class="form-control<%- invalid('descripcion') %>" rows="2" maxlength="2000"><%= form.descripcion || '' %></textarea>
+          </div>
+          <div class="col-md-3">
+            <label for="estado" class="form-label">Columna</label>
+            <select id="estado" name="estado" class="form-select">
+              <% ESTADOS.forEach((estado) => { %>
+                <option value="<%= estado %>"<%= form.estado === estado ? ' selected' : '' %>><%= ESTADO_LABELS[estado] %></option>
+              <% }) %>
+            </select>
+          </div>
+          <div class="col-12">
+            <button class="btn btn-primary" type="submit">Registrar tarea</button>
+          </div>
+        </form>
+      </details>
+
+      <form class="tareas-barra" action="/tareas" method="GET">
+        <label for="filtroResponsable" class="form-label fw-semibold">Ver tareas de</label>
+        <select id="filtroResponsable" name="responsable" class="form-select" onchange="this.form.submit()">
+          <option value="">Todos</option>
+          <% if (yo) { %><option value="<%= yo %>"<%= filtro === yo ? ' selected' : '' %>>Mis tareas</option><% } %>
+          <option value="sin"<%= filtro === 'sin' ? ' selected' : '' %>>Sin asignar</option>
+          <% responsables.filter((user) => String(user.id) !== yo).forEach((user) => { %>
+            <option value="<%= user.id %>"<%= filtro === String(user.id) ? ' selected' : '' %>><%= user.email %></option>
+          <% }) %>
+        </select>
+        <noscript><button class="btn btn-outline-secondary" type="submit">Filtrar</button></noscript>
+      </form>
+
+      <div class="tareas-tablero" data-filtro="<%= filtro %>">
+        <%- include('../partials/tareas-tablero') %>
+      </div>
+    </main>
+    <%- include('../includes/scripts') %>
+    <script src="/public/js/tareas.js" defer></script>
+  </body>
+</html>

@@ -44,6 +44,9 @@
     <li>
       <a class="menu-item<%= navAt('/metricas') ? ' is-current' : '' %>" href="/metricas"<%- navAt('/metricas') ? ' aria-current="page"' : '' %>>Métricas</a>
     </li>
+    <li>
+      <a class="menu-item<%= navAt('/tareas') ? ' is-current' : '' %>" href="/tareas"<%- navAt('/tareas') ? ' aria-current="page"' : '' %>>Tareas</a>
+    </li>
     <% } %>
     <% groups.forEach((group) => { %>
     <% const groupCurrent = group.links.some(linkAt); %>

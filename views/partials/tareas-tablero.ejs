@@ -1,0 +1,49 @@
+<%# The board's columns; also served alone by /tareas/tablero so open pages refresh when someone changes a task. %>
+<% const corto = (email) => String(email || '').split('@')[0]; %>
+<% ESTADOS.forEach((estado) => { %>
+  <section class="tareas-columna" aria-labelledby="columna-<%= estado %>">
+    <h2 id="columna-<%= estado %>"><%= ESTADO_LABELS[estado] %> <span class="tareas-contador" data-contador><%= columnas[estado].length %></span></h2>
+    <div class="tareas-lista" data-estado="<%= estado %>">
+      <p class="tareas-vacia">Sin tareas</p>
+      <% columnas[estado].forEach((tarea) => { %>
+        <% const vencida = tarea.fechaLimite && tarea.fechaLimite < hoy; %>
+        <article class="tarea-card" id="tarea-<%= tarea.id %>" data-id="<%= tarea.id %>">
+          <h3 class="tarea-titulo h6"><%= tarea.titulo %></h3>
+          <% if (tarea.descripcion) { %><p class="tarea-descripcion"><%= tarea.descripcion %></p><% } %>
+          <div class="tarea-meta">
+            <% if (tarea.responsable) { %>
+              <span class="tarea-chip" title="<%= tarea.responsable %>"><i class="bi bi-person" aria-hidden="true"></i> <%= corto(tarea.responsable) %></span>
+            <% } else { %>
+              <span class="tarea-chip is-sin-asignar">Sin asignar</span>
+            <% } %>
+            <% if (tarea.fechaLimite) { %>
+              <span class="tarea-chip<%= vencida ? ' is-vencida' : '' %>"><i class="bi bi-calendar-event" aria-hidden="true"></i>
+                <%= tarea.fechaLimite.split('-').reverse().join('/') %><% if (vencida) { %><span class="tarea-vencida-texto"> · vencida</span><% } %></span>
+            <% } %>
+          </div>
+          <div class="tarea-acciones">
+            <form action="/tareas/<%= tarea.id %>/mover" method="POST" data-direccion="izquierda">
+              <input type="hidden" name="volver" value="<%= filtro %>" />
+              <button class="btn btn-sm btn-outline-secondary" type="submit" name="direccion" value="izquierda"
+                title="Mover a la columna anterior" aria-label="Mover a la columna anterior"><i class="bi bi-arrow-left"></i></button>
+            </form>
+            <form action="/tareas/<%= tarea.id %>/mover" method="POST" data-direccion="derecha">
+              <input type="hidden" name="volver" value="<%= filtro %>" />
+              <button class="btn btn-sm btn-outline-secondary" type="submit" name="direccion" value="derecha"
+                title="Mover a la columna siguiente" aria-label="Mover a la columna siguiente"><i class="bi bi-arrow-right"></i></button>
+            </form>
+            <a class="btn btn-sm btn-outline-primary ms-auto" href="/tareas/<%= tarea.id %>/editar<%= filtro ? `?volver=${filtro}` : '' %>"
+              title="Editar" aria-label="Editar <%= tarea.titulo %>"><i class="bi bi-pencil"></i></a>
+            <% if (puedeEliminar(tarea)) { %>
+              <form action="/tareas/eliminar/<%= tarea.id %>" method="POST"
+                data-confirm="¿Desea eliminar la tarea &quot;<%= tarea.titulo %>&quot;?" data-confirm-action="Eliminar tarea">
+                <input type="hidden" name="volver" value="<%= filtro %>" />
+                <button class="btn btn-sm btn-outline-danger" type="submit" title="Eliminar" aria-label="Eliminar <%= tarea.titulo %>"><i class="bi bi-trash"></i></button>
+              </form>
+            <% } %>
+          </div>
+        </article>
+      <% }) %>
+    </div>
+  </section>
+<% }) %>

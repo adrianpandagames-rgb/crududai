@@ -32,6 +32,7 @@ import { createMaigretRouter, createMaigretSearches } from './src/maigretRouter.
 import { createImagenesRouter, createPublicImageRouter } from './src/imagenesRouter.js';
 import { createNombresRouter } from './src/nombresRouter.js';
 import { createPerfilesRouter } from './src/perfilesRouter.js';
+import { createTareasRouter } from './src/tareasRouter.js';
 import { obtenerMedidores } from './src/medidoresService.js';
 import { resetGoogleGeocodingQuota } from './src/googleGeocodingQuota.js';
 import { listarUsuarios, roleDescriptions, roleLabels, userRoleOf, userRoles } from './src/usuariosService.js';
@@ -213,6 +214,7 @@ app.use('/maigret', requireAuth, createMaigretRouter(pool, { searches: maigretSe
 app.use('/imagenes', requireAuth, createImagenesRouter(pool));
 app.use('/nombres', requireAuth, createNombresRouter(pool, { maigretSearches }));
 app.use('/perfiles', requireAuth, createPerfilesRouter(pool));
+app.use('/tareas', requireAuth, requireNonUecs, createTareasRouter(pool));
 // Reverse image search engines download the image without a session, through an expiring token.
 app.use('/imagen-publica', createPublicImageRouter(pool));
 

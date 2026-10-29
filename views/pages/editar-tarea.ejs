@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <%- include('../includes/head') %>
+  </head>
+  <body>
+    <%- include('../includes/header') %>
+    <main class="container page-offset">
+      <div class="row justify-content-md-center">
+        <div class="col-md-6 mt-5">
+          <div class="card p-4">
+            <h1 class="text-center title">Editar tarea</h1>
+            <p class="small text-muted mb-3"><span class="text-danger" aria-hidden="true">*</span> Campo obligatorio</p>
+            <% if (error) { %><div class="alert alert-danger" role="alert"><%= error %></div><% } %>
+            <form action="/tareas/<%= tarea.id %>/editar" method="POST" autocomplete="off">
+              <input type="hidden" name="volver" value="<%= locals.volver || '' %>" />
+              <div class="mb-3">
+                <label for="titulo" class="form-label">Título <span class="text-danger" aria-hidden="true">*</span></label>
+                <input type="text" id="titulo" name="titulo" class="form-control" maxlength="200" required value="<%= tarea.titulo || '' %>" />
+              </div>
+              <div class="mb-3">
+                <label for="descripcion" class="form-label">Descripción</label>
+                <textarea id="descripcion" name="descripcion" class="form-control" rows="4" maxlength="2000"><%= tarea.descripcion || '' %></textarea>
+              </div>
+              <div class="mb-3">
+                <label for="responsable" class="form-label">Responsable</label>
+                <select id="responsable" name="responsable" class="form-select">
+                  <option value="">Sin asignar</option>
+                  <% responsables.forEach((user) => { %>
+                    <option value="<%= user.id %>"<%= String(tarea.responsable ?? '') === String(user.id) ? ' selected' : '' %>><%= user.email %></option>
+                  <% }) %>
+                </select>
+              </div>
+              <div class="row">
+                <div class="col-sm-6 mb-3">
+                  <label for="fechaLimite" class="form-label">Fecha límite</label>
+                  <input type="date" id="fechaLimite" name="fechaLimite" class="form-control" value="<%= tarea.fechaLimite || '' %>" />
+                </div>
+                <div class="col-sm-6 mb-3">
+                  <label for="estado" class="form-label">Columna</label>
+                  <select id="estado" name="estado" class="form-select">
+                    <% ESTADOS.forEach((estado) => { %>
+                      <option value="<%= estado %>"<%= tarea.estado === estado ? ' selected' : '' %>><%= ESTADO_LABELS[estado] %></option>
+                    <% }) %>
+                  </select>
+                </div>
+              </div>
+              <% if (tarea.creador) { %><p class="small text-muted">Creada por <%= tarea.creador %><%= tarea.actualizada ? ` · última modificación ${tarea.actualizada}` : '' %></p><% } %>
+              <div class="d-flex gap-2">
+                <a class="btn btn-secondary flex-fill" href="/tareas<%= locals.volver ? `?responsable=${locals.volver}` : '' %>#tarea-<%= tarea.id %>">Cancelar</a>
+                <button class="btn btn-primary flex-fill" type="submit">Guardar cambios</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </main>
+    <%- include('../includes/scripts') %>
+  </body>
+</html>

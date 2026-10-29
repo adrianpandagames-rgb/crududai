@@ -8,7 +8,7 @@ export const auditResources = {
   GEOREFERENCIACION: 'Georreferenciación', PLANEACION: 'Planeación geográfica',
   TELEFONO: 'Teléfono', RED: 'Red telefónica', AUDITORIA: 'Auditoría', METRICAS: 'Métricas',
   MAIGRET: 'Maigret', IMAGEN: 'Búsqueda por imagen', NOMBRE: 'RastroX',
-  COINCIDENCIA: 'Coincidencias de antenas', PERFIL: 'Perfil',
+  COINCIDENCIA: 'Coincidencias de antenas', PERFIL: 'Perfil', TAREA: 'Tarea',
 };
 
 const metricTypes = {
@@ -29,7 +29,7 @@ export const auditOperationSql = `CASE
   WHEN method IN ('LOGIN', 'LOGIN_FAILED', 'SEARCH', 'CONSULTA') THEN method
   WHEN method = 'DELETE' OR LOWER(request_path) REGEXP '/(eliminar|delete)(/|$)' THEN 'ELIMINADO'
   WHEN method IN ('PUT', 'PATCH')
-    OR LOWER(request_path) REGEXP '/(editar|modificar|update|restablecer-contrasena|rol|estado)(/|$)'
+    OR LOWER(request_path) REGEXP '/(editar|modificar|update|restablecer-contrasena|rol|estado|mover)(/|$)'
     OR LOWER(request_path) LIKE '/metricas/registros/%'
     OR LOWER(request_path) = '/cambiar-contrasena' THEN 'EDITADO'
   WHEN method = 'POST' THEN 'REGISTRO'
@@ -50,6 +50,7 @@ export const auditResourceSql = `CASE
   WHEN LOWER(request_path) REGEXP '^/imagenes(/|$)' THEN 'IMAGEN'
   WHEN LOWER(request_path) REGEXP '^/nombres(/|$)' THEN 'NOMBRE'
   WHEN LOWER(request_path) REGEXP '^/perfiles(/|$)' THEN 'PERFIL'
+  WHEN LOWER(request_path) REGEXP '^/tareas(/|$)' THEN 'TAREA'
   WHEN LOWER(request_path) REGEXP '^/auditoria(/|$)' THEN 'AUDITORIA'
   WHEN LOWER(request_path) REGEXP '^/ubicaciones(/|$)' THEN 'UBICACION'
   WHEN LOWER(request_path) REGEXP '^/ruta(/|$)' THEN 'RUTA'
@@ -92,6 +93,9 @@ const specificActions = [
   [/^\/imagenes\/eliminar\//i, 'Eliminó imagen'],
   [/^\/perfiles\/?$/i, 'Registró perfil'],
   [/^\/perfiles\/eliminar\//i, 'Eliminó perfil'],
+  [/^\/tareas\/?$/i, 'Registró tarea'],
+  [/^\/tareas\/\d+\/mover\/?$/i, 'Movió tarea'],
+  [/^\/tareas\/eliminar\//i, 'Eliminó tarea'],
   [/^\/usuarios\/?$/i, 'Creó usuario'],
   [/^\/usuarios\/\d+\/rol\/?$/i, 'Cambió rol de usuario'],
   [/^\/usuarios\/\d+\/estado\/?$/i, 'Cambió estado de usuario'],
