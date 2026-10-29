@@ -273,3 +273,95 @@ html[data-theme="dark"] .table > thead th { color: var(--dark-muted); }
 html[data-theme="dark"] .table > :not(:last-child) > :last-child > * { border-bottom-color: rgba(255, 255, 255, .12); }
 html[data-theme="dark"] { color-scheme: dark; }
 html[data-theme="dark"] body .list-group-item { background: rgba(255, 255, 255, .04) !important; border-color: rgba(255, 255, 255, .08) !important; }
+
+/* Botones de vidrio: cada uno conserva su color. Los rellenos son vidrio teñido de ese color, con un brillo
+   arriba y una sombra suave del mismo tono; los de contorno son vidrio claro con texto y borde de su color,
+   y al pasar el cursor se tiñen. --btn-rgb es el color del botón y --btn-text el de su texto en contorno. */
+html :is(.btn-primary, .btn-outline-primary) { --btn-rgb: 13, 110, 253; --btn-text: #0b5ed7; }
+html :is(.btn-secondary, .btn-outline-secondary) { --btn-rgb: 108, 117, 125; --btn-text: #4b5563; }
+html :is(.btn-danger, .btn-outline-danger) { --btn-rgb: 220, 53, 69; --btn-text: #b02a37; }
+html :is(.btn-success, .btn-outline-success) { --btn-rgb: 25, 135, 84; --btn-text: #146c43; }
+html :is(.btn-dark, .btn-outline-dark) { --btn-rgb: 33, 37, 41; --btn-text: #212529; }
+html .btn-outline-purple { --btn-rgb: 111, 66, 193; --btn-text: #6f42c1; }
+html .login-btn { --btn-rgb: 0, 123, 255; }
+html :is(.btn-primary, .btn-secondary, .btn-danger, .btn-success, .btn-dark, .login-btn) {
+  background: linear-gradient(180deg, rgba(var(--btn-rgb), .85), rgba(var(--btn-rgb), .7));
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  backdrop-filter: blur(12px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, .28);
+  border-radius: 10px;
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 4px 14px rgba(var(--btn-rgb), .22);
+}
+html :is(.btn-primary, .btn-secondary, .btn-danger, .btn-success, .btn-dark, .login-btn):not(:disabled):is(:hover, :active, .active) {
+  background: linear-gradient(180deg, rgba(var(--btn-rgb), .97), rgba(var(--btn-rgb), .84));
+  border-color: rgba(255, 255, 255, .35);
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .4), 0 6px 18px rgba(var(--btn-rgb), .32);
+}
+html :is(.btn-outline-primary, .btn-outline-secondary, .btn-outline-danger, .btn-outline-success, .btn-outline-dark,
+  .btn-outline-purple, .btn-light) {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .7), rgba(255, 255, 255, .45));
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  backdrop-filter: blur(12px) saturate(1.4);
+  border: 1px solid rgba(var(--btn-rgb, 15, 23, 42), .35);
+  border-radius: 10px;
+  color: var(--btn-text, #212529);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .8), 0 2px 8px rgba(15, 23, 42, .06);
+}
+html :is(.btn-outline-primary, .btn-outline-secondary, .btn-outline-danger, .btn-outline-success, .btn-outline-dark,
+  .btn-outline-purple, .btn-light):not(:disabled):is(:hover, :active, .active) {
+  background: linear-gradient(180deg, rgba(var(--btn-rgb, 15, 23, 42), .16), rgba(var(--btn-rgb, 15, 23, 42), .1));
+  border-color: rgba(var(--btn-rgb, 15, 23, 42), .55);
+  color: var(--btn-text, #212529);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6), 0 4px 14px rgba(var(--btn-rgb, 15, 23, 42), .14);
+}
+html .btn:focus-visible { box-shadow: 0 0 0 .25rem rgba(var(--btn-rgb, 13, 110, 253), .3); }
+html .btn-sm { border-radius: 8px; }
+/* Paginación y botón de tema con el mismo vidrio claro. */
+html .page-link {
+  background-color: rgba(255, 255, 255, .55);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-color: rgba(15, 23, 42, .1);
+}
+html .page-link:hover { background-color: rgba(13, 110, 253, .1); }
+html .page-item.active .page-link { background: linear-gradient(180deg, rgba(13, 110, 253, .88), rgba(13, 110, 253, .72)); border-color: rgba(255, 255, 255, .3); }
+html .theme-toggle {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .7), rgba(255, 255, 255, .45));
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+  border-color: rgba(255, 255, 255, .7);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .8), 0 6px 20px rgba(15, 23, 42, .12);
+}
+
+html[data-theme="dark"] :is(.btn-primary, .btn-outline-primary) { --btn-text: #8dc5ff; }
+html[data-theme="dark"] :is(.btn-secondary, .btn-outline-secondary) { --btn-text: #c1cfdf; }
+html[data-theme="dark"] :is(.btn-danger, .btn-outline-danger) { --btn-text: #ff8f9a; }
+html[data-theme="dark"] :is(.btn-success, .btn-outline-success) { --btn-text: #7fd6a6; }
+html[data-theme="dark"] :is(.btn-dark, .btn-outline-dark) { --btn-rgb: 148, 163, 184; --btn-text: #e5edf6; }
+html[data-theme="dark"] .btn-outline-purple { --btn-text: #c3a6f5; }
+html[data-theme="dark"] :is(.btn-primary, .btn-secondary, .btn-danger, .btn-success, .btn-dark, .login-btn) {
+  border-color: rgba(255, 255, 255, .14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .2), 0 4px 14px rgba(0, 0, 0, .3);
+}
+html[data-theme="dark"] :is(.btn-outline-primary, .btn-outline-secondary, .btn-outline-danger, .btn-outline-success,
+  .btn-outline-dark, .btn-outline-purple, .btn-light) {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .08), rgba(255, 255, 255, .03));
+  border-color: rgba(var(--btn-rgb, 148, 163, 184), .5);
+  color: var(--btn-text, var(--dark-text));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08), 0 2px 8px rgba(0, 0, 0, .2);
+}
+html[data-theme="dark"] :is(.btn-outline-primary, .btn-outline-secondary, .btn-outline-danger, .btn-outline-success,
+  .btn-outline-dark, .btn-outline-purple, .btn-light):not(:disabled):is(:hover, :active, .active) {
+  background: linear-gradient(180deg, rgba(var(--btn-rgb, 148, 163, 184), .28), rgba(var(--btn-rgb, 148, 163, 184), .18));
+  color: #fff;
+}
+html[data-theme="dark"] .page-link { background-color: rgba(255, 255, 255, .05) !important; border-color: rgba(255, 255, 255, .1) !important; }
+html[data-theme="dark"] .page-link:hover { background-color: rgba(141, 197, 255, .12) !important; }
+html[data-theme="dark"] .page-item.active .page-link { background: linear-gradient(180deg, rgba(23, 92, 170, .9), rgba(23, 92, 170, .72)) !important; }
+html[data-theme="dark"] body .theme-toggle {
+  background: linear-gradient(180deg, rgba(31, 41, 55, .7), rgba(31, 41, 55, .5)) !important;
+  border-color: rgba(255, 255, 255, .12) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08), 0 6px 20px rgba(0, 0, 0, .35);
+}
