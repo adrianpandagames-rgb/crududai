@@ -121,15 +121,17 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 #globalToast { opacity: 0; translate: 0 -4px; transition: opacity .15s ease-in, translate .15s ease-in; }
 #globalToast.is-visible { opacity: 1; translate: 0; transition: opacity .25s cubic-bezier(.2, 0, 0, 1), translate .25s cubic-bezier(.2, 0, 0, 1); }
 @media (prefers-reduced-motion: reduce) { #globalToast, #globalToast.is-visible { translate: none; } }
-/* Transición entre páginas: la página anterior se aleja y se desenfoca; la nueva entra por secciones,
-   una tras otra. La barra superior y el botón de tema no se mueven. */
+/* Transición entre páginas: la página anterior se aleja y se desvanece; la nueva entra por secciones,
+   una tras otra. Solo se animan la opacidad y la posición, que la tarjeta gráfica mueve sin volver a dibujar;
+   desenfocar el contenido obligaría a recalcular en cada cuadro el vidrio de todos los paneles y botones.
+   La barra superior y el botón de tema no se mueven. */
 @view-transition { navigation: auto; }
 .header { view-transition-name: site-header; }
 .theme-toggle { view-transition-name: theme-toggle; }
 .page-progress { view-transition-name: page-progress; }
 ::view-transition-old(root) { animation: page-salida .22s cubic-bezier(.4, 0, 1, 1) both; }
 ::view-transition-new(root) { animation: page-fundido .2s ease-out both; }
-@keyframes page-salida { to { opacity: 0; scale: .985; translate: 0 -10px; filter: blur(3px); } }
+@keyframes page-salida { to { opacity: 0; scale: .985; translate: 0 -10px; } }
 @keyframes page-fundido { from { opacity: 0; } }
 /* "backwards" deja de afectar al elemento al terminar, así no rompe modales ni mapas en posición fija. */
 :is(main, body > .container, body > .container-fluid) > * {
@@ -138,7 +140,7 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 :is(main, body > .container, body > .container-fluid) > :nth-child(3) { animation-delay: 140ms; }
 :is(main, body > .container, body > .container-fluid) > :nth-child(4) { animation-delay: 210ms; }
 :is(main, body > .container, body > .container-fluid) > :nth-child(n + 5) { animation-delay: 280ms; }
-@keyframes page-seccion { from { opacity: 0; translate: 0 16px; filter: blur(4px); } }
+@keyframes page-seccion { from { opacity: 0; translate: 0 16px; } }
 /* Barra de carga mientras el servidor prepara la siguiente página. */
 .page-progress { position: fixed; top: 0; left: 0; z-index: 2100; width: 100%; height: 3px; pointer-events: none;
   background: linear-gradient(90deg, #087f8c, #35b6ac, #3273a8); transform-origin: left; scale: 0 1; opacity: 0; }
@@ -158,10 +160,10 @@ html.is-navigating .page-progress { opacity: 1; animation: page-progreso 4s cubi
 :root[data-entrada="atras"] :is(main, body > .container, body > .container-fluid) > * { animation-name: page-desde-izquierda; }
 /* Mientras algo se desliza de lado no debe aparecer la barra de desplazamiento horizontal. */
 :root:is(.sale-izquierda, .sale-derecha, .entrando-de-lado) body { overflow-x: clip; }
-@keyframes page-sale-izquierda { to { opacity: 0; translate: -60px 0; filter: blur(3px); } }
-@keyframes page-sale-derecha { to { opacity: 0; translate: 60px 0; filter: blur(3px); } }
-@keyframes page-desde-derecha { from { opacity: 0; translate: 60px 0; filter: blur(4px); } }
-@keyframes page-desde-izquierda { from { opacity: 0; translate: -60px 0; filter: blur(4px); } }
+@keyframes page-sale-izquierda { to { opacity: 0; translate: -60px 0; } }
+@keyframes page-sale-derecha { to { opacity: 0; translate: 60px 0; } }
+@keyframes page-desde-derecha { from { opacity: 0; translate: 60px 0; } }
+@keyframes page-desde-izquierda { from { opacity: 0; translate: -60px 0; } }
 @media (prefers-reduced-motion: reduce) {
   :root:is(.sale-izquierda, .sale-derecha) :is(main, body > .container, body > .container-fluid) { animation: none; }
   :root[data-entrada] :is(main, body > .container, body > .container-fluid) > * { animation: none; }
@@ -187,12 +189,20 @@ html[data-theme="dark"] .header ul.menu-submenu { background: transparent !impor
    desenfocar y se note el color sin llamar demasiado la atención. */
 html body {
   background-color: #f3f6f5;
+}
+/* Las luces van en una capa fija aparte: la tarjeta gráfica la deja quieta al desplazarse o animar, en vez de
+   volver a pintar todo el fondo en cada cuadro como pasa con background-attachment: fixed. */
+html body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   background-image:
     radial-gradient(40rem 30rem at 4% 6%, rgba(63, 148, 53, .32), transparent 68%),
     radial-gradient(38rem 30rem at 98% 18%, rgba(8, 127, 140, .3), transparent 68%),
     radial-gradient(44rem 30rem at 35% 108%, rgba(50, 115, 168, .28), transparent 68%),
     radial-gradient(26rem 20rem at 80% 88%, rgba(53, 182, 172, .22), transparent 68%);
-  background-attachment: fixed;
 }
 html :is(.card, .custom_table, .metric-card, .chart-panel, .network-shell, .network-panel, .planning-antennas,
   .login-container, .not-found) {
@@ -233,14 +243,12 @@ html .table > :not(:first-child) { border-top: 0; }
 html .table > :not(:last-child) > :last-child > * { border-bottom-color: rgba(15, 23, 42, .12); }
 html .list-group-item { background-color: rgba(255, 255, 255, .45); border-color: rgba(15, 23, 42, .08); }
 
-html[data-theme="dark"] body {
-  background-color: var(--dark-bg) !important;
+html[data-theme="dark"] body::before {
   background-image:
     radial-gradient(40rem 30rem at 4% 6%, rgba(63, 148, 53, .28), transparent 68%),
     radial-gradient(38rem 30rem at 98% 18%, rgba(8, 127, 140, .36), transparent 68%),
     radial-gradient(44rem 30rem at 35% 108%, rgba(50, 115, 168, .32), transparent 68%),
-    radial-gradient(26rem 20rem at 80% 88%, rgba(53, 182, 172, .2), transparent 68%) !important;
-  background-attachment: fixed !important;
+    radial-gradient(26rem 20rem at 80% 88%, rgba(53, 182, 172, .2), transparent 68%);
 }
 html[data-theme="dark"] body :is(.card, .custom_table, .metric-card, .chart-panel, .network-shell, .network-panel,
   .planning-antennas, .login-container, .not-found) {
