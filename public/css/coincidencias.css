@@ -15,5 +15,8 @@
 .matches-pair:focus-visible { outline: 2px solid #087cf0; outline-offset: -2px; }
 .matches-pair-selected > td { background-color: #dceeff; }
 .matches-pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 10px; }
+/* btn-sm is 31px tall; grow the hit area to 40px, well inside the 12px gap. */
+.matches-pager .btn { position: relative; }
+.matches-pager .btn::after { content: ""; position: absolute; inset: -5px -4px; }
 html[data-theme="dark"] .matches-pairs thead, html[data-theme="dark"] .matches-table thead { background: var(--dark-panel); }
 html[data-theme="dark"] .matches-pair-selected > td { background-color: #1e3a5f; }

@@ -59,9 +59,15 @@
       toastMessageEl.textContent = message;
       toast.dataset.fileId = fileId || '';
       toast.hidden = false;
+      void toast.offsetWidth; // Commit the hidden state first so the entrance transition runs.
+      toast.classList.add('is-visible');
       clearTimeout(window.globalToastTimer);
       window.globalToastTimer = setTimeout(() => {
-        toast.hidden = true;
+        toast.classList.remove('is-visible');
+        // Hide it for real once the fade-out ends, unless a new message brought it back.
+        window.globalToastTimer = setTimeout(() => {
+          if (!toast.classList.contains('is-visible')) toast.hidden = true;
+        }, 200);
       }, 5000);
     };
 

@@ -22,7 +22,7 @@
 .maigret-badge.type-correo { background: #e8e1fb; color: #4b2a9a; }
 .maigret-badge.type-telefono { background: #fde4d3; color: #8a3b0c; }
 /* Username / e-mail / phone switch above the form. */
-.maigret-type-switch { display: flex; padding: 4px; gap: 4px; border-radius: 10px; background: #eef2f6; }
+.maigret-type-switch { display: flex; padding: 4px; gap: 4px; border-radius: 12px; background: #eef2f6; }
 .maigret-type-switch a { flex: 1; padding: .5rem; border-radius: 8px; color: #334155; font-weight: 600; text-align: center; text-decoration: none; }
 .maigret-type-switch a:hover { background: #fff; color: #0f5d9a; }
 .maigret-type-switch a.is-selected { background: #fff; color: #0f5d9a; box-shadow: 0 1px 4px rgba(15, 23, 42, .15); }

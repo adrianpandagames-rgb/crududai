@@ -23,16 +23,26 @@
         outline: 1px solid rgba(0, 0, 0, .1); outline-offset: -1px; }
       .perfil-portada-vacia { display: flex; align-items: center; justify-content: center; font-size: 1.5rem;
         color: #6b7280; background: rgba(127, 127, 127, .12); }
-      .perfil-portada-mas { position: absolute; right: 3px; bottom: 3px; padding: 0 .3rem; border-radius: 4px;
+      .perfil-portada-mas { position: absolute; right: 3px; bottom: 3px; padding: 0 .3rem; border-radius: 3px;
         background: rgba(17, 24, 39, .8); color: #fff; font-size: .7rem; font-weight: 600; line-height: 1.4;
         font-variant-numeric: tabular-nums; }
       .perfil-galeria { margin-top: .25rem; }
       .perfil-galeria summary { display: inline-flex; align-items: center; gap: .35rem; min-height: 32px;
         color: #0d6efd; font-size: .875rem; cursor: pointer; list-style: none; }
       .perfil-galeria summary::-webkit-details-marker { display: none; }
+      /* Grow the 32px toggle and the text-only "Eliminar todas" link toward 40px, stopping short of the photos. */
+      .perfil-galeria summary, .perfil-galeria .btn-link { position: relative; }
+      .perfil-galeria summary::after { content: ""; position: absolute; inset: -4px 0; }
+      .perfil-galeria .btn-link::after { content: ""; position: absolute; inset: -7px -4px; }
       .perfil-galeria summary .bi-chevron-down { font-size: .7rem; transition: rotate .15s ease-out; }
       .perfil-galeria[open] summary .bi-chevron-down { rotate: 180deg; }
-      .perfil-imagenes { display: flex; flex-wrap: wrap; gap: .4rem; padding-top: .35rem; }
+      /* The top padding keeps the photo buttons' hit area clear of the toggle's. */
+      .perfil-imagenes { display: flex; flex-wrap: wrap; gap: .4rem; padding-top: .75rem; }
+      /* Opening the gallery by hand fades the photos in one after another; a gallery that loads open stays still. */
+      .perfil-galeria.is-abriendo[open] .perfil-imagenes > * {
+        animation: perfil-foto-entra .3s cubic-bezier(.2, 0, 0, 1) both; animation-delay: calc(var(--i, 0) * 60ms); }
+      @keyframes perfil-foto-entra { from { opacity: 0; translate: 0 6px; } }
+      @media (prefers-reduced-motion: reduce) { .perfil-galeria.is-abriendo[open] .perfil-imagenes > * { animation: none; } }
       .perfil-imagen { position: relative; }
       .perfil-imagen img, .perfil-agregar-imagen { width: 56px; height: 56px; border-radius: 6px; }
       .perfil-imagen img { display: block; object-fit: cover; outline: 1px solid rgba(0, 0, 0, .1); outline-offset: -1px; }
@@ -50,9 +60,16 @@
       .perfil-acciones .btn { position: relative; }
       .perfil-acciones .btn::after { content: ""; position: absolute; inset: -5px -4px; }
       .perfil-imagen form { position: absolute; top: 2px; right: 2px; }
-      .perfil-imagen .btn { display: inline-flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem;
+      .perfil-imagen .btn { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem;
         padding: 0; font-size: .75rem; border-radius: 4px; background: #fff; }
       .perfil-imagen .btn:hover, .perfil-imagen .btn:focus-visible { background: #dc3545; }
+      /* 24px button, 40px hit area: it spills 6px past the photo's corner, less than the gap to the next photo. */
+      .perfil-imagen .btn::after { content: ""; position: absolute; inset: -8px; }
+      /* With a mouse the button shows on hover or focus; touch screens always show it. */
+      @media (hover: hover) {
+        .perfil-imagen form { opacity: 0; pointer-events: none; transition: opacity .15s ease-out; }
+        .perfil-imagen:is(:hover, :focus-within) form { opacity: 1; pointer-events: auto; }
+      }
       .perfil-agregar-imagen { display: flex; align-items: center; justify-content: center; margin: 0; cursor: pointer;
         border: 2px dashed currentColor; color: #0d6efd; font-size: 1.25rem; transition: background-color .15s ease-out; }
       .perfil-agregar-imagen:hover, .perfil-agregar-imagen:focus-within { background: rgba(13, 110, 253, .08); }
@@ -208,7 +225,7 @@
                               </summary>
                               <div class="perfil-imagenes">
                                 <% perfil.imagenes.forEach((imagenId, index) => { %>
-                                  <div class="perfil-imagen">
+                                  <div class="perfil-imagen" style="--i: <%= Math.min(index, 6) %>">
                                     <a href="/perfiles/imagenes/<%= imagenId %>" target="_blank" rel="noopener">
                                       <img src="/perfiles/imagenes/<%= imagenId %>" alt="Foto <%= index + 1 %> de <%= nombre %> (se abre en otra pestaña)" loading="lazy" />
                                     </a>
@@ -221,7 +238,7 @@
                                     </form>
                                   </div>
                                 <% }) %>
-                                <form action="/perfiles/<%= perfil.id %>/imagenes" method="POST" enctype="multipart/form-data" class="m-0">
+                                <form action="/perfiles/<%= perfil.id %>/imagenes" method="POST" enctype="multipart/form-data" class="m-0" style="--i: <%= Math.min(fotos, 7) %>">
                                   <input type="hidden" name="volver" value="<%= volver %>" />
                                   <label class="perfil-agregar-imagen" title="Agregar fotos (JPG, PNG, GIF o WebP; hasta 10 a la vez)">
                                     <i class="bi bi-plus-lg" aria-hidden="true"></i>
@@ -283,7 +300,7 @@
             <% const first = Math.max(1, Math.min(currentPage - 2, totalPages - 4)), last = Math.min(totalPages, first + 4); %>
             <nav class="perfiles-paginacion" aria-label="Páginas de perfiles">
               <% if (totalPages > 1) { %>
-                <ul class="pagination pagination-sm mb-0">
+                <ul class="pagination mb-0">
                   <li class="page-item <%= currentPage === 1 ? 'disabled' : '' %>">
                     <a class="page-link" href="<%= pageLink(currentPage - 1) %>"<%- currentPage === 1 ? ' aria-disabled="true" tabindex="-1"' : '' %>>Anterior</a>
                   </li>
@@ -313,5 +330,13 @@
       </div>
     </main>
     <%- include('../includes/scripts') %>
+    <script>
+      // Animate only galleries the user opens; one rendered open (after adding a photo) appears without motion.
+      document.querySelectorAll('.perfil-galeria > summary').forEach((summary) => {
+        summary.addEventListener('click', () => {
+          summary.parentElement.classList.toggle('is-abriendo', !summary.parentElement.open);
+        });
+      });
+    </script>
   </body>
 </html>

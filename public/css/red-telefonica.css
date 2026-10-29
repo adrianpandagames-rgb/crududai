@@ -38,7 +38,7 @@
 
 .network-layout-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 1rem; }
 .network-shell { padding: .5rem; }
-.network-scroll { height: 74vh; min-height: 420px; border: 1px solid var(--network-line); border-radius: 8px; background: #fbfdfe; }
+.network-scroll { height: 74vh; min-height: 420px; border: 1px solid var(--network-line); border-radius: 4px; background: #fbfdfe; }
 
 .network-panel { padding: 1rem; max-height: calc(74vh + 1rem); overflow-y: auto; }
 .network-panel-empty { color: var(--network-muted); font-size: .9rem; }
