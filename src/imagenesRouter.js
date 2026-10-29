@@ -78,7 +78,6 @@ export function createImagenesRouter(pool, { publicBaseUrl = process.env.PUBLIC_
     if (!UUID_PATTERN.test(id)) return null;
     const scope = visibleFiles(session, 'i');
     const [rows] = await pool.execute(`SELECT ${columns} FROM imagen_busquedas i
-      LEFT JOIN users u ON u.id = i.user_id
       WHERE i.image_uuid = ? AND ${scope.where} AND i.expires_at > NOW()`, [id, ...scope.values]);
     return rows[0] ?? null;
   };
@@ -101,8 +100,8 @@ export function createImagenesRouter(pool, { publicBaseUrl = process.env.PUBLIC_
     try {
       const scope = visibleFiles(req.session, 'i');
       const [images] = await pool.execute(`SELECT i.image_uuid AS id, i.original_name AS name, i.has_gps AS hasGps,
-        i.size_bytes AS size, u.email AS uploadedBy, DATE_FORMAT(i.created_at, '%Y-%m-%d %H:%i') AS createdAt
-        FROM imagen_busquedas i LEFT JOIN users u ON u.id = i.user_id
+        i.size_bytes AS size, DATE_FORMAT(i.created_at, '%Y-%m-%d %H:%i') AS createdAt
+        FROM imagen_busquedas i
         WHERE ${scope.where} ORDER BY i.id DESC LIMIT 200`, scope.values);
       return res.render('pages/imagenes', {
         images, retentionDays: RETENTION_DAYS, maxMegabytes: MAX_IMAGE_BYTES / 1024 / 1024,
@@ -193,7 +192,7 @@ export function createImagenesRouter(pool, { publicBaseUrl = process.env.PUBLIC_
         i.size_bytes AS size, i.sha256, i.md5, i.public_stripped AS stripped, i.metadata, i.public_token AS token,
         i.public_expires_at > NOW() AS linkActive, DATE_FORMAT(i.public_expires_at, '%H:%i') AS linkExpiresAt,
         i.public_hits AS hits, DATE_FORMAT(i.public_last_access, '%Y-%m-%d %H:%i') AS lastAccess,
-        u.email AS uploadedBy, DATE_FORMAT(i.created_at, '%Y-%m-%d %H:%i') AS createdAt,
+        DATE_FORMAT(i.created_at, '%Y-%m-%d %H:%i') AS createdAt,
         DATE_FORMAT(i.expires_at, '%Y-%m-%d') AS expiresAt`);
       if (!image) return res.status(404).send('Imagen no encontrada.');
       const metadata = JSON.parse(image.metadata || '{"summary":[],"gps":null,"all":[]}');

@@ -27,7 +27,7 @@
           <div class="card p-3 h-100">
             <img class="imagen-preview" src="/imagenes/<%= image.id %>/archivo" alt="Imagen analizada" />
             <dl class="imagen-facts mt-3 mb-0">
-              <dt>Subida por</dt><dd><%= image.uploadedBy || '—' %> · <%= image.createdAt %></dd>
+              <dt>Fecha de subida</dt><dd><%= image.createdAt %></dd>
               <dt>Tamaño</dt><dd><%= (image.size / 1024).toFixed(1) %> KB · <%= image.type.toUpperCase() %></dd>
               <dt>SHA-256</dt><dd class="imagen-hash"><%= image.sha256 %></dd>
               <dt>MD5</dt><dd class="imagen-hash"><%= image.md5 %></dd>

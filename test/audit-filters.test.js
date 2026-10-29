@@ -47,6 +47,9 @@ test('filter links keep only the filters in use', () => {
 
 test('common changes get specific action names', () => {
   assert.equal(describeAuditAction({ operation: 'REGISTRO', request_path: '/ruta/importar' }), 'Importó ruta');
+  assert.equal(describeAuditAction({ operation: 'REGISTRO', request_path: '/georeferenciacion/importar' }), 'Importó georreferenciación');
+  assert.equal(describeAuditAction({ operation: 'REGISTRO', request_path: '/imagenes/subir' }), 'Subió imagen');
+  assert.equal(describeAuditAction({ operation: 'ELIMINADO', request_path: '/imagenes/eliminar/abc' }), 'Eliminó imagen');
   assert.equal(describeAuditAction({ operation: 'REGISTRO', request_path: '/Crud/import-csv' }), 'Importó CSV');
   assert.equal(describeAuditAction({ operation: 'EDITADO', request_path: '/usuarios/7/rol' }), 'Cambió rol de usuario');
   assert.equal(describeAuditAction({ operation: 'EDITADO', request_path: '/ubicaciones/218/modificar' }), 'Editó registro');

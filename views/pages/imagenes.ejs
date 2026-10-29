@@ -48,10 +48,10 @@
           <hr />
           <div class="table-responsive">
             <table class="table w-100 imagenes-table table-stack">
-              <thead><tr><th>Imagen</th><th>Archivo</th><th>Subido por</th><th>Acción</th></tr></thead>
+              <thead><tr><th>Imagen</th><th>Archivo</th><th>Acción</th></tr></thead>
               <tbody>
                 <% if (images.length === 0) { %>
-                  <tr><td colspan="4" class="text-center">No hay imágenes</td></tr>
+                  <tr><td colspan="3" class="text-center">No hay imágenes</td></tr>
                 <% } else { %>
                   <% images.forEach((image) => { %>
                     <tr>
@@ -61,7 +61,6 @@
                         <div class="small text-muted"><%= image.createdAt %></div>
                         <% if (image.hasGps) { %><span class="imagen-badge gps"><i class="bi bi-geo-alt-fill"></i> Con GPS</span><% } %>
                       </td>
-                      <td data-label="Subido por"><%= image.uploadedBy || '—' %></td>
                       <td data-label="Acción">
                         <div class="d-flex align-items-center gap-2 flex-nowrap">
                           <a class="btn btn-sm btn-outline-primary" href="/imagenes/<%= image.id %>">Ver</a>

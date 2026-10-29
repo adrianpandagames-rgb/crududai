@@ -56,20 +56,18 @@
                 <tr>
                   <th>Archivo</th>
                   <th>Línea</th>
-                  <th>Subido por</th>
                   <th>Estado</th>
                   <th>Acción</th>
                 </tr>
               </thead>
               <tbody>
                 <% if (!files || files.length === 0) { %>
-                  <tr><td colspan="5" class="text-center">No hay archivos importados</td></tr>
+                  <tr><td colspan="4" class="text-center">No hay archivos importados</td></tr>
                 <% } else { %>
                   <% files.forEach((file) => { %>
                     <tr id="ruta-file-<%= file.id %>">
                       <td><%= file.name %></td>
                       <td><%= file.lineNumber %></td>
-                      <td><%= file.uploadedBy || '—' %></td>
                       <td>
                         <% if (file.status === 'listo') { %>
                           <span class="ruta-status-dot ruta-status-ready" title="Listo" aria-label="Listo"></span>

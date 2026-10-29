@@ -73,8 +73,7 @@ export function createGeoreferenciacionRouter(pool) {
       const scope = visibleFiles(req.session);
       const [files] = await pool.execute(`SELECT g.file_uuid AS id, g.line_number AS lineNumber,
         g.original_name AS name, g.status, g.error_message AS error, g.row_count AS total,
-        g.processed_rows AS processed, u.email AS uploadedBy FROM georeferenciacion_archivos g
-        LEFT JOIN users u ON u.id = g.user_id
+        g.processed_rows AS processed FROM georeferenciacion_archivos g
         WHERE ${scope.where} AND g.expires_at > NOW() ORDER BY g.id DESC`, scope.values);
       res.render('pages/georeferenciacion', {
         ...await listGeocodingLocations(pool, req.query),
