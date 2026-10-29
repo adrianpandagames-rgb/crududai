@@ -166,10 +166,19 @@ html.is-navigating .page-progress { opacity: 1; animation: page-progreso 4s cubi
   :root:is(.sale-izquierda, .sale-derecha) :is(main, body > .container, body > .container-fluid) { animation: none; }
   :root[data-entrada] :is(main, body > .container, body > .container-fluid) > * { animation: none; }
 }
-/* Barra superior en modo oscuro: mismo color que el fondo de la página, translúcida, con una línea fina. */
+/* Barra superior en modo oscuro: el mismo vidrio esmerilado, sobre el fondo oscuro de la página. */
 html[data-theme="dark"] header.header {
-  background: rgba(17, 24, 39, .55) !important;
-  box-shadow: 0 1px 0 rgba(255, 255, 255, .06);
+  background: linear-gradient(180deg, rgba(31, 41, 55, .55), rgba(17, 24, 39, .35)) !important;
+  border-bottom-color: rgba(255, 255, 255, .08) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06), 0 8px 32px rgba(0, 0, 0, .25);
 }
-html[data-theme="dark"] .header ul.menu { background: rgba(17, 24, 39, .97) !important; }
-@media (min-width: 64em) { html[data-theme="dark"] .header ul.menu { background: transparent !important; } }
+html[data-theme="dark"] .header ul.menu { background: rgba(17, 24, 39, .95) !important; }
+html[data-theme="dark"] .header ul.menu-submenu { background: transparent !important; }
+@media (min-width: 64em) {
+  html[data-theme="dark"] .header ul.menu { background: transparent !important; }
+  html[data-theme="dark"] .header details[open] > ul.menu-submenu {
+    background: linear-gradient(180deg, rgba(37, 49, 66, .985), rgba(31, 41, 55, .97)) !important;
+    border-color: rgba(255, 255, 255, .08) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06), 0 12px 32px rgba(0, 0, 0, .35);
+  }
+}
