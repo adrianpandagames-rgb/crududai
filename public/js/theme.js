@@ -40,8 +40,18 @@
   });
 })();
 
-// Every page loads this file, so it also brings in the page-change loading bar.
+// Every page loads this file, so it also sets up page changes: the slide direction must be read here,
+// before the page is first drawn, and the loading bar script is brought in.
 (() => {
+  window.addEventListener('pagereveal', (event) => {
+    let saved = null;
+    try {
+      saved = JSON.parse(sessionStorage.getItem('page-direction'));
+      sessionStorage.removeItem('page-direction');
+    } catch { /* Without storage the page just fades. */ }
+    if (event.viewTransition && saved?.to?.toLowerCase() === location.pathname.toLowerCase()) event.viewTransition.types.add(saved.type);
+  });
+
   const script = document.createElement('script');
   script.src = '/public/js/page-transitions.js';
   script.defer = true;

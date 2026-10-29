@@ -149,3 +149,13 @@ html.is-navigating .page-progress { opacity: 1; animation: page-progreso 4s cubi
   :is(main, body > .container, body > .container-fluid) > * { animation: none; }
   html.is-navigating .page-progress { animation: none; scale: .9 1; }
 }
+/* Al elegir en el menú una página que está a la derecha, todo se desliza hacia la izquierda (y al revés). */
+:root:active-view-transition-type(adelante, atras) :is(main, body > .container, body > .container-fluid) > * { animation: none; }
+:root:active-view-transition-type(adelante)::view-transition-old(root) { animation: page-sale-izquierda .32s cubic-bezier(.4, 0, 1, 1) both; }
+:root:active-view-transition-type(adelante)::view-transition-new(root) { animation: page-entra-derecha .42s cubic-bezier(.2, 0, 0, 1) both; }
+:root:active-view-transition-type(atras)::view-transition-old(root) { animation: page-sale-derecha .32s cubic-bezier(.4, 0, 1, 1) both; }
+:root:active-view-transition-type(atras)::view-transition-new(root) { animation: page-entra-izquierda .42s cubic-bezier(.2, 0, 0, 1) both; }
+@keyframes page-sale-izquierda { to { opacity: 0; translate: -18% 0; filter: blur(2px); } }
+@keyframes page-sale-derecha { to { opacity: 0; translate: 18% 0; filter: blur(2px); } }
+@keyframes page-entra-derecha { from { opacity: 0; translate: 22% 0; } }
+@keyframes page-entra-izquierda { from { opacity: 0; translate: -22% 0; } }

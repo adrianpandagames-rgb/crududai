@@ -23,6 +23,18 @@
     fallback = setTimeout(stop, 8000);
   };
 
+  // Menu links run left to right; going to one further right slides the page left, and the other way round.
+  // The next page reads this in theme.js before it is drawn.
+  const rememberDirection = (link, url) => {
+    const links = [...document.querySelectorAll('.header .menu a.menu-item:not(.logout-btn)')];
+    const from = links.findIndex((item) => item.getAttribute('aria-current') === 'page');
+    const to = links.findIndex((item) => item === link || new URL(item.href).pathname.toLowerCase() === url.pathname.toLowerCase());
+    try {
+      if (from < 0 || to < 0 || from === to) sessionStorage.removeItem('page-direction');
+      else sessionStorage.setItem('page-direction', JSON.stringify({ to: url.pathname, type: to > from ? 'adelante' : 'atras' }));
+    } catch { /* Without storage the page just fades. */ }
+  };
+
   document.addEventListener('click', (event) => {
     const link = event.target.closest?.('a[href]');
     if (!link || event.defaultPrevented || event.button !== 0) return;
@@ -33,6 +45,7 @@
     if (url.origin !== location.origin) return;
     // Same page, different hash: the browser only scrolls.
     if (url.pathname === location.pathname && url.search === location.search && url.hash) return;
+    rememberDirection(link, url);
     start();
   });
 
