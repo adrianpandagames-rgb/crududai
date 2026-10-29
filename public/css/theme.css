@@ -166,3 +166,10 @@ html.is-navigating .page-progress { opacity: 1; animation: page-progreso 4s cubi
   :root:is(.sale-izquierda, .sale-derecha) :is(main, body > .container, body > .container-fluid) { animation: none; }
   :root[data-entrada] :is(main, body > .container, body > .container-fluid) > * { animation: none; }
 }
+/* Barra superior en modo oscuro: mismo color que el fondo de la página, translúcida, con una línea fina. */
+html[data-theme="dark"] header.header {
+  background: rgba(17, 24, 39, .8) !important;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .06);
+}
+html[data-theme="dark"] .header ul.menu { background: rgba(17, 24, 39, .97) !important; }
+@media (min-width: 64em) { html[data-theme="dark"] .header ul.menu { background: transparent !important; } }

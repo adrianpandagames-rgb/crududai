@@ -337,3 +337,23 @@ html[data-theme="dark"] .header .menu-item.is-current {
 @keyframes submenu-opcion {
   from { opacity: 0; translate: 0 -4px; }
 }
+
+/* La barra toma el color de la página y deja ver, desenfocado, lo que pasa por debajo; una línea fina
+   reemplaza la sombra para que no parezca una franja aparte. */
+.header {
+  background-color: rgba(250, 255, 249, 0.8);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.06);
+}
+
+/* En celular el menú desplegado necesita fondo casi sólido para leerse sobre el contenido. */
+.header .menu {
+  background-color: rgba(250, 255, 249, 0.97);
+}
+
+@media (min-width: 64em) {
+  .header .menu {
+    background-color: transparent;
+  }
+}
