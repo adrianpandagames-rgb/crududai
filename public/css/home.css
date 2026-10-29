@@ -11,13 +11,6 @@ body {
   font-weight: 900;
 }
 
-form {
-  background-color: #fff;
-  padding: 12px 14px;
-  border-radius: 10px;
-  box-shadow: 0px 17px 26px -8px rgba(151, 172, 193, 0.6);
-}
-
 .custom_table {
   background-color: #fff;
   box-shadow: 0px 2px 97px 7px rgba(151, 172, 193, 0.6);
@@ -128,11 +121,7 @@ form {
 .custom_table .ruta-actions form {
   display: inline-flex;
   align-items: center;
-  padding: 0;
   margin: 0;
-  background: transparent;
-  border-radius: 0;
-  box-shadow: none;
 }
 
 .ruta-status-dot {
@@ -200,10 +189,6 @@ form {
 }
 
 @media (max-width: 768px) {
-  form {
-    padding: 10px;
-  }
-
   .card {
     padding: 1rem !important;
   }

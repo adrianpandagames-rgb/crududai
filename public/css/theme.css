@@ -34,7 +34,7 @@ html[data-theme="dark"] :is(.metrics-page, .network-page) {
   --network-muted: var(--dark-muted);
   --network-line: var(--dark-border);
 }
-html[data-theme="dark"] :is(.header, .header ul, form, .card, .card-header, .card-footer,
+html[data-theme="dark"] :is(.header, .header ul, .card, .card-header, .card-footer,
   .custom_table, .login-container, .modal-content, dialog, .dropdown-menu,
   .metric-card, .chart-panel, .network-shell, .network-panel, .network-scroll,
   .planning-antennas, .planning-antenna, .planning-table thead, .not-found,

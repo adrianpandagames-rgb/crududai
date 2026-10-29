@@ -41,7 +41,7 @@
 .password-modal { display: block; position: fixed; inset: 0; z-index: 1050; overflow-y: auto; }
 
 .user-management-table .user-actions { display: grid; grid-template-columns: repeat(2, 140px); align-items: center; justify-content: end; column-gap: .2rem; row-gap: .35rem; min-width: 300px; }
-.user-management-table .user-actions form { display: contents; margin: 0; padding: 0; background: transparent; border-radius: 0; box-shadow: none; }
+.user-management-table .user-actions form { display: contents; margin: 0; }
 .user-management-table .user-actions .user-action-button { display: inline-flex; align-items: center; justify-content: center; justify-self: center; width: 140px; height: 44px; min-height: 44px; padding: .35rem .55rem; border-radius: .375rem; font-size: .78rem; font-weight: 600; line-height: 1.2; text-align: center; white-space: nowrap; }
 .btn-outline-purple { color: #6f42c1; border-color: #6f42c1; }
 .btn-outline-purple:hover { color: #fff; background-color: #6f42c1; border-color: #6f42c1; }
