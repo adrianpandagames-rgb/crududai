@@ -1,8 +1,21 @@
-export function antennaClipboardText(group, totalRecords) {
+// The five cells pasted into the report: coordinates, records, share of all records, location and place.
+const antennaCells = (group, totalRecords) => {
   const percentage = totalRecords > 0 ? group.rows.length / totalRecords * 100 : 0;
   return [group.coordinates, group.rows.length, `${percentage.toFixed(2)}%`, group.ubicacion, group.lugar]
-    .map((value) => String(value ?? '').replace(/[\t\r\n]+/g, ' '))
-    .join('\t');
+    .map((value) => String(value ?? '').replace(/[\t\r\n]+/g, ' '));
+};
+
+export function antennaClipboardText(group, totalRecords) {
+  return antennaCells(group, totalRecords).join('\t');
+}
+
+const escapeHtml = (value) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+// The same row as an HTML table. Excel pastes a table cell by cell, so the commas inside the coordinates and the
+// address stay in their cell even when Text to Columns was last used with Comma, which splits pasted plain text.
+export function antennaClipboardHtml(group, totalRecords) {
+  const cells = antennaCells(group, totalRecords).map((value) => `<td>${escapeHtml(value)}</td>`).join('');
+  return `<table><tr>${cells}</tr></table>`;
 }
 
 export function summarizeAntennas(data) {

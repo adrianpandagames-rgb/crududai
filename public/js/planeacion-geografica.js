@@ -1,5 +1,7 @@
 import { coverageSector } from './planeacion-geometry.js?v=6';
-import { summarizeAntennas, antennaClipboardText, rowMatches, frequencyScale, selectionCsv } from './planeacion-antenas.js?v=6';
+import {
+  summarizeAntennas, antennaClipboardText, antennaClipboardHtml, rowMatches, frequencyScale, selectionCsv,
+} from './planeacion-antenas.js?v=7';
 
 const byId = (id) => document.getElementById(id);
 const status = byId('planningStatus');
@@ -12,23 +14,27 @@ try {
   }
 } catch { /* Storage may be disabled; nothing was saved then. */ }
 
-async function copyAntenna(text) {
+// Puts the row on the clipboard both as a table, which Excel pastes cell by cell, and as tab-separated text
+// for everything else.
+async function copyAntenna(text, html) {
   try {
-    await navigator.clipboard.writeText(text);
+    await navigator.clipboard.write([new ClipboardItem({
+      'text/html': new Blob([html], { type: 'text/html' }),
+      'text/plain': new Blob([text], { type: 'text/plain' }),
+    })]);
     return;
   } catch {
-    const input = document.createElement('textarea');
-    input.value = text;
-    input.style.position = 'fixed';
-    input.style.opacity = '0';
-    (document.fullscreenElement || document.body).append(input);
-    const previousFocus = document.activeElement;
+    // Without the async clipboard (plain HTTP, older browsers) the copy event can still carry both formats.
+    const fill = (event) => {
+      event.clipboardData.setData('text/html', html);
+      event.clipboardData.setData('text/plain', text);
+      event.preventDefault();
+    };
+    document.addEventListener('copy', fill, { once: true });
     try {
-      input.select();
       if (!document.execCommand('copy')) throw new Error('No fue posible copiar la antena.');
     } finally {
-      input.remove();
-      previousFocus?.focus({ preventScroll: true });
+      document.removeEventListener('copy', fill);
     }
   }
 }
@@ -198,7 +204,7 @@ if (!window.L) {
       copy.textContent = 'Copiar';
       copy.setAttribute('aria-label', `Copiar ${group.name} al portapapeles`);
       copy.addEventListener('click', () => {
-        copyAntenna(antennaClipboardText(group, data.rows.length))
+        copyAntenna(antennaClipboardText(group, data.rows.length), antennaClipboardHtml(group, data.rows.length))
           .then(() => {
             copy.textContent = 'Copiado';
             setTimeout(() => { copy.textContent = 'Copiar'; }, 1500);
