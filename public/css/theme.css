@@ -106,3 +106,13 @@ html[data-theme="dark"] .bar-track { background: #354258; }
 html[data-theme="dark"] .btn-outline-secondary { color: #c1cfdf; border-color: #8292a7; }
 html[data-theme="dark"] .btn-close { filter: invert(1) grayscale(1) brightness(2); }
 @media print { .theme-toggle { display: none; } }
+
+/* Detalles globales de pulido */
+body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+:is(h1, h2, h3, h4, h5, h6) { text-wrap: balance; }
+:is(p, li, dd, .form-text) { text-wrap: pretty; }
+:is(.table, .metric-card, .bar-number, .badge, .page-link) { font-variant-numeric: tabular-nums; }
+:is(.btn, .theme-toggle) { transition-property: color, background-color, border-color, box-shadow, scale; }
+.theme-toggle { transition-duration: .15s; transition-timing-function: ease-out; }
+:is(.btn, .theme-toggle):not(:disabled):active { scale: 0.96; }
+@media (prefers-reduced-motion: reduce) { :is(.btn, .theme-toggle):active { scale: none; } }

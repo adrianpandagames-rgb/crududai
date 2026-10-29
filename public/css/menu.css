@@ -144,7 +144,7 @@ a {
   display: block;
   height: 100%;
   position: absolute;
-  transition: all 0.2s ease-out;
+  transition: transform 0.2s ease-out, top 0.2s ease-out;
   width: 100%;
 }
 
