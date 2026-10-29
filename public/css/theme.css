@@ -184,18 +184,19 @@ html[data-theme="dark"] .header ul.menu-submenu { background: transparent !impor
 }
 /* Vidrio esmerilado en tarjetas, tablas, paneles y modales. Detrás, un fondo sobrio: luces muy tenues del
    verde, turquesa y azul de la página sobre un gris frío, fijas a la ventana, para que el vidrio tenga qué
-   desenfocar sin llamar la atención. */
+   desenfocar y se note el color sin llamar demasiado la atención. */
 html body {
   background-color: #f3f6f5;
   background-image:
-    radial-gradient(56rem 40rem at -5% -10%, rgba(63, 148, 53, .13), transparent 70%),
-    radial-gradient(50rem 38rem at 105% 5%, rgba(8, 127, 140, .12), transparent 70%),
-    radial-gradient(60rem 40rem at 50% 115%, rgba(50, 115, 168, .1), transparent 70%);
+    radial-gradient(40rem 30rem at 4% 6%, rgba(63, 148, 53, .32), transparent 68%),
+    radial-gradient(38rem 30rem at 98% 18%, rgba(8, 127, 140, .3), transparent 68%),
+    radial-gradient(44rem 30rem at 35% 108%, rgba(50, 115, 168, .28), transparent 68%),
+    radial-gradient(26rem 20rem at 80% 88%, rgba(53, 182, 172, .22), transparent 68%);
   background-attachment: fixed;
 }
 html :is(.card, .custom_table, .metric-card, .chart-panel, .network-shell, .network-panel, .planning-antennas,
   .login-container, .not-found) {
-  background: linear-gradient(145deg, rgba(255, 255, 255, .78), rgba(255, 255, 255, .58));
+  background: linear-gradient(145deg, rgba(255, 255, 255, .62), rgba(255, 255, 255, .4));
   -webkit-backdrop-filter: blur(24px) saturate(1.4);
   backdrop-filter: blur(24px) saturate(1.4);
   border-radius: 14px;
@@ -235,14 +236,15 @@ html .list-group-item { background-color: rgba(255, 255, 255, .45); border-color
 html[data-theme="dark"] body {
   background-color: var(--dark-bg) !important;
   background-image:
-    radial-gradient(56rem 40rem at -5% -10%, rgba(63, 148, 53, .12), transparent 70%),
-    radial-gradient(50rem 38rem at 105% 5%, rgba(8, 127, 140, .16), transparent 70%),
-    radial-gradient(60rem 40rem at 50% 115%, rgba(50, 115, 168, .14), transparent 70%) !important;
+    radial-gradient(40rem 30rem at 4% 6%, rgba(63, 148, 53, .28), transparent 68%),
+    radial-gradient(38rem 30rem at 98% 18%, rgba(8, 127, 140, .36), transparent 68%),
+    radial-gradient(44rem 30rem at 35% 108%, rgba(50, 115, 168, .32), transparent 68%),
+    radial-gradient(26rem 20rem at 80% 88%, rgba(53, 182, 172, .2), transparent 68%) !important;
   background-attachment: fixed !important;
 }
 html[data-theme="dark"] body :is(.card, .custom_table, .metric-card, .chart-panel, .network-shell, .network-panel,
   .planning-antennas, .login-container, .not-found) {
-  background: linear-gradient(145deg, rgba(31, 41, 55, .72), rgba(31, 41, 55, .52)) !important;
+  background: linear-gradient(145deg, rgba(31, 41, 55, .6), rgba(31, 41, 55, .38)) !important;
   border-color: rgba(255, 255, 255, .08) !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07), 0 8px 24px rgba(0, 0, 0, .25);
 }
