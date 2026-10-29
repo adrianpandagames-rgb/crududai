@@ -1,0 +1,16 @@
+<%# The Licenciado and Ingeniero selects, shared by the new-task form and the edit page. %>
+<% const markInvalid = typeof invalid === 'function' ? invalid : () => ''; %>
+<% Object.entries(opciones).forEach(([puesto, users]) => { %>
+  <div class="<%= columnClass %>">
+    <label for="<%= puesto %>" class="form-label"><%= puestoLabels[puesto] %></label>
+    <select id="<%= puesto %>" name="<%= puesto %>" class="form-select<%- markInvalid(puesto) %>"<%- users.length ? '' : ` aria-describedby="${puesto}Ayuda"` %>>
+      <option value="">Sin asignar</option>
+      <% users.forEach((user) => { %>
+        <option value="<%= user.id %>"<%= String(form[puesto] ?? '') === String(user.id) ? ' selected' : '' %>><%= user.email %></option>
+      <% }) %>
+    </select>
+    <% if (!users.length) { %>
+      <div id="<%= puesto %>Ayuda" class="form-text">Nadie tiene el puesto <%= puestoLabels[puesto] %>. Un administrador lo asigna en Usuarios.</div>
+    <% } %>
+  </div>
+<% }) %>

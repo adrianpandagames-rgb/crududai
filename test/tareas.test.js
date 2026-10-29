@@ -5,14 +5,40 @@ import { fileURLToPath } from 'node:url';
 import { createTareasStore, puedeEliminar, validarTarea } from '../src/tareasService.js';
 import { createTareasEvents, createTareasRouter } from '../src/tareasRouter.js';
 
-test('a task needs a title, a listed responsible person and a real date', () => {
+test('a task needs a title, a real date and each slot filled from its own job title', () => {
+  const allowed = { licenciado: [1], ingeniero: [2] };
   assert.match(validarTarea({ titulo: '  ' }).error, /título/);
-  assert.match(validarTarea({ titulo: 'Oficio', responsable: '9' }, [1, 2]).error, /responsable/);
+  assert.match(validarTarea({ titulo: 'Oficio', licenciado: '2' }, allowed).error, /licenciado/);
+  assert.match(validarTarea({ titulo: 'Oficio', ingeniero: '1' }, allowed).error, /ingeniero/);
   assert.match(validarTarea({ titulo: 'Oficio', fechaLimite: '2026-02-30' }).error, /fecha/);
-  assert.deepEqual(validarTarea({ titulo: ' Revisar  sábana ', descripcion: ' línea 1\r\nlínea 2 ', responsable: '2', fechaLimite: '2026-11-03', estado: 'en_proceso' }, [1, 2]).tarea,
-    { titulo: 'Revisar sábana', descripcion: 'línea 1\nlínea 2', responsableId: 2, fechaLimite: '2026-11-03', estado: 'en_proceso' });
-  assert.deepEqual(validarTarea({ titulo: 'Sin asignar', responsable: '', estado: 'otra' }).tarea,
-    { titulo: 'Sin asignar', descripcion: '', responsableId: null, fechaLimite: null, estado: 'pendiente' });
+  assert.deepEqual(validarTarea({
+    titulo: ' Revisar  sábana ', descripcion: ' línea 1\r\nlínea 2 ', licenciado: '1', ingeniero: '2', fechaLimite: '2026-11-03', estado: 'en_proceso',
+  }, allowed).tarea, {
+    titulo: 'Revisar sábana', descripcion: 'línea 1\nlínea 2', licenciadoId: 1, ingenieroId: 2, fechaLimite: '2026-11-03', estado: 'en_proceso',
+  });
+  // Both slots are optional.
+  assert.deepEqual(validarTarea({ titulo: 'Sin asignar', licenciado: '', estado: 'otra' }, allowed).tarea,
+    { titulo: 'Sin asignar', descripcion: '', licenciadoId: null, ingenieroId: null, fechaLimite: null, estado: 'pendiente' });
+});
+
+test('the single responsable of the first version moves to the slot of their job title', async () => {
+  const sql = [];
+  const pool = {
+    query: async (statement) => {
+      sql.push(statement.replace(/\s+/g, ' ').trim());
+      if (statement.startsWith('SHOW COLUMNS FROM users')) return [[{ Field: 'puesto' }]];
+      if (statement.startsWith('SHOW COLUMNS FROM tareas')) return [[{ Field: 'id' }, { Field: 'responsable_id' }]];
+      return [[]];
+    },
+  };
+  await createTareasStore(pool).initialize();
+  assert.ok(!sql.some((statement) => statement.startsWith('ALTER TABLE users')));
+  const migration = sql.filter((statement) => /^(ALTER TABLE tareas|UPDATE tareas)/.test(statement));
+  assert.equal(migration.length, 4);
+  assert.match(migration[0], /ADD COLUMN licenciado_id/);
+  assert.match(migration[1], /ADD COLUMN ingeniero_id/);
+  assert.match(migration[2], /SET t.ingeniero_id = IF\(u.puesto = 'ingeniero'/);
+  assert.match(migration[3], /DROP COLUMN responsable_id/);
 });
 
 test('only the creator, an administrator or a semiadministrator may delete a task', () => {
@@ -55,19 +81,28 @@ test('moving a task places it before its new neighbour and renumbers the column'
 
 test('the board is closed to UECS and moves cards by drag or by arrow', async (t) => {
   const tasks = [
-    { id: 1, titulo: 'Contestar oficio', descripcion: '', estado: 'pendiente', responsableId: 5, responsable: 'ana@udai.mx', fechaLimite: '2020-01-01', creadorId: 5 },
-    { id: 2, titulo: 'Analizar sábana', descripcion: '', estado: 'en_proceso', responsableId: null, responsable: null, fechaLimite: null, creadorId: 8 },
+    {
+      id: 1, titulo: 'Contestar oficio', descripcion: '', estado: 'pendiente', licenciadoId: 5, licenciado: 'ana@udai.mx',
+      ingenieroId: 8, ingeniero: 'beto@udai.mx', fechaLimite: '2020-01-01', creadorId: 5,
+    },
+    {
+      id: 2, titulo: 'Analizar sábana', descripcion: '', estado: 'en_proceso', licenciadoId: null, licenciado: null,
+      ingenieroId: null, ingeniero: null, fechaLimite: null, creadorId: 8,
+    },
   ];
+  const users = [{ id: 5, email: 'ana@udai.mx', puesto: 'licenciado' }, { id: 8, email: 'beto@udai.mx', puesto: 'ingeniero' }];
+  const updated = [];
   const moves = [];
   const created = [];
   const tareas = {
-    responsables: async () => [{ id: 5, email: 'ana@udai.mx' }, { id: 8, email: 'beto@udai.mx' }],
+    responsables: async () => users,
     board: async ({ responsable }) => {
-      const visible = tasks.filter((task) => !responsable || String(task.responsableId) === responsable);
+      const visible = tasks.filter((task) => !responsable || [task.licenciadoId, task.ingenieroId].map(String).includes(responsable));
       return Object.fromEntries(['pendiente', 'en_proceso', 'terminada'].map((estado) => [estado, visible.filter((task) => task.estado === estado)]));
     },
     get: async (id) => tasks.find((task) => String(task.id) === String(id)) || null,
     create: async (tarea) => { created.push(tarea); return 3; },
+    update: async (id, tarea) => { updated.push([Number(id), tarea]); return true; },
     move: async (id, estado, antesDe) => {
       moves.push([Number(id), estado, antesDe]);
       const task = tasks.find((candidate) => String(candidate.id) === String(id));
@@ -104,16 +139,31 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
   assert.ok(page.includes('Contestar oficio') && page.includes('Analizar sábana') && page.includes('vencida'));
   // Task 2 was created by someone else, so this user sees no delete button for it.
   assert.ok(page.includes('/tareas/eliminar/1') && !page.includes('/tareas/eliminar/2'));
-  const filtered = await (await fetch(`${base}?responsable=5`, as('usuario'))).text();
+  assert.ok(page.includes('<span class="tarea-chip-puesto">Lic.</span> ana') && page.includes('<span class="tarea-chip-puesto">Ing.</span> beto'));
+  // Each select offers only the people with that job title.
+  const select = (html, name) => html.match(new RegExp(`<select id="${name}"[\\s\\S]*?</select>`))[0];
+  assert.ok(select(page, 'licenciado').includes('ana@udai.mx') && !select(page, 'licenciado').includes('beto@udai.mx'));
+  assert.ok(select(page, 'ingeniero').includes('beto@udai.mx') && !select(page, 'ingeniero').includes('ana@udai.mx'));
+  // Filtering by someone finds the tasks where they fill either slot.
+  const filtered = await (await fetch(`${base}?responsable=8`, as('usuario'))).text();
   assert.ok(filtered.includes('Contestar oficio') && !filtered.includes('Analizar sábana'));
 
-  const invalid = await fetch(base, as('usuario', form({ titulo: 'Revisar', responsable: '99' })));
+  const invalid = await fetch(base, as('usuario', form({ titulo: 'Revisar', licenciado: '8' })));
   assert.equal(invalid.status, 400);
-  assert.ok((await invalid.text()).includes('Seleccione un responsable'));
-  const ok = await fetch(base, as('usuario', form({ titulo: 'Revisar', responsable: '8', volver: '5' })));
+  assert.ok((await invalid.text()).includes('Seleccione un licenciado'));
+  const ok = await fetch(base, as('usuario', form({ titulo: 'Revisar', licenciado: '5', ingeniero: '8', volver: '5' })));
   assert.match(message(ok), /registrada/);
   assert.match(ok.headers.get('location'), /responsable=5.*#tarea-3$/);
-  assert.equal(created[0].responsableId, 8);
+  assert.deepEqual([created[0].licenciadoId, created[0].ingenieroId], [5, 8]);
+
+  // Ana stops being a licenciada: the task she already has keeps her when it is edited, new tasks no longer offer her.
+  users[0].puesto = 'ingeniero';
+  const editPage = await (await fetch(`${base}/1/editar`, as('usuario'))).text();
+  assert.match(select(editPage, 'licenciado'), /<option value="5" selected>ana@udai.mx/);
+  assert.match(message(await fetch(`${base}/1/editar`, as('usuario', form({ titulo: 'Contestar oficio', licenciado: '5', ingeniero: '8' })))), /actualizada/);
+  assert.deepEqual([updated[0][1].licenciadoId, updated[0][1].ingenieroId], [5, 8]);
+  assert.equal((await fetch(base, as('usuario', form({ titulo: 'Otra', licenciado: '5' })))).status, 400);
+  users[0].puesto = 'licenciado';
 
   const dragged = await fetch(`${base}/2/mover`, as('usuario', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado: 'terminada', antesDe: 1 }),
@@ -133,8 +183,8 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
   assert.match(message(await fetch(`${base}/eliminar/2`, as('usuario', form({})))), /Solo quien creó/);
   assert.match(message(await fetch(`${base}/eliminar/1`, as('usuario', form({})))), /eliminada/);
   assert.equal((await fetch(`${base}/eliminar/1`, as('uecs', form({})))).headers.get('location'), '/Crud');
-  // Every saved change tells the open boards (create, drag, two arrows, delete); rejected ones do not.
-  assert.equal(avisos, 5);
+  // Every saved change tells the open boards (create, edit, drag, two arrows, delete); rejected ones do not.
+  assert.equal(avisos, 6);
 
   const columns = await (await fetch(`${base}/tablero?responsable=5`, as('usuario'))).text();
   assert.ok(columns.includes('data-estado="pendiente"') && !columns.includes('<header') && !columns.includes('Nueva tarea'));

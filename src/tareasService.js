@@ -1,3 +1,5 @@
+import { ensureUserPuesto, puestoLabels, userPuestos } from './usuariosService.js';
+
 // The board's columns, left to right.
 export const ESTADOS = ['pendiente', 'en_proceso', 'terminada'];
 export const ESTADO_LABELS = { pendiente: 'Pendiente', en_proceso: 'En proceso', terminada: 'Terminada' };
@@ -13,21 +15,25 @@ const isDate = (value) => {
   return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value);
 };
 
-// The responsible person must be one of the users offered in the form; an empty value leaves the task unassigned.
-export function validarTarea({ titulo, descripcion, responsable, fechaLimite, estado }, responsableIds = []) {
+const idOf = (value) => (/^\d+$/.test(String(value ?? '')) ? Number(value) : null);
+
+// Each task has one slot per job title, both optional. A slot takes one of the ids offered for it in the form
+// (allowed: { licenciado: [ids], ingeniero: [ids] }); an empty value leaves it unassigned.
+export function validarTarea({ titulo, descripcion, licenciado, ingeniero, fechaLimite, estado }, allowed = {}) {
   const tarea = {
     titulo: clean(titulo),
     descripcion: cleanText(descripcion),
-    responsableId: /^\d+$/.test(String(responsable ?? '')) ? Number(responsable) : null,
+    licenciadoId: idOf(licenciado),
+    ingenieroId: idOf(ingeniero),
     fechaLimite: clean(fechaLimite) || null,
     estado: ESTADOS.includes(estado) ? estado : 'pendiente',
   };
   if (!tarea.titulo) return { error: 'Escriba el título de la tarea.', field: 'titulo' };
   if (tarea.titulo.length > MAX_LENGTHS.titulo) return { error: 'El título es demasiado largo.', field: 'titulo' };
   if (tarea.descripcion.length > MAX_LENGTHS.descripcion) return { error: 'La descripción es demasiado larga.', field: 'descripcion' };
-  if (clean(responsable) && !responsableIds.includes(tarea.responsableId)) {
-    return { error: 'Seleccione un responsable de la lista.', field: 'responsable' };
-  }
+  const values = { licenciado, ingeniero };
+  const wrong = userPuestos.find((puesto) => clean(values[puesto]) && !(allowed[puesto] || []).includes(tarea[`${puesto}Id`]));
+  if (wrong) return { error: `Seleccione un ${puestoLabels[wrong].toLowerCase()} de la lista.`, field: wrong };
   if (tarea.fechaLimite && !isDate(tarea.fechaLimite)) return { error: 'La fecha límite no es válida.', field: 'fechaLimite' };
   return { tarea };
 }
@@ -46,40 +52,59 @@ export function createTareasStore(pool) {
       descripcion TEXT NOT NULL,
       estado VARCHAR(20) NOT NULL DEFAULT 'pendiente',
       posicion INT NOT NULL DEFAULT 0,
-      responsable_id BIGINT NULL,
+      licenciado_id BIGINT NULL,
+      ingeniero_id BIGINT NULL,
       fecha_limite DATE NULL,
       user_id BIGINT NULL,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       INDEX tareas_estado (estado, posicion)
-    )`).catch((error) => { storage = null; throw error; });
+    )`).then(() => ensureUserPuesto(pool)).then(async () => {
+      // The first version had a single responsable_id. Each assignee moves to the slot of their job title,
+      // or to Licenciado when they have none yet; an administrator can correct it by editing the task.
+      const [columns] = await pool.query('SHOW COLUMNS FROM tareas');
+      const has = (name) => columns.some((column) => column.Field === name);
+      if (!has('licenciado_id')) await pool.query('ALTER TABLE tareas ADD COLUMN licenciado_id BIGINT NULL AFTER posicion');
+      if (!has('ingeniero_id')) await pool.query('ALTER TABLE tareas ADD COLUMN ingeniero_id BIGINT NULL AFTER licenciado_id');
+      if (has('responsable_id')) {
+        await pool.query(`UPDATE tareas t LEFT JOIN users u ON u.id = t.responsable_id
+          SET t.ingeniero_id = IF(u.puesto = 'ingeniero', t.responsable_id, t.ingeniero_id),
+              t.licenciado_id = IF(u.puesto = 'ingeniero', t.licenciado_id, t.responsable_id)
+          WHERE t.responsable_id IS NOT NULL`);
+        await pool.query('ALTER TABLE tareas DROP COLUMN responsable_id');
+      }
+    }).catch((error) => { storage = null; throw error; });
     return storage;
   };
 
-  // Active users who can open the board, the people a task can be assigned to.
+  // Active users who can open the board and have a job title, the people a task can be assigned to.
   const responsables = async () => {
-    const [rows] = await pool.execute("SELECT id, email FROM users WHERE is_active = 1 AND (role IS NULL OR role <> 'uecs') ORDER BY email");
-    return rows.map((row) => ({ id: Number(row.id), email: row.email }));
+    await initialize();
+    const [rows] = await pool.execute(`SELECT id, email, puesto FROM users
+      WHERE is_active = 1 AND (role IS NULL OR role <> 'uecs') AND puesto IN (${userPuestos.map(() => '?').join(', ')}) ORDER BY email`, userPuestos);
+    return rows.map((row) => ({ id: Number(row.id), email: row.email, puesto: row.puesto }));
   };
 
-  const select = `SELECT t.id, t.titulo, t.descripcion, t.estado, t.posicion, t.responsable_id AS responsableId, r.email AS responsable,
+  const select = `SELECT t.id, t.titulo, t.descripcion, t.estado, t.posicion,
+    t.licenciado_id AS licenciadoId, l.email AS licenciado, t.ingeniero_id AS ingenieroId, i.email AS ingeniero,
     DATE_FORMAT(t.fecha_limite, '%Y-%m-%d') AS fechaLimite, t.user_id AS creadorId, c.email AS creador,
     DATE_FORMAT(t.updated_at, '%Y-%m-%d %H:%i') AS actualizada
-    FROM tareas t LEFT JOIN users r ON r.id = t.responsable_id LEFT JOIN users c ON c.id = t.user_id`;
+    FROM tareas t LEFT JOIN users l ON l.id = t.licenciado_id LEFT JOIN users i ON i.id = t.ingeniero_id LEFT JOIN users c ON c.id = t.user_id`;
+  const numberOrNull = (value) => (value == null ? null : Number(value));
   const normalize = (row) => ({
-    ...row, id: Number(row.id), responsableId: row.responsableId == null ? null : Number(row.responsableId),
-    creadorId: row.creadorId == null ? null : Number(row.creadorId),
+    ...row, id: Number(row.id), licenciadoId: numberOrNull(row.licenciadoId), ingenieroId: numberOrNull(row.ingenieroId),
+    creadorId: numberOrNull(row.creadorId),
   });
 
-  // Every task, grouped by column; responsable filters by a user id, or 'sin' for unassigned tasks.
+  // Every task, grouped by column; responsable filters by a user id in either slot, or 'sin' for tasks with nobody.
   const board = async ({ responsable = '' } = {}) => {
     await initialize();
     let where = 'TRUE';
     const values = [];
-    if (responsable === 'sin') where = 't.responsable_id IS NULL';
+    if (responsable === 'sin') where = 't.licenciado_id IS NULL AND t.ingeniero_id IS NULL';
     else if (/^\d+$/.test(String(responsable))) {
-      where = 't.responsable_id = ?';
-      values.push(Number(responsable));
+      where = '(t.licenciado_id = ? OR t.ingeniero_id = ?)';
+      values.push(Number(responsable), Number(responsable));
     }
     const [rows] = await pool.execute(`${select} WHERE ${where} ORDER BY t.posicion, t.id`, values);
     const columns = Object.fromEntries(ESTADOS.map((estado) => [estado, []]));
@@ -98,9 +123,10 @@ export function createTareasStore(pool) {
     await initialize();
     const [[{ siguiente }]] = await pool.execute('SELECT COALESCE(MAX(posicion), -1) + 1 AS siguiente FROM tareas WHERE estado = ?', [tarea.estado]);
     const [result] = await pool.execute(
-      `INSERT INTO tareas (titulo, descripcion, estado, posicion, responsable_id, fecha_limite, user_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [tarea.titulo, tarea.descripcion, tarea.estado, Number(siguiente), tarea.responsableId, tarea.fechaLimite, session?.userId ?? null],
+      `INSERT INTO tareas (titulo, descripcion, estado, posicion, licenciado_id, ingeniero_id, fecha_limite, user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [tarea.titulo, tarea.descripcion, tarea.estado, Number(siguiente), tarea.licenciadoId, tarea.ingenieroId, tarea.fechaLimite,
+        session?.userId ?? null],
     );
     return result.insertId;
   };
@@ -141,8 +167,8 @@ export function createTareasStore(pool) {
   const update = async (id, tarea) => {
     const current = await get(id);
     if (!current) return false;
-    await pool.execute('UPDATE tareas SET titulo = ?, descripcion = ?, responsable_id = ?, fecha_limite = ? WHERE id = ?',
-      [tarea.titulo, tarea.descripcion, tarea.responsableId, tarea.fechaLimite, id]);
+    await pool.execute('UPDATE tareas SET titulo = ?, descripcion = ?, licenciado_id = ?, ingeniero_id = ?, fecha_limite = ? WHERE id = ?',
+      [tarea.titulo, tarea.descripcion, tarea.licenciadoId, tarea.ingenieroId, tarea.fechaLimite, id]);
     if (current.estado !== tarea.estado) await move(id, tarea.estado, null);
     return true;
   };

@@ -35,7 +35,9 @@ import { createPerfilesRouter } from './src/perfilesRouter.js';
 import { createTareasRouter } from './src/tareasRouter.js';
 import { obtenerMedidores } from './src/medidoresService.js';
 import { resetGoogleGeocodingQuota } from './src/googleGeocodingQuota.js';
-import { listarUsuarios, roleDescriptions, roleLabels, userRoleOf, userRoles } from './src/usuariosService.js';
+import {
+  ensureUserPuesto, listarUsuarios, puestoLabels, roleDescriptions, roleLabels, userPuestos, userRoleOf, userRoles,
+} from './src/usuariosService.js';
 import { createLoginRateLimiter, LOGIN_WINDOW_MS } from './src/loginRateLimit.js';
 import { forwardAsyncErrors, handleErrors } from './src/errorHandling.js';
 
@@ -456,7 +458,7 @@ app.get('/usuarios', requireAdmin, async (req, res, next) => {
   try {
     const { users, counts } = await listarUsuarios(pool, decryptTelegramId);
     return res.render('pages/usuarios', {
-      ...takeFlash(req, res), users, counts, roleLabels, roleDescriptions, userRoles,
+      ...takeFlash(req, res), users, counts, roleLabels, roleDescriptions, userRoles, userPuestos, puestoLabels,
       currentUserIsInitialAdmin: users.some((user) => user.id === req.session.userId && user.isInitialAdmin),
     });
   } catch (error) {
@@ -630,6 +632,25 @@ app.post('/usuarios/:id/rol', requireAdmin, async (req, res, next) => {
     const [result] = await pool.execute('UPDATE users SET is_admin = ?, role = ? WHERE id = ?', [isAdmin ? 1 : 0, role, userId]);
     if (result.affectedRows !== 1) return toUsers(req, res, { error: 'Usuario no encontrado.' });
     return toUsers(req, res, { message: `Rol de ${target.email} cambiado a ${roleLabels[role]}.` });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// The job title only decides the task slots a person can fill, so it does not touch sessions or access.
+app.post('/usuarios/:id/puesto', requireAdmin, async (req, res, next) => {
+  const userId = Number.parseInt(req.params.id, 10);
+  const puesto = userPuestos.includes(req.body.puesto) ? req.body.puesto : null;
+  if (!Number.isSafeInteger(userId) || userId < 1) return toUsers(req, res, { error: 'Usuario inválido.' });
+
+  try {
+    await ensureUserPuesto(pool);
+    const [targets] = await pool.execute('SELECT email FROM users WHERE id = ?', [userId]);
+    if (targets.length !== 1) return toUsers(req, res, { error: 'Usuario no encontrado.' });
+    await pool.execute('UPDATE users SET puesto = ? WHERE id = ?', [puesto, userId]);
+    return toUsers(req, res, {
+      message: puesto ? `Puesto de ${targets[0].email} cambiado a ${puestoLabels[puesto]}.` : `${targets[0].email} quedó sin puesto.`,
+    });
   } catch (error) {
     return next(error);
   }

@@ -11,9 +11,13 @@
           <h3 class="tarea-titulo h6"><%= tarea.titulo %></h3>
           <% if (tarea.descripcion) { %><p class="tarea-descripcion"><%= tarea.descripcion %></p><% } %>
           <div class="tarea-meta">
-            <% if (tarea.responsable) { %>
-              <span class="tarea-chip" title="<%= tarea.responsable %>"><i class="bi bi-person" aria-hidden="true"></i> <%= corto(tarea.responsable) %></span>
-            <% } else { %>
+            <% if (tarea.licenciado) { %>
+              <span class="tarea-chip" title="Licenciado: <%= tarea.licenciado %>"><span class="tarea-chip-puesto">Lic.</span> <%= corto(tarea.licenciado) %></span>
+            <% } %>
+            <% if (tarea.ingeniero) { %>
+              <span class="tarea-chip" title="Ingeniero: <%= tarea.ingeniero %>"><span class="tarea-chip-puesto">Ing.</span> <%= corto(tarea.ingeniero) %></span>
+            <% } %>
+            <% if (!tarea.licenciado && !tarea.ingeniero) { %>
               <span class="tarea-chip is-sin-asignar">Sin asignar</span>
             <% } %>
             <% if (tarea.fechaLimite) { %>

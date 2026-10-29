@@ -32,6 +32,7 @@
       .tarea-meta { display: flex; flex-wrap: wrap; gap: .35rem; font-size: .8rem; margin-bottom: .5rem; }
       .tarea-chip { display: inline-flex; align-items: center; gap: .25rem; padding: .1rem .45rem; border-radius: 999px; background: rgba(127, 127, 127, .15); }
       .tarea-chip.is-sin-asignar { font-style: italic; opacity: .75; }
+      .tarea-chip-puesto { font-weight: 700; }
       .tarea-chip.is-vencida { background: #f8d7da; color: #842029; font-weight: 600; }
       html[data-theme="dark"] .tarea-chip.is-vencida { background: rgba(220, 53, 69, .25); color: #f1aeb5; }
       /* Finished tasks are not overdue. Keyed on the column, so a card dragged there updates without a reload. */
@@ -79,28 +80,20 @@
         <% const invalid = (field) => (formError?.field === field ? ' is-invalid" aria-invalid="true" aria-describedby="tareaFormError' : ''); %>
         <form action="/tareas" method="POST" autocomplete="off" class="row g-3 mt-1">
           <input type="hidden" name="volver" value="<%= filtro %>" />
-          <div class="col-md-6">
+          <div class="col-lg-6">
             <label for="titulo" class="form-label">Título <span class="text-danger" aria-hidden="true">*</span></label>
             <input type="text" id="titulo" name="titulo" class="form-control<%- invalid('titulo') %>" maxlength="200" required value="<%= form.titulo || '' %>" />
           </div>
-          <div class="col-md-6 col-lg-3">
-            <label for="responsable" class="form-label">Responsable</label>
-            <select id="responsable" name="responsable" class="form-select<%- invalid('responsable') %>">
-              <option value="">Sin asignar</option>
-              <% responsables.forEach((user) => { %>
-                <option value="<%= user.id %>"<%= String(form.responsable ?? '') === String(user.id) ? ' selected' : '' %>><%= user.email %></option>
-              <% }) %>
-            </select>
+          <%- include('../partials/tarea-asignacion', { form, opciones, puestoLabels, invalid, columnClass: 'col-md-6 col-lg-3' }) %>
+          <div class="col-lg-6">
+            <label for="descripcion" class="form-label">Descripción</label>
+            <textarea id="descripcion" name="descripcion" class="form-control<%- invalid('descripcion') %>" rows="2" maxlength="2000"><%= form.descripcion || '' %></textarea>
           </div>
           <div class="col-md-6 col-lg-3">
             <label for="fechaLimite" class="form-label">Fecha límite</label>
             <input type="date" id="fechaLimite" name="fechaLimite" class="form-control<%- invalid('fechaLimite') %>" value="<%= form.fechaLimite || '' %>" />
           </div>
-          <div class="col-md-9">
-            <label for="descripcion" class="form-label">Descripción</label>
-            <textarea id="descripcion" name="descripcion" class="form-control<%- invalid('descripcion') %>" rows="2" maxlength="2000"><%= form.descripcion || '' %></textarea>
-          </div>
-          <div class="col-md-3">
+          <div class="col-md-6 col-lg-3">
             <label for="estado" class="form-label">Columna</label>
             <select id="estado" name="estado" class="form-select">
               <% ESTADOS.forEach((estado) => { %>

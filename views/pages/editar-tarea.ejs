@@ -22,14 +22,8 @@
                 <label for="descripcion" class="form-label">Descripción</label>
                 <textarea id="descripcion" name="descripcion" class="form-control" rows="4" maxlength="2000"><%= tarea.descripcion || '' %></textarea>
               </div>
-              <div class="mb-3">
-                <label for="responsable" class="form-label">Responsable</label>
-                <select id="responsable" name="responsable" class="form-select">
-                  <option value="">Sin asignar</option>
-                  <% responsables.forEach((user) => { %>
-                    <option value="<%= user.id %>"<%= String(tarea.responsable ?? '') === String(user.id) ? ' selected' : '' %>><%= user.email %></option>
-                  <% }) %>
-                </select>
+              <div class="row">
+                <%- include('../partials/tarea-asignacion', { form: tarea, opciones, puestoLabels, columnClass: 'col-sm-6 mb-3' }) %>
               </div>
               <div class="row">
                 <div class="col-sm-6 mb-3">

@@ -29,7 +29,7 @@ export const auditOperationSql = `CASE
   WHEN method IN ('LOGIN', 'LOGIN_FAILED', 'SEARCH', 'CONSULTA') THEN method
   WHEN method = 'DELETE' OR LOWER(request_path) REGEXP '/(eliminar|delete)(/|$)' THEN 'ELIMINADO'
   WHEN method IN ('PUT', 'PATCH')
-    OR LOWER(request_path) REGEXP '/(editar|modificar|update|restablecer-contrasena|rol|estado|mover)(/|$)'
+    OR LOWER(request_path) REGEXP '/(editar|modificar|update|restablecer-contrasena|rol|estado|mover|puesto)(/|$)'
     OR LOWER(request_path) LIKE '/metricas/registros/%'
     OR LOWER(request_path) = '/cambiar-contrasena' THEN 'EDITADO'
   WHEN method = 'POST' THEN 'REGISTRO'
@@ -99,6 +99,7 @@ const specificActions = [
   [/^\/usuarios\/?$/i, 'Creó usuario'],
   [/^\/usuarios\/\d+\/rol\/?$/i, 'Cambió rol de usuario'],
   [/^\/usuarios\/\d+\/estado\/?$/i, 'Cambió estado de usuario'],
+  [/^\/usuarios\/\d+\/puesto\/?$/i, 'Cambió puesto de usuario'],
   [/^\/usuarios\/\d+\/restablecer-contrasena\/?$/i, 'Restableció contraseña'],
   [/^\/usuarios\/\d+\/telegram\/?$/i, 'Vinculó Telegram'],
   [/^\/cambiar-contrasena\/?$/i, 'Cambió su contraseña'],

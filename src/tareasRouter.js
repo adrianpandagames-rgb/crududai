@@ -1,6 +1,7 @@
 import express from 'express';
 import { isSessionExpired } from './sessionUtils.js';
 import { ESTADOS, ESTADO_LABELS, createTareasStore, puedeEliminar, validarTarea } from './tareasService.js';
+import { puestoLabels, userPuestos } from './usuariosService.js';
 
 // Proxies close a stream that stays silent; a comment line every 25 s keeps it open.
 const HEARTBEAT_MS = 25 * 1000;
@@ -62,13 +63,31 @@ export function createTareasRouter(pool, { tareas = createTareasStore(pool), eve
     hoy: new Date().toLocaleDateString('en-CA', { timeZone: process.env.TZ || 'America/Hermosillo' }),
   });
 
+  // The people each slot offers: users with that job title, plus whoever already fills it on the task being edited,
+  // so that changing someone's job title later does not clear them from their tasks when the task is saved.
+  const opcionesOf = async (actual = null) => {
+    const users = await tareas.responsables();
+    return Object.fromEntries(userPuestos.map((puesto) => {
+      const list = users.filter((user) => user.puesto === puesto);
+      const currentId = actual?.[`${puesto}Id`];
+      if (currentId != null && !list.some((user) => user.id === currentId)) list.push({ id: currentId, email: actual[puesto] || `Usuario ${currentId}` });
+      return [puesto, list];
+    }));
+  };
+  const allowedOf = (opciones) => Object.fromEntries(Object.entries(opciones).map(([puesto, list]) => [puesto, list.map((user) => user.id)]));
+
   const renderBoard = async (req, res, extra, status = 200) => {
     const filtro = filtroOf(req.query.responsable ?? req.body?.volver);
-    const [locals, responsables] = await Promise.all([boardLocals(req, filtro), tareas.responsables()]);
+    const [locals, opciones] = await Promise.all([boardLocals(req, filtro), opcionesOf()]);
+    // The filter lists everyone who can be assigned, in either slot.
+    const responsables = [...opciones.licenciado, ...opciones.ingeniero].sort((a, b) => a.email.localeCompare(b.email));
     return res.status(status).render('pages/tareas', {
-      ...locals, responsables, form: {}, formError: null, message: '', messageType: '', ...extra,
+      ...locals, opciones, responsables, puestoLabels, form: {}, formError: null, message: '', messageType: '', ...extra,
     });
   };
+  const renderEdit = (res, { tarea, opciones, error = null, volver = '' }, status = 200) => res.status(status).render('pages/editar-tarea', {
+    tarea, opciones, puestoLabels, ESTADOS, ESTADO_LABELS, error, volver,
+  });
 
   router.get('/eventos', (req, res) => eventos.subscribe(req, res));
 
@@ -94,8 +113,7 @@ export function createTareasRouter(pool, { tareas = createTareasStore(pool), eve
 
   router.post('/', async (req, res, next) => {
     try {
-      const ids = (await tareas.responsables()).map((user) => user.id);
-      const { tarea, error, field } = validarTarea(req.body, ids);
+      const { tarea, error, field } = validarTarea(req.body, allowedOf(await opcionesOf()));
       if (error) return await renderBoard(req, res, { form: req.body, formError: { message: error, field } }, 400);
       const tareaId = await tareas.create(tarea, req.session);
       eventos.notify();
@@ -109,9 +127,9 @@ export function createTareasRouter(pool, { tareas = createTareasStore(pool), eve
     try {
       const tarea = isId(req.params.id) ? await tareas.get(req.params.id) : null;
       if (!tarea) return redirect(res, 'La tarea no fue encontrada.');
-      const form = { ...tarea, responsable: tarea.responsableId ?? '' };
-      return res.render('pages/editar-tarea', {
-        tarea: form, responsables: await tareas.responsables(), ESTADOS, ESTADO_LABELS, error: null, volver: filtroOf(req.query.volver),
+      return renderEdit(res, {
+        tarea: { ...tarea, licenciado: tarea.licenciadoId ?? '', ingeniero: tarea.ingenieroId ?? '' },
+        opciones: await opcionesOf(tarea), volver: filtroOf(req.query.volver),
       });
     } catch (error) {
       return next(error);
@@ -122,13 +140,11 @@ export function createTareasRouter(pool, { tareas = createTareasStore(pool), eve
     if (!isId(req.params.id)) return redirect(res, 'La tarea no fue encontrada.');
     const filtro = filtroOf(req.body.volver);
     try {
-      const responsables = await tareas.responsables();
-      const { tarea, error } = validarTarea(req.body, responsables.map((user) => user.id));
-      if (error) {
-        return res.status(400).render('pages/editar-tarea', {
-          tarea: { ...req.body, id: req.params.id }, responsables, ESTADOS, ESTADO_LABELS, error, volver: filtro,
-        });
-      }
+      const actual = await tareas.get(req.params.id);
+      if (!actual) return redirect(res, 'La tarea no fue encontrada.', 'error', { filtro });
+      const opciones = await opcionesOf(actual);
+      const { tarea, error } = validarTarea(req.body, allowedOf(opciones));
+      if (error) return renderEdit(res, { tarea: { ...req.body, id: req.params.id }, opciones, error, volver: filtro }, 400);
       const updated = await tareas.update(req.params.id, tarea);
       if (updated) eventos.notify();
       return updated ? redirect(res, 'Tarea actualizada correctamente.', 'success', { filtro, tareaId: req.params.id })

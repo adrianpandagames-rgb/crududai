@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import ejs from 'ejs';
-import { listarUsuarios, roleDescriptions, roleLabels, userRoleOf, userRoles } from '../src/usuariosService.js';
+import {
+  listarUsuarios, puestoLabels, roleDescriptions, roleLabels, userPuestos, userRoleOf, userRoles,
+} from '../src/usuariosService.js';
 
 const rows = [
   { id: 1, email: 'inicial@example.com', is_admin: 1, role: 'admin', is_active: 1, is_initial_admin: 1, must_change_password: 0, telegram_id_encrypted: 'enc', lastLoginTs: Date.UTC(2026, 9, 24, 1) / 1000 },
@@ -24,7 +26,7 @@ test('lists users with role, last access in Sonora time and counters', async () 
 const render = async (currentUserId) => {
   const { users, counts } = await listarUsuarios(pool, () => '123456');
   return ejs.renderFile('views/pages/usuarios.ejs', {
-    users, counts, roleLabels, roleDescriptions, userRoles, message: null, error: null,
+    users, counts, roleLabels, roleDescriptions, userRoles, userPuestos, puestoLabels, message: null, error: null,
     currentUser: { id: currentUserId, isAdmin: true, role: 'admin' },
   });
 };

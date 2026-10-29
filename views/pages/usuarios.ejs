@@ -122,7 +122,7 @@
             <h3 class="h5 mb-3">Usuarios</h3>
             <div class="table-responsive overflow-visible">
               <table class="table user-table mb-0">
-                <thead><tr><th>Usuario</th><th>Rol</th><th>Estado</th><th>Último acceso</th><th>Telegram</th><th class="text-end">Más</th></tr></thead>
+                <thead><tr><th>Usuario</th><th>Rol</th><th>Puesto</th><th>Estado</th><th>Último acceso</th><th>Telegram</th><th class="text-end">Más</th></tr></thead>
                 <tbody>
                   <% users.forEach((user) => { %>
                     <% const isSelf = user.id === currentUser.id; %>
@@ -150,6 +150,18 @@
                             <% }) %>
                           </select>
                           <button class="btn btn-sm btn-outline-primary" type="submit" <%= locked ? 'disabled' : '' %>>Guardar</button>
+                        </form>
+                      </td>
+                      <td data-label="Puesto">
+                        <%# Decides whether the person appears as Licenciado or Ingeniero when assigning tasks. %>
+                        <form action="/usuarios/<%= user.id %>/puesto" method="POST" class="user-role-form">
+                          <select name="puesto" class="form-select form-select-sm" aria-label="Puesto de <%= user.email %>">
+                            <option value="">Sin puesto</option>
+                            <% userPuestos.forEach((puesto) => { %>
+                              <option value="<%= puesto %>" <%= user.puesto === puesto ? 'selected' : '' %>><%= puestoLabels[puesto] %></option>
+                            <% }) %>
+                          </select>
+                          <button class="btn btn-sm btn-outline-primary" type="submit">Guardar</button>
                         </form>
                       </td>
                       <td data-label="Estado" class="text-nowrap">
