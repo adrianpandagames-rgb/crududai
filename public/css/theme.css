@@ -121,3 +121,12 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 #globalToast { opacity: 0; translate: 0 -4px; transition: opacity .15s ease-in, translate .15s ease-in; }
 #globalToast.is-visible { opacity: 1; translate: 0; transition: opacity .25s cubic-bezier(.2, 0, 0, 1), translate .25s cubic-bezier(.2, 0, 0, 1); }
 @media (prefers-reduced-motion: reduce) { #globalToast, #globalToast.is-visible { translate: none; } }
+/* Transición entre páginas: el contenido se funde y sube un poco; la barra superior y el botón de tema no se mueven. */
+@view-transition { navigation: auto; }
+.header { view-transition-name: site-header; }
+.theme-toggle { view-transition-name: theme-toggle; }
+::view-transition-old(root) { animation: page-salida .15s ease-in both; }
+::view-transition-new(root) { animation: page-entrada .25s cubic-bezier(.2, 0, 0, 1) both; }
+@keyframes page-salida { to { opacity: 0; } }
+@keyframes page-entrada { from { opacity: 0; translate: 0 6px; } }
+@media (prefers-reduced-motion: reduce) { @view-transition { navigation: none; } }
