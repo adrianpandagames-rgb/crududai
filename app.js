@@ -97,6 +97,15 @@ const getAuthToken = (req) => {
   return authCookie ? authCookie.slice('auth='.length) : null;
 };
 
+// Task assignments queue up, so two in a row are both shown; the newest 20 are kept for someone who is away.
+const pendingTaskToasts = new Map();
+const MAX_TASK_TOASTS = 20;
+const queueTaskToast = (userId, toast) => {
+  const queue = pendingTaskToasts.get(Number(userId)) || [];
+  queue.push(toast);
+  pendingTaskToasts.set(Number(userId), queue.slice(-MAX_TASK_TOASTS));
+};
+
 const consumePendingRouteToast = (userId) => {
   if (typeof userId === 'undefined' || userId === null) return null;
   const toast = pendingRouteToasts.get(userId);
@@ -104,7 +113,10 @@ const consumePendingRouteToast = (userId) => {
     pendingRouteToasts.delete(userId);
     return toast;
   }
-  return null;
+  const queue = pendingTaskToasts.get(Number(userId));
+  if (!queue) return null;
+  if (queue.length <= 1) pendingTaskToasts.delete(Number(userId));
+  return queue.shift();
 };
 
 const revokeUserSessions = (userId) => {
@@ -165,6 +177,8 @@ const requireAuth = async (req, res, next) => {
     if (pendingToast) {
       res.locals.toastMessage = pendingToast.message;
       res.locals.toastFileId = pendingToast.fileId;
+      res.locals.toastTitle = pendingToast.title;
+      res.locals.toastUrl = pendingToast.url;
     }
     const requestPath = req.originalUrl.split('?')[0];
     if (session.mustChangePassword && requestPath !== '/cambiar-contrasena') {
@@ -216,7 +230,7 @@ app.use('/maigret', requireAuth, createMaigretRouter(pool, { searches: maigretSe
 app.use('/imagenes', requireAuth, createImagenesRouter(pool));
 app.use('/nombres', requireAuth, createNombresRouter(pool, { maigretSearches }));
 app.use('/perfiles', requireAuth, createPerfilesRouter(pool));
-app.use('/tareas', requireAuth, requireNonUecs, createTareasRouter(pool));
+app.use('/tareas', requireAuth, requireNonUecs, createTareasRouter(pool, { avisar: queueTaskToast }));
 // Reverse image search engines download the image without a session, through an expiring token.
 app.use('/imagen-publica', createPublicImageRouter(pool));
 
@@ -315,6 +329,8 @@ app.get('/api/route-toast', async (req, res) => {
   return res.json({
     message: pendingToast ? pendingToast.message : null,
     fileId: pendingToast ? pendingToast.fileId : null,
+    title: pendingToast?.title ?? null,
+    url: pendingToast?.url ?? null,
   });
 });
 

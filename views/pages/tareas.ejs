@@ -11,7 +11,7 @@
       .tareas-nueva { margin-bottom: 1rem; }
       .tareas-nueva summary { display: inline-flex; align-items: center; gap: .4rem; min-height: 40px; cursor: pointer; font-weight: 600; color: #0d6efd; }
       html[data-theme="dark"] .tareas-nueva summary { color: #8dc5ff; }
-      .tareas-tablero { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; align-items: start; }
+      .tareas-tablero { display: grid; grid-template-columns: repeat(<%= ESTADOS.length %>, minmax(220px, 1fr)); gap: 1rem; align-items: start; overflow-x: auto; }
       @media (max-width: 991.98px) { .tareas-tablero { grid-template-columns: minmax(0, 1fr); } }
       .tareas-columna { border-radius: 10px; background: rgba(127, 127, 127, .1); padding: .75rem; }
       .tareas-columna h2 { display: flex; align-items: center; justify-content: space-between; font-size: 1rem; font-weight: 700; margin: 0 0 .75rem; }
@@ -36,11 +36,11 @@
       .tarea-llegada { font-size: .8rem; margin: 0 0 .5rem; opacity: .85; }
       .tarea-dias { font-weight: 700; font-variant-numeric: tabular-nums; }
       /* Age frame: yellow from 2 to 3 days since arrival, red after 3. The shadow thickens the 1px border without moving the layout.
-         Finished tasks are left plain; keyed on the column, so a card dragged there updates without a reload. */
-      .tareas-lista:not([data-estado="terminada"]) .tarea-card.is-amarilla { border-color: #ffc107; box-shadow: 0 0 0 2px #ffc107; }
-      .tareas-lista:not([data-estado="terminada"]) .tarea-card.is-roja { border-color: #dc3545; box-shadow: 0 0 0 2px #dc3545; }
-      .tareas-lista:not([data-estado="terminada"]) .tarea-card.is-roja .tarea-dias { color: #b02a37; }
-      html[data-theme="dark"] .tareas-lista:not([data-estado="terminada"]) .tarea-card.is-roja .tarea-dias { color: #f1aeb5; }
+         Finished and sent tasks are left plain; keyed on the column, so a card dragged there updates without a reload. */
+      .tareas-lista:not([data-estado="terminada"], [data-estado="enviada"]) .tarea-card.is-amarilla { border-color: #ffc107; box-shadow: 0 0 0 2px #ffc107; }
+      .tareas-lista:not([data-estado="terminada"], [data-estado="enviada"]) .tarea-card.is-roja { border-color: #dc3545; box-shadow: 0 0 0 2px #dc3545; }
+      .tareas-lista:not([data-estado="terminada"], [data-estado="enviada"]) .tarea-card.is-roja .tarea-dias { color: #b02a37; }
+      html[data-theme="dark"] .tareas-lista:not([data-estado="terminada"], [data-estado="enviada"]) .tarea-card.is-roja .tarea-dias { color: #f1aeb5; }
       /* The arrows likewise follow the card's column: no left arrow in the first, no right arrow in the last. */
       .tareas-lista[data-estado="<%= ESTADOS[0] %>"] [data-direccion="izquierda"],
       .tareas-lista[data-estado="<%= ESTADOS.at(-1) %>"] [data-direccion="derecha"] { display: none; }

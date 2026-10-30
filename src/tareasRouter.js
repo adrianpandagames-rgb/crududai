@@ -42,8 +42,22 @@ export function createTareasEvents({ heartbeatMs = HEARTBEAT_MS } = {}) {
   };
 }
 
-export function createTareasRouter(pool, { tareas = createTareasStore(pool), eventos = createTareasEvents() } = {}) {
+// `avisar(userId, toast)` queues the toast every page polls for. Whoever takes a slot is told, unless they filled it themselves.
+export function createTareasRouter(pool, {
+  tareas = createTareasStore(pool), eventos = createTareasEvents(), avisar = () => {},
+} = {}) {
   const router = express.Router();
+  const avisarAsignados = (tareaId, tarea, session, anterior = {}) => {
+    for (const puesto of userPuestos) {
+      const userId = tarea[`${puesto}Id`];
+      if (userId == null || userId === anterior[`${puesto}Id`] || userId === session?.userId) continue;
+      avisar(userId, {
+        title: 'Nueva tarea asignada',
+        message: `Se te asignó “${tarea.titulo}” como ${puestoLabels[puesto].toLowerCase()}.`,
+        url: `/tareas#tarea-${tareaId}`,
+      });
+    }
+  };
   // Forms send the board's filter back in a hidden "volver" field, so an action returns to the same view.
   const filtroOf = (value) => (typeof value === 'string' && /^(\d+|sin)$/.test(value) ? value : '');
   const redirect = (res, message, type = 'error', { filtro = '', tareaId } = {}) => res.redirect('/tareas?' + new URLSearchParams({
@@ -121,6 +135,7 @@ export function createTareasRouter(pool, { tareas = createTareasStore(pool), eve
       if (failure) return await renderBoard(req, res, { form: req.body, formError: failure }, 400);
       const tareaId = await tareas.create({ ...tarea, fechaLlegada: llegada.fecha }, req.session);
       eventos.notify();
+      avisarAsignados(tareaId, tarea, req.session);
       return redirect(res, 'Tarea registrada correctamente.', 'success', { filtro: filtroOf(req.body.volver), tareaId });
     } catch (failure) {
       return next(failure);
@@ -151,7 +166,10 @@ export function createTareasRouter(pool, { tareas = createTareasStore(pool), eve
       // What was typed, over the saved task so the arrival date and creator still show.
       if (error) return renderEdit(res, { tarea: { ...actual, ...req.body, id: req.params.id }, opciones, error, volver: filtro }, 400);
       const updated = await tareas.update(req.params.id, tarea);
-      if (updated) eventos.notify();
+      if (updated) {
+        eventos.notify();
+        avisarAsignados(req.params.id, tarea, req.session, actual);
+      }
       return updated ? redirect(res, 'Tarea actualizada correctamente.', 'success', { filtro, tareaId: req.params.id })
         : redirect(res, 'La tarea no fue encontrada.', 'error', { filtro });
     } catch (failure) {

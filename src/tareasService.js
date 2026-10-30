@@ -1,8 +1,10 @@
 import { ensureUserPuesto, puestoLabels, userPuestos } from './usuariosService.js';
 
 // The board's columns, left to right.
-export const ESTADOS = ['pendiente', 'en_proceso', 'terminada'];
-export const ESTADO_LABELS = { pendiente: 'Pendiente', en_proceso: 'En proceso', terminada: 'Terminada' };
+export const ESTADOS = ['pendiente', 'en_proceso', 'falta_oficio', 'terminada', 'enviada'];
+export const ESTADO_LABELS = {
+  pendiente: 'Pendiente', en_proceso: 'En proceso', falta_oficio: 'Falta oficio', terminada: 'Terminada', enviada: 'Enviada',
+};
 export const MAX_LENGTHS = { titulo: 200, descripcion: 2000 };
 
 // Whole days since a task arrived before its card is framed in yellow (2 to 3 days) and then in red (more than 3).

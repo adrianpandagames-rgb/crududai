@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import express from 'express';
 import { fileURLToPath } from 'node:url';
 import {
-  antiguedadOf, createTareasStore, diasDesde, haceDias, hoyLocal, puedeEliminar, validarLlegada, validarTarea,
+  ESTADOS, ESTADO_LABELS, antiguedadOf, createTareasStore, diasDesde, haceDias, hoyLocal, puedeEliminar, validarLlegada, validarTarea,
 } from '../src/tareasService.js';
 import { createTareasEvents, createTareasRouter } from '../src/tareasRouter.js';
 
@@ -115,7 +115,7 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
     responsables: async () => users,
     board: async ({ responsable }) => {
       const visible = tasks.filter((task) => !responsable || [task.licenciadoId, task.ingenieroId].map(String).includes(responsable));
-      return Object.fromEntries(['pendiente', 'en_proceso', 'terminada'].map((estado) => [estado, visible.filter((task) => task.estado === estado)]));
+      return Object.fromEntries(ESTADOS.map((estado) => [estado, visible.filter((task) => task.estado === estado)]));
     },
     get: async (id) => tasks.find((task) => String(task.id) === String(id)) || null,
     create: async (tarea) => { created.push(tarea); return 3; },
@@ -140,7 +140,10 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
     next();
   });
   let avisos = 0;
-  app.use('/tareas', createTareasRouter(null, { tareas, eventos: { subscribe: () => {}, notify: () => { avisos += 1; } } }));
+  const toasts = [];
+  app.use('/tareas', createTareasRouter(null, {
+    tareas, eventos: { subscribe: () => {}, notify: () => { avisos += 1; } }, avisar: (userId, toast) => toasts.push([userId, toast]),
+  }));
   const server = app.listen(0, '127.0.0.1');
   await new Promise((resolve) => server.once('listening', resolve));
   t.after(() => { server.closeAllConnections(); server.close(); });
@@ -181,6 +184,8 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
   assert.match(message(ok), /registrada/);
   assert.match(ok.headers.get('location'), /responsable=5.*#tarea-3$/);
   assert.deepEqual([created[0].licenciadoId, created[0].ingenieroId, created[0].fechaLlegada], [5, 8, '2026-10-01']);
+  // The engineer is told; the user who created it filled the licenciado slot themselves, so they are not.
+  assert.deepEqual(toasts, [[8, { title: 'Nueva tarea asignada', message: 'Se te asignó “Revisar” como ingeniero.', url: '/tareas#tarea-3' }]]);
 
   // Ana stops being a licenciada: the task she already has keeps her when it is edited, new tasks no longer offer her.
   users[0].puesto = 'ingeniero';
@@ -192,6 +197,8 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
   const edited = form({ titulo: 'Contestar oficio', licenciado: '5', ingeniero: '8', fechaLlegada: '2000-01-01' });
   assert.match(message(await fetch(`${base}/1/editar`, as('usuario', edited))), /actualizada/);
   assert.deepEqual([updated[0][1].licenciadoId, updated[0][1].ingenieroId, updated[0][1].fechaLlegada], [5, 8, undefined]);
+  // Saving a task without changing who has it notifies nobody again.
+  assert.equal(toasts.length, 1);
   assert.equal((await fetch(base, as('usuario', form({ titulo: 'Otra', licenciado: '5', fechaLlegada: '2026-10-01' })))).status, 400);
   users[0].puesto = 'licenciado';
 
@@ -209,8 +216,8 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
   const pastEdge = await fetch(`${base}/1/mover`, as('usuario', form({ direccion: 'izquierda', estado: 'terminada' })));
   assert.ok(message(pastEdge).includes('no existe'));
   assert.deepEqual(moves, [[2, 'terminada'], [1, 'en_proceso'], [1, 'pendiente']]);
-  // In Terminada the frame is dropped by the column's style, so a card dragged there needs no redraw.
-  assert.ok(page.includes('.tareas-lista:not([data-estado="terminada"]) .tarea-card.is-roja'));
+  // In Terminada and Enviada the frame is dropped by the column's style, so a card dragged there needs no redraw.
+  assert.ok(page.includes('.tareas-lista:not([data-estado="terminada"], [data-estado="enviada"]) .tarea-card.is-roja'));
 
   assert.match(message(await fetch(`${base}/eliminar/2`, as('usuario', form({})))), /Solo quien creó/);
   assert.match(message(await fetch(`${base}/eliminar/1`, as('usuario', form({})))), /eliminada/);
@@ -245,4 +252,10 @@ test('open boards hear about every change until their session expires', async (t
   session.lastActivity = 0;
   eventos.notify();
   assert.equal((await reader.read()).done, true);
+});
+
+test('Falta oficio sits between En proceso and Terminada, and Enviada comes after Terminada', () => {
+  assert.deepEqual(ESTADOS.map((estado) => ESTADO_LABELS[estado]), ['Pendiente', 'En proceso', 'Falta oficio', 'Terminada', 'Enviada']);
+  assert.ok(ESTADOS.every((estado) => estado.length <= 20));
+  assert.equal(validarTarea({ titulo: 'Oficio', estado: 'enviada' }).tarea.estado, 'enviada');
 });
