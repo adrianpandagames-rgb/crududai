@@ -22,8 +22,6 @@ export function createPlaneacionRouter(pool) {
       ? 'El archivo supera el límite de 20 MB.' : 'No fue posible recibir el archivo.' });
     next();
   }), async (req, res) => {
-    const line = String(req.body.linea || '').trim();
-    if (!line || line.length > 50) return res.status(400).json({ error: 'Ingresa un número de línea de hasta 50 caracteres.' });
     if (!req.file) return res.status(400).json({ error: 'Selecciona un archivo CSV o Excel (.xlsx).' });
     const extension = path.extname(req.file.originalname).toLowerCase();
     if (!['.csv', '.xlsx'].includes(extension)) return res.status(400).json({ error: 'El archivo debe ser CSV o Excel (.xlsx).' });
@@ -37,7 +35,7 @@ export function createPlaneacionRouter(pool) {
       const rows = extension === '.xlsx' ? processRutaXlsx(req.file.buffer, locations)
         : processRutaCsv(req.file.buffer.toString('utf8'), locations);
       if (rows.length < 2) return res.status(400).json({ error: 'El archivo no contiene registros.' });
-      return res.json({ name: req.file.originalname, line, headers: rows[0], rows: rows.slice(1),
+      return res.json({ name: req.file.originalname, headers: rows[0], rows: rows.slice(1),
         csv: '\uFEFF' + createRutaCsv(rows), ...extractPlanningPoints(rows) });
     } catch (error) {
       return res.status(400).json({ error: 'No fue posible procesar el archivo. Verifica el formato y el límite de 100000 filas.' });

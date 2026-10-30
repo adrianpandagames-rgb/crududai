@@ -34,20 +34,20 @@ test('planning upload is available to all authenticated users and returns enrich
   const url = `http://127.0.0.1:${server.address().port}/planeacion-geografica/importar`;
   for (const headers of [{}, { 'x-test-admin': 'yes' }]) {
     const body = new FormData();
-    body.append('linea', '123');
     body.append('archivo', new Blob(['antena,azimuth\nABC,50\n'], { type: 'text/csv' }), 'antenas.csv');
     const response = await fetch(url, { method: 'POST', headers, body });
     assert.equal(response.status, 200);
     assert.equal(response.headers.get('cache-control'), 'no-store');
     assert.equal(response.headers.get('referrer-policy'), 'strict-origin-when-cross-origin');
     const result = await response.json();
-    assert.equal(result.line, '123');
+    // No line number is asked for; the target comes from the file itself.
+    assert.equal(result.line, undefined);
     assert.deepEqual(result.points, [{ lat: 29.1, lng: -110.9, azimuth: 50, row: 1 }]);
     assert.ok(result.csv.includes('Hermosillo'));
   }
   assert.equal(queries, 2);
   const emptyBody = new FormData();
-  emptyBody.append('linea', '123');
+  emptyBody.append('nota', 'sin archivo');
   const invalid = await fetch(url, { method: 'POST', headers: { 'x-test-admin': 'yes' }, body: emptyBody });
   assert.equal(invalid.status, 400);
 });

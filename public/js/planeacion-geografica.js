@@ -53,6 +53,8 @@ function download(name, content) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 const safeLine = (line) => String(line).replace(/[^a-zA-Z0-9_-]/g, '_');
+// Exports are named after the imported file, without its extension.
+const baseName = (name) => safeLine(String(name).replace(/.[^.]+$/, ''));
 
 if (!window.L) {
   message('No fue posible cargar el mapa. Revisa tu conexión y recarga la página.', true);
@@ -549,7 +551,7 @@ if (!window.L) {
       timeFilterActive() ? 'Periodo filtrado' : '',
       search.value.trim() ? `Búsqueda: “${search.value.trim()}”` : '',
     ].filter(Boolean).join(' · ');
-    byId('planningFile').textContent = `${data.name} · Línea ${data.line} · ${visible.length} de ${data.rows.length} registros${filters ? ` · ${filters}` : ''}`;
+    byId('planningFile').textContent = `${data.name}${contacts?.target ? ` · Objetivo ${contacts.target}` : ''} · ${visible.length} de ${data.rows.length} registros${filters ? ` · ${filters}` : ''}`;
     byId('planningClearFilter').hidden = coordinateFilter === null && !option;
     const pager = document.querySelector('.planning-pager');
     pager.hidden = totalPages <= 1;
@@ -684,13 +686,13 @@ if (!window.L) {
     draw({ fit: true });
   });
   byId('planningExport').addEventListener('click', () => {
-    if (data) download(`Planeacion-${safeLine(data.line)}.csv`, data.csv);
+    if (data) download(`Planeacion-${baseName(data.name)}.csv`, data.csv);
   });
   byId('planningContactsExport').addEventListener('click', () => {
     if (contacts?.contacts.length) download(`Contactos-${safeLine(contacts.target)}.csv`, contactsCsv(contacts));
   });
   byId('planningExportSelection').addEventListener('click', () => {
     if (!data || !selectedRows.size) return;
-    download(`Planeacion-${safeLine(data.line)}-seleccion.csv`, selectionCsv(data.headers, data.rows, selectedRows));
+    download(`Planeacion-${baseName(data.name)}-seleccion.csv`, selectionCsv(data.headers, data.rows, selectedRows));
   });
 }
