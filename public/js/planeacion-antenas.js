@@ -18,12 +18,15 @@ export function antennaClipboardHtml(group, totalRecords) {
   return `<table><tr>${cells}</tr></table>`;
 }
 
-export function summarizeAntennas(data) {
-  const headers = data.headers.map((value) => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase());
+// Indexes of the antenna, location and place columns, or -1 when the file has none.
+export function antennaColumns(headerRow) {
+  const headers = headerRow.map((value) => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase());
   const column = (pattern) => headers.findIndex((header) => pattern.test(header));
-  const antenna = column(/antena|antenna/);
-  const location = column(/ubicacion|location/);
-  const place = column(/lugar|place/);
+  return { antenna: column(/antena|antenna/), location: column(/ubicacion|location/), place: column(/lugar|place/) };
+}
+
+export function summarizeAntennas(data) {
+  const { antenna, location, place } = antennaColumns(data.headers);
   const points = new Map(data.points.map((point) => [point.row, point]));
   const groups = new Map();
   data.rows.forEach((row, index) => {

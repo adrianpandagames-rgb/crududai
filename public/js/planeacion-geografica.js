@@ -1,7 +1,8 @@
 import { coverageSector } from './planeacion-geometry.js?v=6';
 import {
   summarizeAntennas, antennaClipboardText, antennaClipboardHtml, rowMatches, frequencyScale, selectionCsv,
-} from './planeacion-antenas.js?v=7';
+} from './planeacion-antenas.js?v=8';
+import { findOvernightLocations } from './planeacion-pernocta.js?v=1';
 
 const byId = (id) => document.getElementById(id);
 const status = byId('planningStatus');
@@ -142,6 +143,7 @@ if (!window.L) {
   }
 
   const layers = L.featureGroup().addTo(map);
+  const overnightLayer = L.layerGroup().addTo(map);
   let data = null;
   const selectedRows = new Set();
   let selectionActive = false;
@@ -156,6 +158,10 @@ if (!window.L) {
   const from = byId('planningFrom');
   const to = byId('planningTo');
   const search = byId('planningSearch');
+  const nightStart = byId('planningNightStart');
+  const nightEnd = byId('planningNightEnd');
+  const nightShare = byId('planningNightShare');
+  const nightRadius = byId('planningNightRadius');
 
   const timeFilterActive = () => Boolean(data?.hasTimes && (from.value || to.value));
   function inPeriod(rowNumber) {
@@ -227,6 +233,82 @@ if (!window.L) {
       fragment.append(note);
     }
     byId('planningAntennas').replaceChildren(fragment);
+  }
+  const formatNight = (night) => night.split('-').reverse().join('/');
+  function showOvernight(location) {
+    if (!radius.reportValidity()) return;
+    selectedRows.clear();
+    location.rows.forEach((row) => selectedRows.add(row));
+    selectionActive = true;
+    coordinateFilter = null;
+    page = 1;
+    table();
+    draw({ fit: true });
+    const description = document.createElement('div');
+    description.textContent = `Pernocta: ${location.name} · ${location.nights} noches · ${location.rows.length} registros nocturnos`;
+    L.popup().setLatLng([location.lat, location.lng]).setContent(description).openOn(map);
+    mapElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  function overnightSummary() {
+    overnightLayer.clearLayers();
+    const list = byId('planningOvernight');
+    const note = (text) => {
+      const paragraph = document.createElement('p');
+      paragraph.className = 'small mb-0';
+      paragraph.textContent = text;
+      list.replaceChildren(paragraph);
+    };
+    if (!data?.hasTimes) return note('El archivo no tiene fecha y hora; no es posible estimar la pernocta.');
+    if (![nightStart, nightEnd, nightShare, nightRadius].every((input) => input.reportValidity())) return;
+    if (nightStart.value === nightEnd.value) return note('El inicio y el fin de la noche no pueden ser la misma hora.');
+    const result = findOvernightLocations(data, {
+      start: nightStart.value, end: nightEnd.value, minShare: Number(nightShare.value), radius: Number(nightRadius.value),
+      include: inPeriod,
+    });
+    if (!result.totalNights) {
+      return note(`Ningún registro con coordenadas cae entre las ${nightStart.value} y las ${nightEnd.value}${timeFilterActive() ? ' en el periodo elegido' : ''}.`);
+    }
+    const fragment = document.createDocumentFragment();
+    const summary = document.createElement('p');
+    summary.className = 'small text-muted mb-0';
+    summary.textContent = `${result.nightRecords} registros nocturnos en ${result.totalNights} noches. Se muestran las ubicaciones presentes en al menos el ${nightShare.value}% de las noches.`;
+    fragment.append(summary);
+    for (const [index, location] of result.locations.entries()) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `planning-antenna${index === 0 ? ' planning-overnight-top' : ''}`;
+      const title = document.createElement('strong');
+      const rank = document.createElement('span');
+      rank.className = 'planning-overnight-rank';
+      rank.textContent = String(index + 1);
+      title.append(rank, `${location.name} · ${location.nights} de ${result.totalNights} noches (${Math.round(location.share)}%)`);
+      const place = document.createElement('span');
+      place.textContent = `Ubicación: ${location.ubicacion || 'Sin información'} · Lugar: ${location.lugar || 'Sin información'}`;
+      const detail = document.createElement('span');
+      detail.textContent = `${location.rows.length} registros nocturnos · ${formatNight(location.firstNight)} a ${formatNight(location.lastNight)} · `
+        + `Primera de la noche: ${location.settles} · Última de la noche: ${location.wakes}`;
+      const coordinates = document.createElement('span');
+      coordinates.textContent = location.coordinates;
+      button.append(title, place, detail, coordinates);
+      button.addEventListener('click', () => showOvernight(location));
+      fragment.append(button);
+      // Numbered pins above the coverage, the most likely one larger and in its own colour.
+      L.marker([location.lat, location.lng], {
+        icon: L.divIcon({
+          className: '', html: `<span class="planning-overnight-marker${index === 0 ? ' is-top' : ''}">${index + 1}</span>`,
+          iconSize: index === 0 ? [32, 32] : [26, 26],
+        }),
+        zIndexOffset: 1000 - index, keyboard: false,
+      }).bindTooltip(`Pernocta ${index + 1}: ${location.name} · ${location.nights} noches`)
+        .on('click', () => showOvernight(location)).addTo(overnightLayer);
+    }
+    if (!result.locations.length) {
+      const empty = document.createElement('p');
+      empty.className = 'small mb-0';
+      empty.textContent = 'Ninguna ubicación alcanza el mínimo de noches. Baja el porcentaje para ver más candidatas.';
+      fragment.append(empty);
+    }
+    list.replaceChildren(fragment);
   }
   function showCoordinateRecords(point) {
     coordinateFilter = coordinateKey(point);
@@ -400,6 +482,7 @@ if (!window.L) {
     }
     pointsByRow = new Map(data.points.map((point) => [point.row, point]));
     antennaSummary();
+    overnightSummary();
     const tr = document.createElement('tr');
     const selectionHeader = document.createElement('th');
     selectionHeader.scope = 'col';
@@ -441,6 +524,10 @@ if (!window.L) {
       byId('planningSubmit').disabled = false;
     }
   });
+  for (const input of [nightStart, nightEnd, nightShare, nightRadius]) {
+    input.addEventListener('change', () => { if (data) overnightSummary(); });
+  }
+  byId('planningOvernightSettings').addEventListener('submit', (event) => event.preventDefault());
   coverageMode.addEventListener('change', () => draw());
   beam.addEventListener('change', () => draw());
   radius.addEventListener('change', () => draw());
@@ -454,6 +541,7 @@ if (!window.L) {
     page = 1;
     table();
     draw();
+    overnightSummary();
   };
   from.addEventListener('change', periodChanged);
   to.addEventListener('change', periodChanged);
