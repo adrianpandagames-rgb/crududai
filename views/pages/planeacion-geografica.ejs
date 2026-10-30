@@ -3,7 +3,7 @@
 <head>
   <%- include('../includes/head') %>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <link rel="stylesheet" href="/public/css/planeacion-geografica.css?v=6" />
+  <link rel="stylesheet" href="/public/css/planeacion-geografica.css?v=7" />
 </head>
 <body>
   <%- include('../includes/header') %>
@@ -123,7 +123,7 @@
       <p id="planningFile" class="small">No hay archivo importado.</p>
       <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
         <input id="planningSearch" type="search" class="form-control form-control-sm planning-search" placeholder="Buscar en la tabla…" aria-label="Buscar en los registros" autocomplete="off" disabled />
-        <button id="planningClearFilter" type="button" class="btn btn-sm btn-outline-secondary" hidden>Mostrar todas las coordenadas</button>
+        <button id="planningClearFilter" type="button" class="btn btn-sm btn-outline-secondary" hidden>Mostrar todos los registros</button>
         <button id="planningExport" class="btn btn-sm btn-outline-secondary" type="button" disabled>Exportar CSV</button>
         <button id="planningExportSelection" class="btn btn-sm btn-outline-secondary" type="button" disabled>Exportar selección</button>
       </div>
@@ -138,6 +138,6 @@
   </main>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="/public/js/ruta-upload.js"></script>
-  <script type="module" src="/public/js/planeacion-geografica.js?v=8"></script>
+  <script type="module" src="/public/js/planeacion-geografica.js?v=9"></script>
 </body>
 </html>

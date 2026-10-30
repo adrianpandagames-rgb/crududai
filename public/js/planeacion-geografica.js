@@ -171,6 +171,54 @@ if (!window.L) {
     return Boolean(time) && (!from.value || time >= from.value) && (!to.value || time <= to.value);
   }
 
+  // An option picked in Frecuencia de antenas, Pernocta or Contactos frecuentes replaces whatever was shown before:
+  // the map and the table keep only its records. Picking the same option again shows everything.
+  let option = null;
+  function markOption() {
+    for (const button of document.querySelectorAll('[data-option]')) {
+      const active = button.dataset.option === option?.id;
+      button.classList.toggle('is-selected', active);
+      button.setAttribute('aria-pressed', String(active));
+    }
+  }
+  function clearSelection() {
+    option = null;
+    selectedRows.clear();
+    selectionActive = false;
+    coordinateFilter = null;
+    search.value = '';
+    map.closePopup();
+    markOption();
+  }
+  function selectOption({ id, label, rows, popup = null }) {
+    if (!radius.reportValidity()) return;
+    const again = option?.id === id;
+    clearSelection();
+    page = 1;
+    if (again) {
+      table();
+      draw({ fit: true });
+      return;
+    }
+    option = { id, label, rows: new Set(rows) };
+    rows.filter((row) => pointsByRow.has(row)).forEach((row) => selectedRows.add(row));
+    selectionActive = true;
+    markOption();
+    table();
+    draw({ fit: true });
+    if (!selectedRows.size) {
+      message(`${label}: sus registros no tienen coordenadas válidas para mostrar en el mapa; se listan en la tabla.`, true);
+      byId('planningData').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      return;
+    }
+    if (popup) {
+      const description = document.createElement('div');
+      description.textContent = popup.text;
+      L.popup().setLatLng([popup.lat, popup.lng]).setContent(description).openOn(map);
+    }
+    mapElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
   function antennaSummary() {
     const fragment = document.createDocumentFragment();
     // Only antennas that can be placed on the map are listed; the rest are counted in a note.
@@ -190,21 +238,12 @@ if (!window.L) {
       const coordinates = document.createElement('span');
       coordinates.textContent = group.coordinates;
       button.append(title, location, coordinates);
-      button.addEventListener('click', () => {
-        if (!radius.reportValidity()) return;
-        selectedRows.clear();
-        group.points.forEach((point) => selectedRows.add(point.row));
-        selectionActive = true;
-        coordinateFilter = null;
-        page = 1;
-        table();
-        draw({ fit: true });
-        const description = document.createElement('div');
-        description.textContent = `${group.name} · ${group.ubicacion} · ${group.lugar} · ${group.rows.length} registros`;
-        const point = group.points[0];
-        L.popup().setLatLng([point.lat, point.lng]).setContent(description).openOn(map);
-        mapElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      });
+      const antennaId = `antena:${group.name}|${group.coordinates}`;
+      button.dataset.option = antennaId;
+      button.addEventListener('click', () => selectOption({
+        id: antennaId, label: `Antena ${group.name}`, rows: group.rows,
+        popup: { lat: group.points[0].lat, lng: group.points[0].lng, text: `${group.name} · ${group.ubicacion} · ${group.lugar} · ${group.rows.length} registros` },
+      }));
       const copy = document.createElement('button');
       copy.type = 'button';
       copy.className = 'btn btn-sm btn-outline-secondary planning-copy';
@@ -234,21 +273,15 @@ if (!window.L) {
       fragment.append(note);
     }
     byId('planningAntennas').replaceChildren(fragment);
+    markOption();
   }
   const formatNight = (night) => night.split('-').reverse().join('/');
+  const overnightId = (location) => `pernocta:${location.coordinates}`;
   function showOvernight(location) {
-    if (!radius.reportValidity()) return;
-    selectedRows.clear();
-    location.rows.forEach((row) => selectedRows.add(row));
-    selectionActive = true;
-    coordinateFilter = null;
-    page = 1;
-    table();
-    draw({ fit: true });
-    const description = document.createElement('div');
-    description.textContent = `Pernocta: ${location.name} · ${location.nights} noches · ${location.rows.length} registros nocturnos`;
-    L.popup().setLatLng([location.lat, location.lng]).setContent(description).openOn(map);
-    mapElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    selectOption({
+      id: overnightId(location), label: `Pernocta ${location.name}`, rows: location.rows,
+      popup: { lat: location.lat, lng: location.lng, text: `Pernocta: ${location.name} · ${location.nights} noches · ${location.rows.length} registros nocturnos` },
+    });
   }
   function overnightSummary() {
     overnightLayer.clearLayers();
@@ -291,6 +324,7 @@ if (!window.L) {
       const coordinates = document.createElement('span');
       coordinates.textContent = location.coordinates;
       button.append(title, place, detail, coordinates);
+      button.dataset.option = overnightId(location);
       button.addEventListener('click', () => showOvernight(location));
       fragment.append(button);
       // Numbered pins above the coverage, the most likely one larger and in its own colour.
@@ -310,6 +344,7 @@ if (!window.L) {
       fragment.append(empty);
     }
     list.replaceChildren(fragment);
+    markOption();
   }
   let contacts = null;
   function contactSummary() {
@@ -344,23 +379,8 @@ if (!window.L) {
         range.textContent = `Del ${formatContactTime(contact.first)} al ${formatContactTime(contact.last)}`;
         button.append(range);
       }
-      button.addEventListener('click', () => {
-        if (!radius.reportValidity()) return;
-        const located = contact.rows.filter((row) => pointsByRow.has(row));
-        if (!located.length) {
-          message(`Los registros con ${contact.line} no tienen coordenadas válidas para mostrar en el mapa.`, true);
-          return;
-        }
-        selectedRows.clear();
-        located.forEach((row) => selectedRows.add(row));
-        selectionActive = true;
-        coordinateFilter = null;
-        search.value = contact.line;
-        page = 1;
-        table();
-        draw({ fit: true });
-        mapElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      });
+      button.dataset.option = `contacto:${contact.line}`;
+      button.addEventListener('click', () => selectOption({ id: `contacto:${contact.line}`, label: `Contacto ${contact.line}`, rows: contact.rows }));
       const copy = document.createElement('button');
       copy.type = 'button';
       copy.className = 'btn btn-sm btn-outline-secondary planning-copy';
@@ -391,6 +411,7 @@ if (!window.L) {
       fragment.append(skipped);
     }
     byId('planningContacts').replaceChildren(fragment);
+    markOption();
   }
   function showCoordinateRecords(point) {
     coordinateFilter = coordinateKey(point);
@@ -463,6 +484,7 @@ if (!window.L) {
     const visible = [];
     for (const [offset, row] of data.rows.entries()) {
       const rowNumber = offset + 1;
+      if (option && !option.rows.has(rowNumber)) continue;
       if (coordinateFilter !== null && coordinateKey(pointsByRow.get(rowNumber)) !== coordinateFilter) continue;
       if (!inPeriod(rowNumber) || !rowMatches(row, search.value)) continue;
       visible.push(rowNumber);
@@ -522,12 +544,13 @@ if (!window.L) {
     }
     byId('planningRows').replaceChildren(fragment);
     const filters = [
+      option ? option.label : '',
       coordinateFilter === null ? '' : `Coordenadas: ${coordinateFilter}`,
       timeFilterActive() ? 'Periodo filtrado' : '',
       search.value.trim() ? `Búsqueda: “${search.value.trim()}”` : '',
     ].filter(Boolean).join(' · ');
     byId('planningFile').textContent = `${data.name} · Línea ${data.line} · ${visible.length} de ${data.rows.length} registros${filters ? ` · ${filters}` : ''}`;
-    byId('planningClearFilter').hidden = coordinateFilter === null;
+    byId('planningClearFilter').hidden = coordinateFilter === null && !option;
     const pager = document.querySelector('.planning-pager');
     pager.hidden = totalPages <= 1;
     byId('planningPageInfo').textContent = `Página ${page} de ${totalPages}`;
@@ -548,11 +571,8 @@ if (!window.L) {
   }
   function load(result) {
     data = { times: {}, hasTimes: false, ...result };
-    selectedRows.clear();
-    selectionActive = false;
-    coordinateFilter = null;
+    clearSelection();
     page = 1;
-    search.value = '';
     search.disabled = false;
     from.value = '';
     to.value = '';
@@ -647,15 +667,19 @@ if (!window.L) {
   byId('planningNext').addEventListener('click', () => { page++; table(); });
   byId('planningClearFilter').addEventListener('click', () => {
     if (!data) return;
-    coordinateFilter = null;
     page = 1;
+    if (!option) {
+      coordinateFilter = null;
+      table();
+      return;
+    }
+    clearSelection();
     table();
+    draw({ fit: true });
   });
   byId('planningFit').addEventListener('click', () => {
     if (!data || !radius.reportValidity()) return;
-    selectedRows.clear();
-    selectionActive = false;
-    coordinateFilter = null;
+    clearSelection();
     table();
     draw({ fit: true });
   });

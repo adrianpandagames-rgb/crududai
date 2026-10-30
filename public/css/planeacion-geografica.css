@@ -42,3 +42,6 @@ html[data-theme="dark"] .planning-legend { background: rgba(31, 41, 55, .94); co
 .planning-overnight-top .planning-overnight-rank { background: #6e3fc4; }
 .planning-overnight-marker { display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 2px solid #fff; border-radius: 50%; background: #16456b; color: #fff; font: 700 12px/1 system-ui, sans-serif; box-shadow: 0 1px 5px rgba(0, 0, 0, .45); }
 .planning-overnight-marker.is-top { width: 32px; height: 32px; background: #6e3fc4; font-size: 14px; }
+/* The option whose records the map and the table are showing. */
+.planning-antenna.is-selected { border-color: #087cf0; background: #dceeff; box-shadow: inset 4px 0 0 #087cf0; }
+html[data-theme="dark"] .planning-antenna.is-selected { background: #16324f; color: #e6f0fa; }
