@@ -110,6 +110,14 @@
         <p class="small text-muted mb-2">Apariciones en el archivo. Pulsa una antena para identificarla en el mapa; “Copiar” la lleva al portapapeles.</p>
         <div id="planningAntennas" class="planning-antennas-list"><p class="small mb-0">Importa un archivo para ver las antenas.</p></div>
       </div>
+      <div class="planning-antennas mb-3" aria-labelledby="planningContactsTitle">
+        <div class="d-flex justify-content-between align-items-center gap-2">
+          <h3 id="planningContactsTitle" class="h6 mb-0">Contactos frecuentes</h3>
+          <button id="planningContactsExport" class="btn btn-sm btn-outline-secondary" type="button" disabled>Exportar CSV</button>
+        </div>
+        <p id="planningContactsTarget" class="small text-muted my-2">Con las columnas Número A y Número B se identifica la línea objetivo y se cuentan sus contactos. Pulsa un contacto para ver en el mapa dónde se comunicó con él.</p>
+        <div id="planningContacts" class="planning-antennas-list"><p class="small mb-0">Importa un archivo para ver los contactos.</p></div>
+      </div>
       <h3 class="h5">Información del archivo</h3>
       <p class="small text-muted">Marca las casillas o haz clic en los registros para mostrar únicamente esas antenas; vuelve a pulsar para quitarlas. Haz clic en un punto del mapa para ver los registros de esas coordenadas.</p>
       <p id="planningFile" class="small">No hay archivo importado.</p>
@@ -130,6 +138,6 @@
   </main>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="/public/js/ruta-upload.js"></script>
-  <script type="module" src="/public/js/planeacion-geografica.js?v=7"></script>
+  <script type="module" src="/public/js/planeacion-geografica.js?v=8"></script>
 </body>
 </html>

@@ -3,6 +3,7 @@ import {
   summarizeAntennas, antennaClipboardText, antennaClipboardHtml, rowMatches, frequencyScale, selectionCsv,
 } from './planeacion-antenas.js?v=8';
 import { findOvernightLocations } from './planeacion-pernocta.js?v=1';
+import { summarizeContacts, contactCells, contactsCsv, formatContactTime } from './planeacion-contactos.js?v=1';
 
 const byId = (id) => document.getElementById(id);
 const status = byId('planningStatus');
@@ -310,6 +311,87 @@ if (!window.L) {
     }
     list.replaceChildren(fragment);
   }
+  let contacts = null;
+  function contactSummary() {
+    contacts = summarizeContacts(data, inPeriod);
+    const fragment = document.createDocumentFragment();
+    const note = byId('planningContactsTarget');
+    byId('planningContactsExport').disabled = !contacts?.contacts.length;
+    if (!contacts) {
+      note.textContent = 'El archivo no tiene columnas Número A y Número B; no es posible identificar contactos.';
+      byId('planningContacts').replaceChildren();
+      return;
+    }
+    const period = timeFilterActive() ? ' en el periodo elegido' : '';
+    note.textContent = !contacts.target ? 'No se encontraron números en las columnas A y B.'
+      : contacts.detected
+        ? `Objetivo detectado: ${contacts.target} (el número más frecuente en A y B${contacts.typed ? `; la línea capturada ${contacts.typed} no aparece en el archivo` : ''}). ${contacts.contacts.length} contactos${period}.`
+        : `Objetivo: ${contacts.target}. ${contacts.contacts.length} contactos${period}. Pulsa un contacto para ver en el mapa dónde se comunicó con él.`;
+    const total = contacts.contacts.reduce((sum, contact) => sum + contact.total, 0);
+    for (const contact of contacts.contacts) {
+      const item = document.createElement('div');
+      item.className = 'planning-antenna-item';
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'planning-antenna';
+      const title = document.createElement('strong');
+      title.textContent = `${contact.line} · ${contact.total} registros`;
+      const direction = document.createElement('span');
+      direction.textContent = `Salientes: ${contact.outgoing} · Entrantes: ${contact.incoming}`;
+      button.append(title, direction);
+      if (contact.first) {
+        const range = document.createElement('span');
+        range.textContent = `Del ${formatContactTime(contact.first)} al ${formatContactTime(contact.last)}`;
+        button.append(range);
+      }
+      button.addEventListener('click', () => {
+        if (!radius.reportValidity()) return;
+        const located = contact.rows.filter((row) => pointsByRow.has(row));
+        if (!located.length) {
+          message(`Los registros con ${contact.line} no tienen coordenadas válidas para mostrar en el mapa.`, true);
+          return;
+        }
+        selectedRows.clear();
+        located.forEach((row) => selectedRows.add(row));
+        selectionActive = true;
+        coordinateFilter = null;
+        search.value = contact.line;
+        page = 1;
+        table();
+        draw({ fit: true });
+        mapElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
+      const copy = document.createElement('button');
+      copy.type = 'button';
+      copy.className = 'btn btn-sm btn-outline-secondary planning-copy';
+      copy.textContent = 'Copiar';
+      copy.setAttribute('aria-label', `Copiar el contacto ${contact.line} al portapapeles`);
+      copy.addEventListener('click', () => {
+        const cells = contactCells(contact, total);
+        copyAntenna(cells.join('\t'), `<table><tr>${cells.map((cell) => `<td>${cell}</td>`).join('')}</tr></table>`)
+          .then(() => {
+            copy.textContent = 'Copiado';
+            setTimeout(() => { copy.textContent = 'Copiar'; }, 1500);
+          })
+          .catch(() => message('No fue posible copiar el contacto al portapapeles. Intenta de nuevo.', true));
+      });
+      item.append(button, copy);
+      fragment.append(item);
+    }
+    if (contacts.target && !contacts.contacts.length) {
+      const empty = document.createElement('p');
+      empty.className = 'small mb-0';
+      empty.textContent = `Ningún registro${period} tiene un contacto del objetivo.`;
+      fragment.append(empty);
+    }
+    if (contacts.withoutContact) {
+      const skipped = document.createElement('p');
+      skipped.className = 'small text-muted mb-0';
+      skipped.textContent = `${contacts.withoutContact} registros sin contacto (datos, servicios o sin número en A o B).`;
+      fragment.append(skipped);
+    }
+    byId('planningContacts').replaceChildren(fragment);
+  }
   function showCoordinateRecords(point) {
     coordinateFilter = coordinateKey(point);
     page = 1;
@@ -483,6 +565,7 @@ if (!window.L) {
     pointsByRow = new Map(data.points.map((point) => [point.row, point]));
     antennaSummary();
     overnightSummary();
+    contactSummary();
     const tr = document.createElement('tr');
     const selectionHeader = document.createElement('th');
     selectionHeader.scope = 'col';
@@ -539,6 +622,7 @@ if (!window.L) {
       return;
     }
     page = 1;
+    contactSummary();
     table();
     draw();
     overnightSummary();
@@ -577,6 +661,9 @@ if (!window.L) {
   });
   byId('planningExport').addEventListener('click', () => {
     if (data) download(`Planeacion-${safeLine(data.line)}.csv`, data.csv);
+  });
+  byId('planningContactsExport').addEventListener('click', () => {
+    if (contacts?.contacts.length) download(`Contactos-${safeLine(contacts.target)}.csv`, contactsCsv(contacts));
   });
   byId('planningExportSelection').addEventListener('click', () => {
     if (!data || !selectedRows.size) return;
