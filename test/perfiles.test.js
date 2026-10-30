@@ -214,33 +214,43 @@ test('the tab registers a profile, taking Nombre and Dirección from the Excel u
   assert.equal(served.headers.get('x-content-type-options'), 'nosniff');
   assert.equal((await fetch(`${base}/imagenes/5`, { headers: { 'x-role': 'uecs' } })).status, 404);
 
+  // UECS registers profiles and adds photos, but sees no edit or delete controls and is turned away from those routes.
+  const uecsPage = await (await fetch(base, { headers: { 'x-role': 'uecs' } })).text();
+  assert.ok(uecsPage.includes('Agregar fotos a JUAN PÉREZ'));
+  assert.ok(!/\/editar\?|\/eliminar"|Eliminar foto|Eliminar todas las fotos|<th>Acciones/.test(uecsPage));
+  for (const [method, route] of [['GET', '/2/editar'], ['POST', '/2/editar'], ['POST', '/eliminar/1'], ['POST', '/imagenes/1/eliminar'], ['POST', '/2/imagenes/eliminar']]) {
+    const denied = await fetch(`${base}${route}`, { method, redirect: 'manual', headers: { 'x-role': 'uecs' } });
+    assert.match(message(denied), /no editarlos ni eliminarlos/, `${method} ${route}`);
+  }
+  assert.equal(images.length, 2);
+
   // A profile with images stays until they are deleted; its trash button is disabled meanwhile.
-  const listPage = await (await fetch(base, { headers: { 'x-role': 'uecs' } })).text();
+  const listPage = await (await fetch(base, { headers: { 'x-role': 'admin' } })).text();
   assert.match(listPage, /aria-label="Eliminar perfil de JUAN PÉREZ: primero elimine sus fotos"/);
-  const blocked = await fetch(`${base}/eliminar/2`, { method: 'POST', redirect: 'manual', headers: { 'x-role': 'uecs' } });
+  const blocked = await fetch(`${base}/eliminar/2`, { method: 'POST', redirect: 'manual', headers: { 'x-role': 'admin' } });
   assert.match(message(blocked), /Elimínelas primero/);
   // Actions return to the profile's row with its photos open, keeping the list's search and page.
   const removed = await fetch(`${base}/imagenes/1/eliminar`, {
     method: 'POST', redirect: 'manual', body: new URLSearchParams({ volver: 'search=juan&page=2&pageSize=20&message=x' }),
-    headers: { 'x-role': 'uecs', 'content-type': 'application/x-www-form-urlencoded' },
+    headers: { 'x-role': 'admin', 'content-type': 'application/x-www-form-urlencoded' },
   });
   assert.match(message(removed), /Imagen eliminada/);
   const back = new URL(removed.headers.get('location'), base);
   assert.deepEqual([back.searchParams.get('search'), back.searchParams.get('page'), back.searchParams.get('pageSize'), back.searchParams.get('abierto'), back.hash],
     ['juan', '2', '20', '2', '#perfil-2']);
   assert.equal(images.length, 1);
-  assert.ok((await (await fetch(`${base}?abierto=2`, { headers: { 'x-role': 'uecs' } })).text()).includes('<details class="perfil-galeria" open>'));
-  assert.match(message(await fetch(`${base}/2/imagenes/eliminar`, { method: 'POST', redirect: 'manual', headers: { 'x-role': 'uecs' } })),
+  assert.ok((await (await fetch(`${base}?abierto=2`, { headers: { 'x-role': 'admin' } })).text()).includes('<details class="perfil-galeria" open>'));
+  assert.match(message(await fetch(`${base}/2/imagenes/eliminar`, { method: 'POST', redirect: 'manual', headers: { 'x-role': 'admin' } })),
     /Se eliminó 1 imagen/);
   assert.equal(images.length, 0);
 
-  assert.ok(page.includes('href="/perfiles/2/editar?'));
-  const editPage = await (await fetch(`${base}/2/editar`, { headers: { 'x-role': 'uecs' } })).text();
+  assert.ok(listPage.includes('href="/perfiles/2/editar?'));
+  const editPage = await (await fetch(`${base}/2/editar`, { headers: { 'x-role': 'admin' } })).text();
   assert.ok(editPage.includes('value="JUAN PÉREZ"') && editPage.includes('CALLE 5</textarea>'));
-  assert.match(message(await fetch(`${base}/9/editar`, { redirect: 'manual', headers: { 'x-role': 'uecs' } })), /no fue encontrado/);
+  assert.match(message(await fetch(`${base}/9/editar`, { redirect: 'manual', headers: { 'x-role': 'admin' } })), /no fue encontrado/);
   const edit = (id, body) => fetch(`${base}/${id}/editar`, {
     method: 'POST', redirect: 'manual', body: new URLSearchParams(body),
-    headers: { 'x-role': 'uecs', 'content-type': 'application/x-www-form-urlencoded' },
+    headers: { 'x-role': 'admin', 'content-type': 'application/x-www-form-urlencoded' },
   });
   const invalidEdit = await edit(2, { nombre: '', direccion: 'Otra', linea: '6621234567' });
   assert.equal(invalidEdit.status, 400);
@@ -248,7 +258,7 @@ test('the tab registers a profile, taking Nombre and Dirección from the Excel u
   assert.match(message(await edit(2, { nombre: ' Juan  Pérez Ruiz ', direccion: 'Calle 9', alias: 'Juan P (WhatsApp)', linea: '662 123 4567' })), /actualizado/);
   assert.deepEqual([created[1].nombre, created[1].direccion, created[1].alias, created[1].linea],
     ['Juan Pérez Ruiz', 'Calle 9', 'Juan P (WhatsApp)', '662 123 4567']);
-  assert.ok((await (await fetch(`${base}/2/editar`, { headers: { 'x-role': 'uecs' } })).text()).includes('value="Juan P (WhatsApp)"'));
+  assert.ok((await (await fetch(`${base}/2/editar`, { headers: { 'x-role': 'admin' } })).text()).includes('value="Juan P (WhatsApp)"'));
   assert.match(message(await edit(9, { nombre: 'X', linea: '1' })), /no fue encontrado/);
 });
 

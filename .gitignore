@@ -183,3 +183,6 @@ __pycache__/
 
 # Maigret site database cache (the app user home is the project folder)
 .maigret/
+
+# Claude rule
+.claude/settings.local.json

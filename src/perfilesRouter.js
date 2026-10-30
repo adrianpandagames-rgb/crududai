@@ -30,6 +30,10 @@ export function createPerfilesRouter(pool, { perfiles = createPerfilesStore(pool
     res.setHeader('Cache-Control', 'no-store');
     next();
   });
+  // UECS registers profiles and adds photos, but cannot edit or delete either.
+  const noUecs = (req, res, next) => (req.session.role === 'uecs'
+    ? redirect(res, 'UECS puede registrar perfiles y agregar fotos, pero no editarlos ni eliminarlos.', 'error', { req })
+    : next());
 
   // The list with its search and page; extra carries the form and message of the page being rendered.
   const renderList = async (req, res, extra, status = 200) => {
@@ -101,7 +105,7 @@ export function createPerfilesRouter(pool, { perfiles = createPerfilesStore(pool
     }
   });
 
-  router.get('/:id/editar', async (req, res, next) => {
+  router.get('/:id/editar', noUecs, async (req, res, next) => {
     try {
       const perfil = /^\d+$/.test(req.params.id) ? await perfiles.get(req.params.id, req.session) : null;
       if (!perfil) return redirect(res, 'El perfil no fue encontrado.');
@@ -111,7 +115,7 @@ export function createPerfilesRouter(pool, { perfiles = createPerfilesStore(pool
     }
   });
 
-  router.post('/:id/editar', async (req, res, next) => {
+  router.post('/:id/editar', noUecs, async (req, res, next) => {
     if (!/^\d+$/.test(req.params.id)) return redirect(res, 'El perfil no fue encontrado.');
     const { perfil, error } = validarPerfil(req.body);
     try {
@@ -156,7 +160,7 @@ export function createPerfilesRouter(pool, { perfiles = createPerfilesStore(pool
     }
   });
 
-  router.post('/:id/imagenes/eliminar', async (req, res, next) => {
+  router.post('/:id/imagenes/eliminar', noUecs, async (req, res, next) => {
     try {
       const removed = /^\d+$/.test(req.params.id) ? await perfiles.removeAllImages(req.params.id, req.session) : null;
       if (removed === null) return redirect(res, 'El perfil no fue encontrado.', 'error', { req });
@@ -180,7 +184,7 @@ export function createPerfilesRouter(pool, { perfiles = createPerfilesStore(pool
     }
   });
 
-  router.post('/imagenes/:id/eliminar', async (req, res, next) => {
+  router.post('/imagenes/:id/eliminar', noUecs, async (req, res, next) => {
     try {
       const perfilId = /^\d+$/.test(req.params.id) ? await perfiles.removeImage(req.params.id, req.session) : null;
       return perfilId ? redirect(res, 'Imagen eliminada correctamente.', 'success', { req, perfilId })
@@ -190,7 +194,7 @@ export function createPerfilesRouter(pool, { perfiles = createPerfilesStore(pool
     }
   });
 
-  router.post('/eliminar/:id', async (req, res, next) => {
+  router.post('/eliminar/:id', noUecs, async (req, res, next) => {
     try {
       const outcome = /^\d+$/.test(req.params.id) ? await perfiles.remove(req.params.id, req.session) : 'no-encontrado';
       if (outcome === 'eliminado') return redirect(res, 'Perfil eliminado correctamente.', 'success', { req });

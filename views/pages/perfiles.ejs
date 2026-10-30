@@ -175,11 +175,13 @@
               <%= total === 1 ? '1 perfil' : `${total} perfiles` %><%= search ? ` para «${search}»` : '' %>
             </span>
           </form>
+          <%# UECS registers profiles and adds photos, but cannot edit or delete either. %>
+          <% const puedeModificar = !(typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'uecs'); %>
           <div class="table-responsive">
             <table class="table w-100 table-stack perfiles-table">
               <caption class="visually-hidden">Perfiles registrados<%= totalPages > 1 ? `, página ${currentPage} de ${totalPages}` : '' %></caption>
               <colgroup>
-                <col style="width: 30%" /><col style="width: 21%" /><col style="width: 14%" /><col style="width: 12%" /><col style="width: 14%" /><col style="width: 9%" />
+                <col style="width: 30%" /><col style="width: 21%" /><col style="width: 14%" /><col style="width: 12%" /><col style="width: 14%" /><% if (puedeModificar) { %><col style="width: 9%" /><% } %>
               </colgroup>
               <thead>
                 <tr>
@@ -188,12 +190,12 @@
                   <th>Alias OSINT</th>
                   <th>Línea</th>
                   <th>Registrado</th>
-                  <th>Acciones</th>
+                  <% if (puedeModificar) { %><th>Acciones</th><% } %>
                 </tr>
               </thead>
               <tbody>
                 <% if (perfiles.length === 0) { %>
-                  <tr><td colspan="6" class="text-center">
+                  <tr><td colspan="<%= puedeModificar ? 6 : 5 %>" class="text-center">
                     <% if (search) { %>
                       Ningún perfil coincide con «<%= search %>». <a href="/perfiles?pageSize=<%= pageSize %>">Ver todos</a>
                     <% } else { %>
@@ -229,13 +231,15 @@
                                     <a href="/perfiles/imagenes/<%= imagenId %>" target="_blank" rel="noopener">
                                       <img src="/perfiles/imagenes/<%= imagenId %>" alt="Foto <%= index + 1 %> de <%= nombre %> (se abre en otra pestaña)" loading="lazy" />
                                     </a>
-                                    <form action="/perfiles/imagenes/<%= imagenId %>/eliminar" method="POST" class="m-0"
-                                      data-confirm="¿Desea eliminar la foto <%= index + 1 %> de &quot;<%= nombre %>&quot;?" data-confirm-action="Eliminar foto">
-                                      <input type="hidden" name="volver" value="<%= volver %>" />
-                                      <button type="submit" class="btn btn-sm btn-outline-danger" aria-label="Eliminar foto <%= index + 1 %> de <%= nombre %>" title="Eliminar foto">
-                                        <i class="bi bi-x-lg" aria-hidden="true"></i>
-                                      </button>
-                                    </form>
+                                    <% if (puedeModificar) { %>
+                                      <form action="/perfiles/imagenes/<%= imagenId %>/eliminar" method="POST" class="m-0"
+                                        data-confirm="¿Desea eliminar la foto <%= index + 1 %> de &quot;<%= nombre %>&quot;?" data-confirm-action="Eliminar foto">
+                                        <input type="hidden" name="volver" value="<%= volver %>" />
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" aria-label="Eliminar foto <%= index + 1 %> de <%= nombre %>" title="Eliminar foto">
+                                          <i class="bi bi-x-lg" aria-hidden="true"></i>
+                                        </button>
+                                      </form>
+                                    <% } %>
                                   </div>
                                 <% }) %>
                                 <form action="/perfiles/<%= perfil.id %>/imagenes" method="POST" enctype="multipart/form-data" class="m-0" style="--i: <%= Math.min(fotos, 7) %>">
@@ -248,7 +252,7 @@
                                   </label>
                                 </form>
                               </div>
-                              <% if (fotos > 1) { %>
+                              <% if (puedeModificar && fotos > 1) { %>
                                 <form action="/perfiles/<%= perfil.id %>/imagenes/eliminar" method="POST" class="m-0 mt-2"
                                   data-confirm="¿Desea eliminar las <%= fotos %> fotos de &quot;<%= nombre %>&quot;? No se pueden recuperar." data-confirm-action="Eliminar fotos">
                                   <input type="hidden" name="volver" value="<%= volver %>" />
@@ -266,7 +270,7 @@
                         <div><%= perfil.createdAt %></div>
                         <div class="text-muted"><%= perfil.createdBy || '—' %><%= perfil.origen === 'archivo' ? ' · desde Líneas' : '' %></div>
                       </td>
-                      <td data-label="Acciones">
+                      <% if (puedeModificar) { %><td data-label="Acciones">
                         <div class="perfil-acciones d-flex align-items-center gap-2 flex-nowrap">
                           <a class="btn btn-sm btn-outline-primary" href="/perfiles/<%= perfil.id %>/editar?<%= volver %>" aria-label="Editar perfil de <%= nombre %>" title="Editar perfil">
                             <i class="bi bi-pencil-square" aria-hidden="true"></i>
@@ -289,7 +293,7 @@
                             </form>
                           <% } %>
                         </div>
-                      </td>
+                      </td><% } %>
                     </tr>
                   <% }) %>
                 <% } %>
@@ -338,5 +342,6 @@
         });
       });
     </script>
+    <%- include('../includes/footer') %>
   </body>
 </html>

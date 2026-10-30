@@ -401,6 +401,16 @@ app.get('/terminos', (_req, res) => {
   return res.render('pages/terminos');
 });
 
+// UECS users get their own manual; everyone else reads the general one. Both live outside /public so only
+// signed-in users can download them.
+const manualesDir = fileURLToPath(new URL('./manuales/', import.meta.url));
+app.get('/manual', requireAuth, (req, res) => {
+  const file = req.session.role === 'uecs' ? 'manual-uecs.pdf' : 'manual-usuario.pdf';
+  return res.sendFile(file, { root: manualesDir }, (error) => {
+    if (error && !res.headersSent) res.status(404).send('El manual de usuario aún no está disponible.');
+  });
+});
+
 app.get('/inicio', (req, res) => {
   res.render('inicio');
 });

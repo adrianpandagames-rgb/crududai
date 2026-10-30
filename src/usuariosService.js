@@ -8,7 +8,7 @@ export const roleLabels = {
 
 export const roleDescriptions = {
   usuario: 'Consulta y registra en Líneas, IMEI, Ubicaciones y Métricas. No puede editar registros existentes.',
-  uecs: 'Solo busca y consulta Líneas, IMEI y Ubicaciones; además usa Georreferenciación, Planeación, Ruta y las herramientas de búsqueda. No ve Métricas.',
+  uecs: 'Solo busca y consulta Líneas, IMEI y Ubicaciones; además usa Georreferenciación, Planeación, Ruta y las herramientas de búsqueda. En Perfiles registra y agrega fotos, sin editar ni eliminar. No ve Métricas.',
   semiadmin: 'Igual que Usuario y además puede editar registros existentes.',
   admin: 'Acceso completo, incluidos Usuarios, Auditoría, Medidores y Red telefónica.',
 };

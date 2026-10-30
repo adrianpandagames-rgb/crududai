@@ -95,3 +95,9 @@
 @media (min-width: 1200px) { .metricas-workspace { width: 70%; } }
 /* On small screens each row of a .table-stack table becomes a card; cells show their data-label. */
 @media (max-width: 767.98px) { table.table.table-stack { min-width: 0 !important; table-layout: auto; } .table-stack thead { display: none; } .table-stack tbody, .table-stack tr { display: block; width: 100%; } .table-stack tr { margin-bottom: .75rem; padding: .5rem .75rem; border: 1px solid rgba(127, 127, 127, .3); border-radius: .5rem; } .table-stack tr > * { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; width: 100% !important; min-width: 0 !important; padding: .3rem 0 !important; border: 0; text-align: right !important; white-space: normal !important; overflow-wrap: anywhere; } .table-stack tr > *::before { content: attr(data-label); flex-shrink: 0; font-weight: 600; text-align: left; opacity: .7; } .table-stack tr > [colspan] { justify-content: center; text-align: center !important; } .table-stack tr > [colspan]::before { content: none; } .table-stack .btn { width: auto; } }
+
+.site-footer {
+  padding: 16px;
+  text-align: center;
+  font-size: 0.9rem;
+}
