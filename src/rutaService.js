@@ -28,7 +28,8 @@ export const firstListedValue = (value) => {
 };
 
 export const parseCoordinateNumber = (rawValue, delimiter = ',') => {
-  const value = firstListedValue(rawValue);
+  // Some carriers prefix coordinates with an apostrophe ("'-110.94") so Excel keeps them as text.
+  const value = String(firstListedValue(rawValue) ?? '').trim().replace(/^'/, '');
   const normalizedValue = String(value ?? '')
     .trim()
     .replace(/\s+/g, '')
@@ -186,6 +187,48 @@ export const buildRutaLocationIndex = (locations) => {
   return index;
 };
 
+export function distanceMetres(a, b) {
+  const radians = Math.PI / 180;
+  const dPhi = (b.lat - a.lat) * radians;
+  const dLambda = (b.lng - a.lng) * radians;
+  const h = Math.sin(dPhi / 2) ** 2 + Math.cos(a.lat * radians) * Math.cos(b.lat * radians) * Math.sin(dLambda / 2) ** 2;
+  return 6371008.8 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+// Carriers round coordinates differently from Ubicaciones (29.01384722 vs 29.013844), so a site
+// without an exact match takes the closest registered one within this distance.
+const NEARBY_LOCATION_METRES = 100;
+// Buckets of 0.01° (about 1.1 km) so each lookup only measures the neighbouring cells.
+const buildNearbyLocationLookup = (locations) => {
+  const cells = new Map();
+  const cellOf = (lat, lng) => [Math.floor(lat * 100), Math.floor(lng * 100)];
+  for (const location of locations) {
+    const lat = Number(location.latitude);
+    const lng = Number(location.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+    const key = cellOf(lat, lng).join(',');
+    if (!cells.has(key)) cells.set(key, []);
+    cells.get(key).push({ lat, lng, location });
+  }
+  return (lat, lng) => {
+    const [row, column] = cellOf(lat, lng);
+    let best = null;
+    let bestDistance = NEARBY_LOCATION_METRES;
+    for (let dRow = -1; dRow <= 1; dRow++) {
+      for (let dColumn = -1; dColumn <= 1; dColumn++) {
+        for (const candidate of cells.get(`${row + dRow},${column + dColumn}`) || []) {
+          const distance = distanceMetres({ lat, lng }, candidate);
+          if (distance <= bestDistance) {
+            best = candidate.location;
+            bestDistance = distance;
+          }
+        }
+      }
+    }
+    return best;
+  };
+};
+
 // Official annexes often start with a title, an office number or blank lines before the table.
 // The header is the first of the opening rows naming latitude and longitude, or else an antenna column.
 const HEADER_SEARCH_ROWS = 30;
@@ -227,6 +270,7 @@ const processRutaRows = (sourceRows, locations, delimiter = ',') => {
   const outputLatitudeColumn = ensureColumn(latitudeColumn, 'latitud');
   const outputLongitudeColumn = ensureColumn(longitudeColumn, 'longitud');
   const locationIndex = buildRutaLocationIndex(locations);
+  const nearbyLocation = buildNearbyLocationLookup(locations);
   const antennaNumbers = new Map();
   const result = [outputHeaders];
   let nextAntennaNumber = 1;
@@ -263,10 +307,16 @@ const processRutaRows = (sourceRows, locations, delimiter = ',') => {
     const antennaKey = normalizeRutaValue(sourceKey);
     if (!antennaNumbers.has(antennaKey)) antennaNumbers.set(antennaKey, nextAntennaNumber++);
 
-    const location = locationIndex.get(coordinateKey) || locationIndex.get(normalizeRutaValue(rawAntenna));
+    // With valid coordinates the antenna name is never looked up: a previous export numbers antennas
+    // 1, 2, 3…, and those numbers would match unrelated Ubicaciones ids.
+    const location = coordinateKey && rawLatitude && rawLongitude
+      ? locationIndex.get(coordinateKey) || nearbyLocation(numericLatitude, numericLongitude)
+      : locationIndex.get(normalizeRutaValue(rawAntenna));
     outputRow[outputAntennaColumn] = antennaNumbers.get(antennaKey);
-    outputRow[outputLocationColumn] = location?.ubicacion ?? '';
-    outputRow[outputPlaceColumn] = location?.lugar ?? '';
+    // The file's own location and place win; Ubicaciones only fills the cells it left empty.
+    const keepOwn = (column) => column >= 0 && String(sourceRow[column] ?? '').trim() !== '';
+    if (!keepOwn(locationColumn)) outputRow[outputLocationColumn] = location?.ubicacion ?? '';
+    if (!keepOwn(placeColumn)) outputRow[outputPlaceColumn] = location?.lugar ?? '';
     if (!rawLatitude && location) outputRow[outputLatitudeColumn] = location.latitude ?? '';
     if (!rawLongitude && location) outputRow[outputLongitudeColumn] = location.longitude ?? '';
     result.push(outputRow);

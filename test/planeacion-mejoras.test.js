@@ -117,3 +117,23 @@ test('AT&T cells listing several coordinates use only the first one', async () =
   assert.deepEqual(result.points, [{ lat: 20.091234, lng: -98.361234, azimuth: 305, row: 1, time: '2026-07-23T00:27' }]);
   assert.equal(result.omitted, 1);
 });
+
+test('the file location wins and an earlier antenna number never matches an Ubicaciones id', () => {
+  const locations = [
+    { idUbicacion: 1, latitude: 32.443525, longitude: -114.793567, ubicacion: 'Col del Bosque', lugar: 'San Luis Río Colorado, Sonora.' },
+    { idUbicacion: 77, latitude: 29.013844, longitude: -110.944683, ubicacion: 'Altares', lugar: 'Hermosillo, Sonora.' },
+  ];
+  const rows = processRutaCsv('latitud,longitud,antena,ubicacion,lugar\n'
+    + '29.01384722,-110.9446861,1,Avenida Profesor Miguel Castro,"Hermosillo, Sonora"\n'
+    + "29.01384722,'-110.9446861,1,,\n"
+    + '29.5,-111.5,1,,\n', locations);
+  const place = rows[0].indexOf('lugar');
+  const location = rows[0].indexOf('ubicacion');
+  assert.equal(rows[1][place], 'Hermosillo, Sonora');
+  assert.equal(rows[1][location], 'Avenida Profesor Miguel Castro');
+  // Empty cells take the registered site 0.4 m away, also with the apostrophe Excel uses for text.
+  assert.equal(rows[2][place], 'Hermosillo, Sonora.');
+  assert.equal(rows[2][location], 'Altares');
+  assert.equal(rows[3][place], '');
+  assert.equal(extractPlanningPoints(rows).points.length, 3);
+});

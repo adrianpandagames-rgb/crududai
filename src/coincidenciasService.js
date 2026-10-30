@@ -1,4 +1,6 @@
-import { findHeaderColumn, firstListedValue, LATITUDE_HEADERS, LONGITUDE_HEADERS, normalizeRutaValue, parseCoordinateNumber } from './rutaService.js';
+import {
+  distanceMetres, findHeaderColumn, firstListedValue, LATITUDE_HEADERS, LONGITUDE_HEADERS, normalizeRutaValue, parseCoordinateNumber,
+} from './rutaService.js';
 import { parsePlanningTimestamp } from './planeacionService.js';
 
 export const DEFAULT_MINUTES = 10;
@@ -17,13 +19,7 @@ export function lineFromFileName(name) {
   return (digits ? digits[0] : base).slice(0, 50);
 }
 
-export function distanceMetres(a, b) {
-  const radians = Math.PI / 180;
-  const dPhi = (b.lat - a.lat) * radians;
-  const dLambda = (b.lng - a.lng) * radians;
-  const h = Math.sin(dPhi / 2) ** 2 + Math.cos(a.lat * radians) * Math.cos(b.lat * radians) * Math.sin(dLambda / 2) ** 2;
-  return 6371008.8 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
-}
+export { distanceMetres };
 
 const pad = (value) => String(value).padStart(2, '0');
 export function formatTimestamp(ms) {
