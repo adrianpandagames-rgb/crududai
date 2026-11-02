@@ -19,6 +19,7 @@ import {
   agregarImei,
 } from "./estudianteController.js";
 import { imeisDeArchivo, MAX_IMEIS_POR_ARCHIVO } from './imeiUtils.js';
+import { fetchImeiMetadata } from './imeiApiClient.js';
 import { parseCsvRow } from './csvUtils.js';
 import { MAX_REDIRECT_ITEMS, parsePagination } from './routeHelpers.js';
 import pool from './db.js';
@@ -119,8 +120,8 @@ router.get("/Crud", async (req, res, next) => {
 });
 
 // The target's phones in the file go to the IMEI table under the same line, NUC, type and year, so a sábana is
-// captured once. Brand and model are left for the daily IMEI review, instead of querying the service per file.
-// The contacts are already saved, so a failure here only leaves a note in the message.
+// captured once. Brand and model are looked up as in the manual registration; when the service does not answer,
+// the daily IMEI review fills them. The contacts are already saved, so a failure here only leaves a note in the message.
 const registrarImeis = async (sheets, { numObjetivo, nucObjetivo, tipo, ano }) => {
   const { imeis, demasiados } = imeisDeArchivo(sheets);
   if (demasiados) return ` La columna IMEI trae más de ${MAX_IMEIS_POR_ARCHIVO} distintos; no se registraron IMEI.`;
@@ -128,14 +129,18 @@ const registrarImeis = async (sheets, { numObjetivo, nucObjetivo, tipo, ano }) =
   try {
     const { idObjetivo, tipo: tipoImei } = await obtenerOCrearObjetivoImei(numObjetivo, nucObjetivo, tipo, ano);
     let nuevos = 0;
+    let sinServicio = false;
     for (const imei of imeis) {
       if (await imeiExisteExacto(imei, numObjetivo, nucObjetivo, tipoImei, ano)) continue;
-      await agregarImei(imei, idObjetivo);
+      const metadata = await fetchImeiMetadata(imei).catch(() => ({ available: false }));
+      if (metadata?.available === false) sinServicio = true;
+      await agregarImei(imei, idObjetivo, metadata || {});
       nuevos += 1;
     }
     const yaEstaban = imeis.length - nuevos;
     return nuevos
       ? ` Se registraron ${nuevos} IMEI del archivo (${imeis.join(', ')}).${yaEstaban ? ` ${yaEstaban} ya estaban registrados.` : ''}`
+        + (sinServicio ? ' El sistema de IMEI no está disponible; la marca y el modelo se completarán en la revisión diaria.' : '')
       : ` Los IMEI del archivo ya estaban registrados (${imeis.join(', ')}).`;
   } catch (error) {
     console.error('No se pudieron registrar los IMEI del archivo:', error.message || error);
