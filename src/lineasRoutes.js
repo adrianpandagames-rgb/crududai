@@ -19,6 +19,7 @@ import { parseCsvRow } from './csvUtils.js';
 import { MAX_REDIRECT_ITEMS, parsePagination } from './routeHelpers.js';
 import pool from './db.js';
 import { createPerfilesStore, extractTitular, readXlsxSheets } from './perfilesService.js';
+import { contactosPorNumeros } from './contactosArchivo.js';
 
 const CONTACTS_MAX_FILE_SIZE = 5 * 1024 * 1024;
 const CONTACTS_MAX_ROWS = 10000;
@@ -204,29 +205,26 @@ router.post('/Crud/import-csv', requireRecordCreator, contactsUpload, async (req
       const message = `${reason}${await registrarTitular()}`;
       return res.json({ status: 'success', message, redirect: '/Crud?message=' + encodeURIComponent(message) + '&type=success', partialMatches: [] });
     };
-    if (headerIndex === -1 && titular?.nombre) return soloTitular('El archivo no trae la columna contactos.');
-
-    if (headerIndex === -1) {
-      return res.json({ status: 'error', message: 'El encabezado debe incluir la columna contactos, o el archivo filas de Nombre o Dirección.' });
-    }
-
-    const contactColumnIndex = headers.findIndex((value) => value === 'contactos');
-    if (contactColumnIndex === -1) {
-      return res.redirect('/Crud?message=' + encodeURIComponent('CSV header debe incluir la columna: contactos.') + '&type=error');
-    }
-
-    const contactosCSV = [];
-    for (let i = headerIndex + 1; i < rows.length; i++) {
-      const values = rows[i];
-      const contactoValue = values[contactColumnIndex] ? values[contactColumnIndex].trim() : '';
-      if (contactoValue !== '' && /^\d+$/.test(contactoValue)) {
-        contactosCSV.push(contactoValue);
+    // A "contactos" column prepared by hand wins; otherwise the contacts come from the carrier's Número A and
+    // Número B columns, taking in each record the number that is not the typed line.
+    let contactosCSV = [];
+    if (headerIndex !== -1) {
+      const contactColumnIndex = headers.findIndex((value) => value === 'contactos');
+      for (let i = headerIndex + 1; i < rows.length; i++) {
+        const values = rows[i];
+        const contactoValue = values[contactColumnIndex] ? values[contactColumnIndex].trim() : '';
+        if (contactoValue !== '' && /^\d+$/.test(contactoValue)) {
+          contactosCSV.push(contactoValue);
+        }
       }
     }
-
     if (contactosCSV.length === 0) {
-      if (titular?.nombre) return soloTitular('El archivo no trae contactos numéricos; no se importaron contactos.');
-      return res.json({ status: 'error', message: 'CSV no contiene contactos válidos.' });
+      const deNumeros = contactosPorNumeros(contactRows.sheets, numObjetivo);
+      contactosCSV = deNumeros.contactos;
+      if (contactosCSV.length === 0) {
+        if (titular?.nombre) return soloTitular(`${deNumeros.error} No se importaron contactos.`);
+        return res.json({ status: 'error', message: deNumeros.error });
+      }
     }
 
     const forceFollowup = req.body.forceFollowup === 'true';
