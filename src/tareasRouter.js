@@ -5,6 +5,12 @@ import {
 } from './tareasService.js';
 import { puestoLabels, userPuestos } from './usuariosService.js';
 
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const nombreMes = (clave) => {
+  const [ano, mes] = clave.split('-').map(Number);
+  return MESES[mes - 1] ? `${MESES[mes - 1][0].toUpperCase()}${MESES[mes - 1].slice(1)} ${ano}` : 'Sin fecha de envío';
+};
+
 // Proxies close a stream that stays silent; a comment line every 25 s keeps it open.
 const HEARTBEAT_MS = 25 * 1000;
 
@@ -74,7 +80,8 @@ export function createTareasRouter(pool, {
   });
 
   const boardLocals = async (req, filtro) => ({
-    columnas: await tareas.board({ responsable: filtro }), filtro, ESTADOS, ESTADO_LABELS,
+    columnas: await tareas.board({ responsable: filtro }), filtro, ESTADOS, ESTADO_LABELS, userPuestos,
+    usuarioId: Number(req.session.userId),
     puedeEliminar: (tarea) => puedeEliminar(tarea, req.session), antiguedadOf, haceDias,
   });
 
@@ -106,6 +113,24 @@ export function createTareasRouter(pool, {
   });
 
   router.get('/eventos', (req, res) => eventos.subscribe(req, res));
+
+  // Tasks that were already in Enviada before this month, out of the board but still searchable.
+  router.get('/archivo', async (req, res, next) => {
+    try {
+      const buscar = typeof req.query.buscar === 'string' ? req.query.buscar.trim().slice(0, 200) : '';
+      const lista = await tareas.archivo({ buscar });
+      // Grouped by the month they were sent, latest first, as the list already comes.
+      const meses = [];
+      lista.forEach((tarea) => {
+        const clave = (tarea.enviadaEl || '').slice(0, 7);
+        if (meses.at(-1)?.clave !== clave) meses.push({ clave, nombre: nombreMes(clave), tareas: [] });
+        meses.at(-1).tareas.push(tarea);
+      });
+      return res.render('pages/tareas-archivo', { meses, total: lista.length, buscar });
+    } catch (error) {
+      return next(error);
+    }
+  });
 
   // Only the columns, which open boards fetch when told that a task changed.
   router.get('/tablero', async (req, res, next) => {
@@ -197,6 +222,36 @@ export function createTareasRouter(pool, {
       eventos.notify();
       return json ? res.json({ ok: true })
         : redirect(res, `Tarea movida a ${ESTADO_LABELS[estado]}.`, 'success', { filtro: filtroOf(req.body.volver), tareaId: req.params.id });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  // Whoever fills a slot marks their own part as done, or takes the mark back. The other assignee and the
+  // creator are told when a part is done.
+  router.post('/:id/listo', async (req, res, next) => {
+    const filtro = filtroOf(req.body.volver);
+    const { puesto } = req.body;
+    if (!isId(req.params.id) || !userPuestos.includes(puesto)) return redirect(res, 'La tarea no fue encontrada.', 'error', { filtro });
+    try {
+      const tarea = await tareas.get(req.params.id);
+      if (!tarea) return redirect(res, 'La tarea no fue encontrada.', 'error', { filtro });
+      const userId = Number(req.session.userId);
+      if (tarea[`${puesto}Id`] !== userId) {
+        return redirect(res, `Solo el ${puestoLabels[puesto].toLowerCase()} asignado puede marcar su parte como lista.`, 'error', { filtro, tareaId: tarea.id });
+      }
+      const listo = req.body.listo === '1';
+      await tareas.marcarListo(tarea.id, puesto, userId, listo);
+      eventos.notify();
+      if (listo) {
+        const avisados = new Set([...userPuestos.map((otro) => tarea[`${otro}Id`]), tarea.creadorId].filter((id) => id != null && id !== userId));
+        avisados.forEach((id) => avisar(id, {
+          title: 'Parte de tarea lista',
+          message: `${tarea[puesto]} terminó su parte de “${tarea.titulo}” como ${puestoLabels[puesto].toLowerCase()}.`,
+          url: `/tareas#tarea-${tarea.id}`,
+        }));
+      }
+      return redirect(res, listo ? 'Tu parte quedó marcada como lista.' : 'Tu parte quedó como pendiente.', 'success', { filtro, tareaId: tarea.id });
     } catch (error) {
       return next(error);
     }

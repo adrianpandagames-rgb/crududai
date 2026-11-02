@@ -16,6 +16,8 @@ export const haceDias = (dias) => (dias <= 0 ? 'hoy' : `hace ${dias} ${dias === 
 // Today's date in the office's time zone, as YYYY-MM-DD. Days are counted here rather than in MySQL,
 // whose clock may run in another time zone and would change the day at the wrong hour.
 export const hoyLocal = (now = new Date()) => now.toLocaleDateString('en-CA', { timeZone: process.env.TZ || 'America/Hermosillo' });
+// The first day of the month of hoy; a task sent before it is archived.
+export const inicioMes = (hoy = hoyLocal()) => `${hoy.slice(0, 7)}-01`;
 const dayNumber = (date) => Date.parse(`${date}T00:00:00Z`) / 86400000;
 export const diasDesde = (fecha, hoy = hoyLocal()) => (fecha ? Math.max(0, Math.round(dayNumber(hoy) - dayNumber(fecha))) : 0);
 
@@ -101,6 +103,16 @@ export function createTareasStore(pool) {
         await pool.query('UPDATE tareas SET fecha_llegada = DATE(created_at) WHERE fecha_llegada IS NULL');
         await pool.query('ALTER TABLE tareas MODIFY fecha_llegada DATE NOT NULL');
       }
+      // When the licenciado or the ingeniero marked their part of the task as done; NULL while it is not.
+      for (const puesto of userPuestos) {
+        if (!has(`${puesto}_listo_at`)) await pool.query(`ALTER TABLE tareas ADD COLUMN ${puesto}_listo_at DATETIME NULL`);
+      }
+      // The day a task went to Enviada, which decides when it leaves the board for the archive. Tasks already
+      // there take the day they were last changed.
+      if (!has('enviada_el')) {
+        await pool.query('ALTER TABLE tareas ADD COLUMN enviada_el DATE NULL');
+        await pool.query("UPDATE tareas SET enviada_el = DATE(updated_at) WHERE estado = 'enviada'");
+      }
     }).catch((error) => { storage = null; throw error; });
     return storage;
   };
@@ -115,7 +127,8 @@ export function createTareasStore(pool) {
 
   const select = `SELECT t.id, t.titulo, t.descripcion, t.estado,
     t.licenciado_id AS licenciadoId, l.email AS licenciado, t.ingeniero_id AS ingenieroId, i.email AS ingeniero,
-    DATE_FORMAT(t.fecha_llegada, '%Y-%m-%d') AS fechaLlegada, t.user_id AS creadorId, c.email AS creador,
+    DATE_FORMAT(t.licenciado_listo_at, '%d/%m/%Y %H:%i') AS licenciadoListo, DATE_FORMAT(t.ingeniero_listo_at, '%d/%m/%Y %H:%i') AS ingenieroListo,
+    DATE_FORMAT(t.fecha_llegada, '%Y-%m-%d') AS fechaLlegada, DATE_FORMAT(t.enviada_el, '%Y-%m-%d') AS enviadaEl, t.user_id AS creadorId, c.email AS creador,
     DATE_FORMAT(t.updated_at, '%Y-%m-%d %H:%i') AS actualizada
     FROM tareas t LEFT JOIN users l ON l.id = t.licenciado_id LEFT JOIN users i ON i.id = t.ingeniero_id LEFT JOIN users c ON c.id = t.user_id`;
   const numberOrNull = (value) => (value == null ? null : Number(value));
@@ -123,11 +136,17 @@ export function createTareasStore(pool) {
     ...row, id: Number(row.id), licenciadoId: numberOrNull(row.licenciadoId), ingenieroId: numberOrNull(row.ingenieroId),
     creadorId: numberOrNull(row.creadorId),
     llegada: row.fechaLlegada ? row.fechaLlegada.split('-').reverse().join('/') : '', dias: diasDesde(row.fechaLlegada),
+    enviada: row.enviadaEl ? row.enviadaEl.split('-').reverse().join('/') : '',
   });
+  // Tasks sent before the current month are archived: they leave the board and are listed by archivo.
+  const archivada = "t.estado = 'enviada' AND t.enviada_el IS NOT NULL AND t.enviada_el < ?";
+  // The day a task enters Enviada is kept while it stays there and dropped when it leaves. MySQL applies SET left
+  // to right, so this goes before estado changes.
+  const enviadaSet = "enviada_el = IF(? = 'enviada', IF(estado = 'enviada' AND enviada_el IS NOT NULL, enviada_el, ?), NULL)";
 
   // Every task, grouped by column with the oldest first; responsable filters by a user id in either slot,
   // or 'sin' for tasks with nobody.
-  const board = async ({ responsable = '' } = {}) => {
+  const board = async ({ responsable = '' } = {}, hoy = hoyLocal()) => {
     await initialize();
     let where = 'TRUE';
     const values = [];
@@ -136,10 +155,21 @@ export function createTareasStore(pool) {
       where = '(t.licenciado_id = ? OR t.ingeniero_id = ?)';
       values.push(Number(responsable), Number(responsable));
     }
-    const [rows] = await pool.execute(`${select} WHERE ${where} ORDER BY t.fecha_llegada, t.created_at, t.id`, values);
+    const [rows] = await pool.execute(`${select} WHERE ${where} AND NOT (${archivada}) ORDER BY t.fecha_llegada, t.created_at, t.id`,
+      [...values, inicioMes(hoy)]);
     const columns = Object.fromEntries(ESTADOS.map((estado) => [estado, []]));
     rows.map(normalize).forEach((row) => (columns[row.estado] ?? columns.pendiente).push(row));
     return columns;
+  };
+
+  // The archived tasks, latest sent first, optionally only those whose title, description or assignees contain buscar.
+  const archivo = async ({ buscar = '' } = {}, hoy = hoyLocal()) => {
+    await initialize();
+    const texto = clean(buscar);
+    const filtro = texto ? " AND CONCAT_WS(' ', t.titulo, t.descripcion, l.email, i.email) LIKE ?" : '';
+    const [rows] = await pool.execute(`${select} WHERE ${archivada}${filtro} ORDER BY t.enviada_el DESC, t.id DESC`,
+      [inicioMes(hoy), ...(texto ? [`%${texto}%`] : [])]);
+    return rows.map(normalize);
   };
 
   const get = async (id) => {
@@ -152,8 +182,9 @@ export function createTareasStore(pool) {
   const create = async (tarea, session) => {
     await initialize();
     const [result] = await pool.execute(
-      'INSERT INTO tareas (titulo, descripcion, estado, licenciado_id, ingeniero_id, fecha_llegada, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [tarea.titulo, tarea.descripcion, tarea.estado, tarea.licenciadoId, tarea.ingenieroId, tarea.fechaLlegada, session?.userId ?? null],
+      'INSERT INTO tareas (titulo, descripcion, estado, licenciado_id, ingeniero_id, fecha_llegada, user_id, enviada_el) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [tarea.titulo, tarea.descripcion, tarea.estado, tarea.licenciadoId, tarea.ingenieroId, tarea.fechaLlegada, session?.userId ?? null,
+        tarea.estado === 'enviada' ? hoyLocal() : null],
     );
     return result.insertId;
   };
@@ -162,14 +193,28 @@ export function createTareasStore(pool) {
   const move = async (id, estado) => {
     await initialize();
     if (!ESTADOS.includes(estado)) return false;
-    const [result] = await pool.execute('UPDATE tareas SET estado = ? WHERE id = ?', [estado, id]);
+    const [result] = await pool.execute(`UPDATE tareas SET ${enviadaSet}, estado = ? WHERE id = ?`, [estado, hoyLocal(), estado, id]);
     return result.affectedRows === 1;
   };
 
+  // A slot given to someone else loses its done mark, which belonged to the person who had it. MySQL applies SET
+  // left to right, so the marks are compared with the slots before the slots change.
   const update = async (id, tarea) => {
     await initialize();
-    const [result] = await pool.execute('UPDATE tareas SET titulo = ?, descripcion = ?, licenciado_id = ?, ingeniero_id = ?, estado = ? WHERE id = ?',
-      [tarea.titulo, tarea.descripcion, tarea.licenciadoId, tarea.ingenieroId, tarea.estado, id]);
+    const [result] = await pool.execute(`UPDATE tareas SET
+      licenciado_listo_at = IF(licenciado_id <=> ?, licenciado_listo_at, NULL), ingeniero_listo_at = IF(ingeniero_id <=> ?, ingeniero_listo_at, NULL),
+      ${enviadaSet}, titulo = ?, descripcion = ?, licenciado_id = ?, ingeniero_id = ?, estado = ? WHERE id = ?`,
+    [tarea.licenciadoId, tarea.ingenieroId, tarea.estado, hoyLocal(), tarea.titulo, tarea.descripcion, tarea.licenciadoId, tarea.ingenieroId, tarea.estado, id]);
+    return result.affectedRows === 1;
+  };
+
+  // Marks or clears the done mark of one slot. Only the person in that slot may change it, so the mark always
+  // names who finished; returns false when the task does not exist or the slot is someone else's.
+  const marcarListo = async (id, puesto, userId, listo) => {
+    await initialize();
+    if (!userPuestos.includes(puesto)) return false;
+    const [result] = await pool.execute(`UPDATE tareas SET ${puesto}_listo_at = ${listo ? 'NOW()' : 'NULL'} WHERE id = ? AND ${puesto}_id = ?`,
+      [id, Number(userId)]);
     return result.affectedRows === 1;
   };
 
@@ -181,5 +226,5 @@ export function createTareasStore(pool) {
     return 'eliminada';
   };
 
-  return { initialize, responsables, board, get, create, move, update, remove };
+  return { initialize, responsables, board, archivo, get, create, move, update, marcarListo, remove };
 }

@@ -25,6 +25,12 @@
               <div class="row">
                 <%- include('../partials/tarea-asignacion', { form: tarea, opciones, puestoLabels, columnClass: 'col-sm-6 mb-3' }) %>
               </div>
+              <%# Each person marks their own part from the board; here it is only shown. Giving the slot to someone else clears it. %>
+              <% Object.keys(puestoLabels).filter((puesto) => tarea[`${puesto}Listo`]).forEach((puesto) => { %>
+                <% const quien = (opciones[puesto] || []).find((user) => user.id === tarea[`${puesto}Id`])?.email || ''; %>
+                <p class="small text-success mb-2"><i class="bi bi-check-circle-fill" aria-hidden="true"></i>
+                  <%= puestoLabels[puesto] %>: <%= quien %> terminó su parte el <%= tarea[`${puesto}Listo`] %></p>
+              <% }) %>
               <div class="row">
                 <div class="col-sm-6 mb-3">
                   <%# Typed when the task was registered; shown for reference only, the form never sends it. %>

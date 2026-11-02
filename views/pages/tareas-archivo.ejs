@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <%- include('../includes/head') %>
+    <style>
+      .archivo-page { padding-bottom: 5rem; }
+      .archivo-barra { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-bottom: 1rem; }
+      .archivo-barra input { flex: 1 1 260px; min-width: 0; }
+      .archivo-mes { margin-top: 1.5rem; }
+      .archivo-mes h2 { font-size: 1.1rem; font-weight: 700; }
+      .archivo-descripcion { white-space: pre-line; font-size: .85rem; opacity: .85; margin: .25rem 0 0; }
+    </style>
+  </head>
+  <body>
+    <%- include('../includes/header') %>
+    <% const corto = (email) => String(email || '').split('@')[0]; %>
+    <main class="container page-offset archivo-page">
+      <div class="row justify-content-md-center mb-4">
+        <div class="col-md-12 mt-5">
+          <h1 class="text-center title">ARCHIVO DE TAREAS</h1>
+          <hr />
+          <p class="text-center small text-muted mb-0">Las tareas que ya estaban en Enviada desde un mes anterior salen del tablero y quedan aquí.</p>
+        </div>
+      </div>
+
+      <form class="archivo-barra" action="/tareas/archivo" method="GET" role="search">
+        <a class="btn btn-outline-secondary" href="/tareas"><i class="bi bi-arrow-left" aria-hidden="true"></i> Tablero</a>
+        <label for="buscarArchivo" class="visually-hidden">Buscar en el archivo</label>
+        <input type="search" id="buscarArchivo" name="buscar" class="form-control" maxlength="200" value="<%= buscar %>"
+          placeholder="Buscar por título, descripción o responsable" />
+        <button class="btn btn-primary" type="submit">Buscar</button>
+        <% if (buscar) { %><a class="btn btn-link" href="/tareas/archivo">Ver todo</a><% } %>
+      </form>
+
+      <p class="small text-muted" role="status"><%= total %> <%= total === 1 ? 'tarea archivada' : 'tareas archivadas' %><%= buscar ? ` que coinciden con “${buscar}”` : '' %></p>
+
+      <% meses.forEach((mes) => { %>
+        <section class="archivo-mes" aria-labelledby="mes-<%= mes.clave %>">
+          <h2 id="mes-<%= mes.clave %>">Enviadas en <%= mes.nombre %> <span class="badge text-bg-secondary"><%= mes.tareas.length %></span></h2>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle table-stack">
+              <thead>
+                <tr><th>Tarea</th><th>Licenciado</th><th>Ingeniero</th><th>Llegó</th><th>Enviada</th><th><span class="visually-hidden">Acciones</span></th></tr>
+              </thead>
+              <tbody>
+                <% mes.tareas.forEach((tarea) => { %>
+                  <tr>
+                    <td data-label="Tarea">
+                      <strong><%= tarea.titulo %></strong>
+                      <% if (tarea.descripcion) { %><p class="archivo-descripcion"><%= tarea.descripcion %></p><% } %>
+                    </td>
+                    <td data-label="Licenciado" title="<%= tarea.licenciado || '' %>"><%= tarea.licenciado ? corto(tarea.licenciado) : '—' %></td>
+                    <td data-label="Ingeniero" title="<%= tarea.ingeniero || '' %>"><%= tarea.ingeniero ? corto(tarea.ingeniero) : '—' %></td>
+                    <td data-label="Llegó"><%= tarea.llegada %></td>
+                    <td data-label="Enviada"><%= tarea.enviada %></td>
+                    <td><a class="btn btn-sm btn-outline-primary" href="/tareas/<%= tarea.id %>/editar" aria-label="Abrir <%= tarea.titulo %>"><i class="bi bi-pencil" aria-hidden="true"></i></a></td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      <% }) %>
+    </main>
+    <%- include('../includes/scripts') %>
+    <%- include('../includes/footer') %>
+  </body>
+</html>

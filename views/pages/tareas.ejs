@@ -32,6 +32,9 @@
       .tarea-meta { display: flex; flex-wrap: wrap; gap: .35rem; font-size: .8rem; margin-bottom: .5rem; }
       .tarea-chip { display: inline-flex; align-items: center; gap: .25rem; padding: .1rem .45rem; border-radius: 999px; background: rgba(127, 127, 127, .15); }
       .tarea-chip.is-sin-asignar { font-style: italic; opacity: .75; }
+      .tarea-chip.is-listo { background: rgba(25, 135, 84, .18); }
+      .tarea-chip.is-listo .bi { color: #198754; }
+      .tarea-listo { margin: 0 0 .5rem; }
       .tarea-chip-puesto { font-weight: 700; }
       .tarea-llegada { font-size: .8rem; margin: 0 0 .5rem; opacity: .85; }
       .tarea-dias { font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -123,6 +126,7 @@
           <% }) %>
         </select>
         <noscript><button class="btn btn-outline-secondary" type="submit">Filtrar</button></noscript>
+        <a class="btn btn-outline-secondary ms-auto" href="/tareas/archivo"><i class="bi bi-archive" aria-hidden="true"></i> Archivo</a>
       </form>
 
       <div class="tareas-tablero" data-filtro="<%= filtro %>">

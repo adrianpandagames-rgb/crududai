@@ -49,7 +49,7 @@ test('the single responsable of the first version moves to the slot of their job
   await createTareasStore(pool).initialize();
   assert.ok(!sql.some((statement) => statement.startsWith('ALTER TABLE users')));
   const migration = sql.filter((statement) => /^(ALTER TABLE tareas|UPDATE tareas)/.test(statement));
-  assert.equal(migration.length, 7);
+  assert.equal(migration.length, 11);
   assert.match(migration[0], /ADD COLUMN licenciado_id/);
   assert.match(migration[1], /ADD COLUMN ingeniero_id/);
   assert.match(migration[2], /SET t.ingeniero_id = IF\(u.puesto = 'ingeniero'/);
@@ -58,6 +58,11 @@ test('the single responsable of the first version moves to the slot of their job
   assert.match(migration[4], /ADD COLUMN fecha_llegada DATE NULL/);
   assert.match(migration[5], /SET fecha_llegada = DATE\(created_at\)/);
   assert.match(migration[6], /MODIFY fecha_llegada DATE NOT NULL/);
+  assert.match(migration[7], /ADD COLUMN licenciado_listo_at DATETIME NULL/);
+  assert.match(migration[8], /ADD COLUMN ingeniero_listo_at DATETIME NULL/);
+  // Tasks already in Enviada take the day they were last changed as the day they were sent.
+  assert.match(migration[9], /ADD COLUMN enviada_el DATE NULL/);
+  assert.match(migration[10], /SET enviada_el = DATE\(updated_at\) WHERE estado = 'enviada'/);
 });
 
 test('only the creator, an administrator or a semiadministrator may delete a task', () => {
@@ -81,16 +86,35 @@ test('columns list the oldest arrival first and editing never writes the arrival
     },
   };
   const store = createTareasStore(pool);
-  const columns = await store.board();
+  const columns = await store.board({}, '2026-11-02');
   assert.match(calls.at(-1).sql, /ORDER BY t.fecha_llegada, t.created_at, t.id$/);
+  // Whatever was already in Enviada before November is archived and left off the board.
+  assert.match(calls.at(-1).sql, /AND NOT \(t.estado = 'enviada' AND t.enviada_el IS NOT NULL AND t.enviada_el < ?\?\)/);
+  assert.deepEqual(calls.at(-1).values, ['2026-11-01']);
+  await store.archivo({ buscar: ' oficio ' }, '2026-11-02');
+  assert.match(calls.at(-1).sql, /WHERE t.estado = 'enviada' AND t.enviada_el IS NOT NULL AND t.enviada_el < ?\? AND CONCAT_WS[\s\S]*ORDER BY t.enviada_el DESC/);
+  assert.deepEqual(calls.at(-1).values, ['2026-11-01', '%oficio%']);
   // An unknown column falls back to Pendiente; the date is shown day first.
   assert.deepEqual(columns.pendiente.map((row) => [row.id, row.llegada]), [[4, '20/10/2026'], [9, '']]);
 
   await store.create({ titulo: 'Nueva', descripcion: '', estado: 'pendiente', licenciadoId: null, ingenieroId: 8, fechaLlegada: '2026-10-28' }, { userId: 5 });
   assert.match(calls.at(-1).sql, /fecha_llegada/);
-  assert.deepEqual(calls.at(-1).values.slice(-2), ['2026-10-28', 5]);
+  assert.deepEqual(calls.at(-1).values.slice(-3), ['2026-10-28', 5, null]);
   await store.update(4, { titulo: 'Vieja', descripcion: '', estado: 'terminada', licenciadoId: 5, ingenieroId: null, fechaLlegada: '2000-01-01' });
   assert.ok(!calls.at(-1).sql.includes('fecha_llegada') && !calls.at(-1).values.includes('2000-01-01'));
+  // The done marks and the sent day are worked out before the slots and the column change.
+  const set = calls.at(-1).sql.replace(/\s+/g, ' ');
+  assert.ok(set.indexOf('licenciado_listo_at = IF(licenciado_id <=> ?') < set.indexOf('licenciado_id = ?, ingeniero_id'));
+  assert.ok(set.indexOf('enviada_el = IF') < set.indexOf('estado = ? WHERE'));
+  assert.deepEqual(calls.at(-1).values.slice(0, 3), [5, null, 'terminada']);
+  assert.ok(await store.move(4, 'enviada'));
+  assert.match(calls.at(-1).sql, /^UPDATE tareas SET enviada_el = IF\(\? = 'enviada'.*, estado = \? WHERE id = \?$/);
+  assert.deepEqual([calls.at(-1).values[0], calls.at(-1).values[2]], ['enviada', 'enviada']);
+  // Only the person in the slot can mark it.
+  assert.ok(await store.marcarListo(4, 'licenciado', 5, true));
+  assert.match(calls.at(-1).sql, /SET licenciado_listo_at = NOW\(\) WHERE id = \? AND licenciado_id = \?/);
+  assert.deepEqual(calls.at(-1).values, [4, 5]);
+  assert.equal(await store.marcarListo(4, 'jefe', 5, true), false);
   assert.ok(await store.move(4, 'en_proceso'));
   assert.equal(await store.move(7, 'en_proceso'), false);
   assert.equal(await store.move(4, 'archivada'), false);
@@ -126,6 +150,15 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
       if (task) task.estado = estado;
       return Boolean(task);
     },
+    marcarListo: async (id, puesto, userId, listo) => {
+      const task = tasks.find((candidate) => String(candidate.id) === String(id));
+      task[`${puesto}Listo`] = listo ? '02/11/2026 10:30' : null;
+      return true;
+    },
+    archivo: async ({ buscar }) => [
+      { id: 7, titulo: 'Oficio de septiembre', descripcion: '', licenciado: 'ana@udai.mx', enviadaEl: '2026-10-03', enviada: '03/10/2026', llegada: '01/10/2026' },
+      { id: 6, titulo: 'Oficio viejo', descripcion: '', ingeniero: 'beto@udai.mx', enviadaEl: '2026-09-28', enviada: '28/09/2026', llegada: '20/09/2026' },
+    ].filter((task) => !buscar || task.titulo.includes(buscar)),
     remove: async (id, session) => (puedeEliminar(tasks.find((task) => String(task.id) === id), session) ? 'eliminada' : 'sin-permiso'),
   };
   const app = express();
@@ -219,11 +252,39 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
   // In Terminada and Enviada the frame is dropped by the column's style, so a card dragged there needs no redraw.
   assert.ok(page.includes('.tareas-lista:not([data-estado="terminada"], [data-estado="enviada"]) .tarea-card.is-roja'));
 
+  // Ana (user 5) is the licenciada of task 1: she sees the button for her part only, and her mark names her.
+  const conBoton = await (await fetch(base, as('usuario'))).text();
+  const card = (html, id) => html.match(new RegExp(`id="tarea-${id}"[\\s\\S]*?</article>`))[0];
+  assert.ok(card(conBoton, 1).includes('Mi parte está lista (Lic.)') && !card(conBoton, 1).includes('(Ing.)'));
+  assert.ok(!card(conBoton, 2).includes('/listo'));
+  const notMine = await fetch(`${base}/1/listo`, as('usuario', form({ puesto: 'ingeniero', listo: '1' })));
+  assert.match(message(notMine), /Solo el ingeniero asignado/);
+  toasts.length = 0;
+  assert.match(message(await fetch(`${base}/1/listo`, as('usuario', form({ puesto: 'licenciado', listo: '1' })))), /marcada como lista/);
+  // Beto, the engineer, hears about it; Ana, who marked it and created the task, does not.
+  assert.deepEqual(toasts.map(([userId, toast]) => [userId, toast.message]),
+    [[8, 'ana@udai.mx terminó su parte de “Contestar oficio” como licenciado.']]);
+  const marcada = card(await (await fetch(base, as('usuario'))).text(), 1);
+  assert.match(marcada, /class="tarea-chip is-listo"[\s\S]*Lic\.<\/span> ana · listo/);
+  assert.ok(marcada.includes('Desmarcar mi parte') && marcada.includes('name="listo" value="0"'));
+  assert.match(await (await fetch(`${base}/1/editar`, as('usuario'))).text(), /Licenciado: ana@udai.mx terminó su parte el 02\/11\/2026 10:30/);
+  assert.match(message(await fetch(`${base}/1/listo`, as('usuario', form({ puesto: 'licenciado', listo: '0' })))), /pendiente/);
+  assert.equal(tasks[0].licenciadoListo, null);
+
+  // The archive lists tasks by the month they were sent, and the board links to it.
+  assert.ok(conBoton.includes('href="/tareas/archivo"'));
+  const archivo = await (await fetch(`${base}/archivo`, as('usuario'))).text();
+  assert.ok(archivo.includes('2 tareas archivadas'));
+  assert.ok(archivo.indexOf('Enviadas en Octubre 2026') < archivo.indexOf('Enviadas en Septiembre 2026'));
+  const buscado = await (await fetch(`${base}/archivo?buscar=viejo`, as('usuario'))).text();
+  assert.ok(buscado.includes('1 tarea archivada') && !buscado.includes('Oficio de septiembre'));
+  assert.equal((await fetch(`${base}/archivo`, as('uecs'))).headers.get('location'), '/Crud');
+
   assert.match(message(await fetch(`${base}/eliminar/2`, as('usuario', form({})))), /Solo quien creó/);
   assert.match(message(await fetch(`${base}/eliminar/1`, as('usuario', form({})))), /eliminada/);
   assert.equal((await fetch(`${base}/eliminar/1`, as('uecs', form({})))).headers.get('location'), '/Crud');
-  // Every saved change tells the open boards (create, edit, drag, two arrows, delete); rejected ones do not.
-  assert.equal(avisos, 6);
+  // Every saved change tells the open boards (create, edit, drag, two arrows, two done marks, delete); rejected ones do not.
+  assert.equal(avisos, 8);
 
   const columns = await (await fetch(`${base}/tablero?responsable=5`, as('usuario'))).text();
   assert.ok(columns.includes('data-estado="pendiente"') && !columns.includes('<header') && !columns.includes('Nueva tarea'));
