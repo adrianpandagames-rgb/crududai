@@ -283,36 +283,31 @@ router.post('/Crud/import-csv', requireRecordCreator, contactsUpload, async (req
     const exactDuplicates = [];
     const partialMatches = [];
 
-    for (let i = headerIndex + 1; i < rows.length; i++) {
-      const values = rows[i];
-      const contactoValue = values[contactColumnIndex] ? values[contactColumnIndex].trim() : '';
-      if (contactoValue !== '') {
-        if (/^\d+$/.test(contactoValue)) {
-          const alreadyExists = await contactoExisteExacto(contactoValue, numObjetivo, nucObjetivo, objetivoTipo, ano);
-          if (!alreadyExists) {
-            await agregarContacto(contactoValue, idObjetivo);
-            insertCount += 1;
-            const partials = await contactoCoincidenciasParciales(contactoValue, numObjetivo, nucObjetivo, objetivoTipo, ano);
-            partials.slice(0, MAX_REDIRECT_ITEMS - partialMatches.length).forEach((match) => {
-              partialMatches.push({
-                contacto: contactoValue,
-                numObjetivo: match.numObjetivo,
-                nuc: match.nuc,
-                ano: match.ano,
-                tipo: match.tipo,
-              });
-            });
-          } else {
-            exactDuplicateCount += 1;
-            exactDuplicates.push({
-              contacto: contactoValue,
-              numObjetivo,
-              nuc: nucObjetivo,
-              ano,
-              tipo: objetivoTipo,
-            });
-          }
-        }
+    // contactosCSV already holds only numeric contacts, from the contactos column or from Número A / Número B.
+    for (const contactoValue of contactosCSV) {
+      const alreadyExists = await contactoExisteExacto(contactoValue, numObjetivo, nucObjetivo, objetivoTipo, ano);
+      if (!alreadyExists) {
+        await agregarContacto(contactoValue, idObjetivo);
+        insertCount += 1;
+        const partials = await contactoCoincidenciasParciales(contactoValue, numObjetivo, nucObjetivo, objetivoTipo, ano);
+        partials.slice(0, MAX_REDIRECT_ITEMS - partialMatches.length).forEach((match) => {
+          partialMatches.push({
+            contacto: contactoValue,
+            numObjetivo: match.numObjetivo,
+            nuc: match.nuc,
+            ano: match.ano,
+            tipo: match.tipo,
+          });
+        });
+      } else {
+        exactDuplicateCount += 1;
+        exactDuplicates.push({
+          contacto: contactoValue,
+          numObjetivo,
+          nuc: nucObjetivo,
+          ano,
+          tipo: objetivoTipo,
+        });
       }
     }
 
