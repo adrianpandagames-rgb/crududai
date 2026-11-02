@@ -14,22 +14,9 @@ import {
 } from "./estudianteController.js";
 import { fetchImeiMetadata } from './imeiApiClient.js';
 import { addJsonQueryParam, parsePagination } from './routeHelpers.js';
+import { calculateLuhnCheckDigit } from './imeiUtils.js';
 
 const router = forwardAsyncErrors(express.Router());
-
-const calculateLuhnCheckDigit = (base) => {
-  let sum = 0;
-
-  for (let i = 0; i < base.length; i++) {
-    let digit = Number(base[i]);
-    if (i % 2 === 1) {
-      digit *= 2;
-    }
-    sum += Math.floor(digit / 10) + (digit % 10);
-  }
-
-  return String((10 - (sum % 10)) % 10);
-};
 
 router.get('/imei/editar/:id', requireRecordEditor, async (req, res) => {
   const idImei = Number.parseInt(req.params.id, 10);

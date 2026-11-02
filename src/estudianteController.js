@@ -90,16 +90,29 @@ export const obtenerOCrearObjetivo = async (numObjetivo, nuc, tipo, ano, delito 
     const isSolucion = normalizedTipo.toLowerCase() === "solución" || normalizedTipo.toLowerCase() === "solucion";
 
     let tipoToInsert = normalizedTipo;
+    // An import that failed halfway could leave the line without contacts: it does not count as a Solución,
+    // and the next import fills it instead of adding another.
+    const conContactos = "EXISTS (SELECT 1 FROM contactos c WHERE c.idObjetivo = objetivo.idObjetivo)";
+    const sinContactos = `NOT ${conContactos}`;
 
     if (isSolucion) {
       const [existingSolucion] = await pool.query(
-        "SELECT idObjetivo FROM objetivo WHERE numObjetivo = ? AND nuc = ? AND tipo IN ('Solución', 'solución') AND ano = ?",
+        `SELECT idObjetivo FROM objetivo WHERE numObjetivo = ? AND nuc = ? AND tipo IN ('Solución', 'solución') AND ano = ? AND ${conContactos}`,
         [numObjetivo, nuc, ano]
       );
 
       if (existingSolucion.length > 0) {
         tipoToInsert = "Seguimiento";
       }
+    }
+
+    const [empty] = await pool.query(
+      `SELECT idObjetivo FROM objetivo WHERE numObjetivo = ? AND nuc = ? AND ano = ? AND ${sinContactos} ORDER BY idObjetivo LIMIT 1`,
+      [numObjetivo, nuc, ano]
+    );
+    if (empty.length > 0) {
+      await pool.query("UPDATE objetivo SET tipo = ?, delito = ? WHERE idObjetivo = ?", [tipoToInsert, delito || null, empty[0].idObjetivo]);
+      return { idObjetivo: empty[0].idObjetivo, tipo: tipoToInsert };
     }
 
     const [result] = await pool.query(

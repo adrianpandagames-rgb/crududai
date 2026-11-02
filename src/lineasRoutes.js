@@ -14,7 +14,11 @@ import {
   verificarObjetivoConContactos,
   obtenerObjetivoPorId,
   actualizarObjetivo,
+  obtenerOCrearObjetivoImei,
+  imeiExisteExacto,
+  agregarImei,
 } from "./estudianteController.js";
+import { imeisDeArchivo, MAX_IMEIS_POR_ARCHIVO } from './imeiUtils.js';
 import { parseCsvRow } from './csvUtils.js';
 import { MAX_REDIRECT_ITEMS, parsePagination } from './routeHelpers.js';
 import pool from './db.js';
@@ -113,6 +117,31 @@ router.get("/Crud", async (req, res, next) => {
     return next(error);
   }
 });
+
+// The target's phones in the file go to the IMEI table under the same line, NUC, type and year, so a sábana is
+// captured once. Brand and model are left for the daily IMEI review, instead of querying the service per file.
+// The contacts are already saved, so a failure here only leaves a note in the message.
+const registrarImeis = async (sheets, { numObjetivo, nucObjetivo, tipo, ano }) => {
+  const { imeis, demasiados } = imeisDeArchivo(sheets);
+  if (demasiados) return ` La columna IMEI trae más de ${MAX_IMEIS_POR_ARCHIVO} distintos; no se registraron IMEI.`;
+  if (!imeis.length) return '';
+  try {
+    const { idObjetivo, tipo: tipoImei } = await obtenerOCrearObjetivoImei(numObjetivo, nucObjetivo, tipo, ano);
+    let nuevos = 0;
+    for (const imei of imeis) {
+      if (await imeiExisteExacto(imei, numObjetivo, nucObjetivo, tipoImei, ano)) continue;
+      await agregarImei(imei, idObjetivo);
+      nuevos += 1;
+    }
+    const yaEstaban = imeis.length - nuevos;
+    return nuevos
+      ? ` Se registraron ${nuevos} IMEI del archivo (${imeis.join(', ')}).${yaEstaban ? ` ${yaEstaban} ya estaban registrados.` : ''}`
+      : ` Los IMEI del archivo ya estaban registrados (${imeis.join(', ')}).`;
+  } catch (error) {
+    console.error('No se pudieron registrar los IMEI del archivo:', error.message || error);
+    return ' No se pudieron registrar los IMEI del archivo; regístralos en la pestaña IMEI.';
+  }
+};
 
 const contactsUpload = (req, res, next) => {
   upload.single('csvFile')(req, res, (error) => {
@@ -233,9 +262,10 @@ router.post('/Crud/import-csv', requireRecordCreator, contactsUpload, async (req
     const normalizedTipo = String(curso_dc || '').trim().toLowerCase();
     const isSolucion = normalizedTipo === 'solución' || normalizedTipo === 'solucion';
     const mismosObjetivos = verificacion.objetivos || [];
+    // A line left without contacts by a failed import is not a registered Solución; the import reuses it.
     const tieneSolucionExistente = mismosObjetivos.some((obj) => {
       const tipoObj = String(obj.tipo || '').trim().toLowerCase();
-      return tipoObj === 'solución' || tipoObj === 'solucion';
+      return obj.contactos.length > 0 && (tipoObj === 'solución' || tipoObj === 'solucion');
     });
 
     if (verificacion.conMismos && !forceFollowup) {
@@ -319,6 +349,7 @@ router.post('/Crud/import-csv', requireRecordCreator, contactsUpload, async (req
       message += ` ${partialMatches.length} inserted contacts have partial matches with other objectives/NUC/año.`;
     }
     message += await registrarTitular();
+    message += await registrarImeis(contactRows.sheets, { numObjetivo, nucObjetivo, tipo: objetivoTipo, ano });
 
     const redirectUrl = '/Crud?message=' + encodeURIComponent(message) + '&type=success';
 
