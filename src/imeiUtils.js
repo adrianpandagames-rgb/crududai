@@ -13,9 +13,6 @@ export const calculateLuhnCheckDigit = (base) => {
   return String((10 - (sum % 10)) % 10);
 };
 
-// Stored in place of the number when the phone gives nothing useful, like "sin utilidad" in Líneas.
-export const IMEI_SIN_UTILIDAD = 'sin utilidad';
-
 // Carriers write the same phone as 14 digits, as 15 with a 0 or a wrong last digit, or as a 16-digit IMEISV;
 // all of them become the first 14 digits plus their check digit, so one phone is one record.
 // Returns '' for anything shorter than 14 digits or a placeholder such as 00000000000000.

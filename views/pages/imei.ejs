@@ -72,10 +72,6 @@
                   </div>
                 </div>
                 <input type="hidden" id="imei" name="imei" />
-                <div class="form-check mt-2">
-                  <input type="checkbox" id="sinUtilidadImei" name="sinUtilidad" value="true" class="form-check-input" />
-                  <label for="sinUtilidadImei" class="form-check-label">Sin utilidad</label>
-                </div>
               </div>
               <div class="row g-3">
                 <div id="objetivoInputsContainer" class="col-md-8">
@@ -100,6 +96,10 @@
                     <div class="form-text">Ingresa un número mayor o igual a 1.</div>
                   </div>
                 </div>
+              </div>
+              <div class="form-check mb-3">
+                <input type="checkbox" id="sinUtilidadImei" name="sinUtilidad" value="true" class="form-check-input" />
+                <label for="sinUtilidadImei" class="form-check-label">Sin utilidad (el IMEI no trae línea)</label>
               </div>
               <div class="mb-3 mt-3">
                 <label for="nucObjetivo" class="form-label">NUC</label>
@@ -372,21 +372,7 @@
 
       imeiBaseInput?.addEventListener('input', updateImeiCheckDigit);
 
-      // "Sin utilidad" registers the objetivos without an IMEI number.
-      const sinUtilidadImeiInput = document.getElementById('sinUtilidadImei');
-      const updateSinUtilidadImei = () => {
-        const sinUtilidad = Boolean(sinUtilidadImeiInput?.checked);
-        imeiBaseInput.disabled = sinUtilidad;
-        imeiBaseInput.required = !sinUtilidad;
-        if (sinUtilidad) {
-          imeiBaseInput.value = '';
-          updateImeiCheckDigit();
-        }
-      };
-      sinUtilidadImeiInput?.addEventListener('change', updateSinUtilidadImei);
-
       imeiForm?.addEventListener('submit', (event) => {
-        if (sinUtilidadImeiInput?.checked) return;
         if (!updateImeiCheckDigit()) {
           event.preventDefault();
           imeiBaseInput.focus();
@@ -427,6 +413,19 @@
 
 
       renderObjetivoInputs(Number(objetivoCountSelect?.value || 1));
+
+      // Without a line there is no objetivo to type: the IMEI is registered as "sin utilidad".
+      const sinUtilidadImeiInput = document.getElementById('sinUtilidadImei');
+      sinUtilidadImeiInput?.addEventListener('change', () => {
+        const sinUtilidad = sinUtilidadImeiInput.checked;
+        if (sinUtilidad) renderObjetivoInputs(1);
+        objetivoCountSelect.disabled = sinUtilidad;
+        objetivoInputsContainer.querySelectorAll('input').forEach((input) => {
+          input.value = '';
+          input.disabled = sinUtilidad;
+          input.required = !sinUtilidad;
+        });
+      });
 
     </script>
 

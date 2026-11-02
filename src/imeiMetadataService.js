@@ -123,7 +123,6 @@ export const refreshImeiMetadata = async () => {
     `SELECT i.idImei, i.imei, i.brand_name, i.modelo, i.metadata_check_count, i.metadata_not_found
      FROM imei i
      WHERE (i.brand_name IS NULL OR i.modelo IS NULL)
-       AND i.imei <> 'sin utilidad'
        AND COALESCE(i.metadata_not_found, 0) = 0
        AND COALESCE(i.metadata_check_count, 0) < ${MAX_METADATA_CHECKS}`
   );

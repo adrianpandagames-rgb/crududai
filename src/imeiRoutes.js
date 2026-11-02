@@ -14,7 +14,9 @@ import {
 } from "./estudianteController.js";
 import { fetchImeiMetadata } from './imeiApiClient.js';
 import { addJsonQueryParam, parsePagination } from './routeHelpers.js';
-import { calculateLuhnCheckDigit, IMEI_SIN_UTILIDAD } from './imeiUtils.js';
+import { calculateLuhnCheckDigit } from './imeiUtils.js';
+
+const OBJETIVO_SIN_UTILIDAD = 'sin utilidad';
 
 const router = forwardAsyncErrors(express.Router());
 
@@ -28,10 +30,9 @@ router.get('/imei/editar/:id', requireRecordEditor, async (req, res) => {
 
 router.post('/imei/editar/:id', requireRecordEditor, async (req, res) => {
   const idImei = Number.parseInt(req.params.id, 10);
-  const rawImei = String(req.body.imei || '').trim();
   const imei = {
     idImei,
-    imei: rawImei.toLowerCase() === IMEI_SIN_UTILIDAD ? IMEI_SIN_UTILIDAD : rawImei.replace(/\D/g, ''),
+    imei: String(req.body.imei || '').replace(/\D/g, ''),
     numObjetivo: String(req.body.numObjetivo || '').trim(),
     nuc: String(req.body.nuc || '').trim(),
     tipo: String(req.body.tipo || '').trim(),
@@ -39,7 +40,7 @@ router.post('/imei/editar/:id', requireRecordEditor, async (req, res) => {
     brandName: String(req.body.brandName || '').trim(),
     modelo: String(req.body.modelo || '').trim(),
   };
-  const validImei = imei.imei === IMEI_SIN_UTILIDAD || /^\d{15}$/.test(imei.imei) && imei.imei[14] === String(calculateLuhnCheckDigit(imei.imei.slice(0, 14)));
+  const validImei = /^\d{15}$/.test(imei.imei) && imei.imei[14] === String(calculateLuhnCheckDigit(imei.imei.slice(0, 14)));
   if (!Number.isSafeInteger(idImei) || idImei < 1 || !validImei || !imei.numObjetivo || !imei.nuc || !imei.tipo || !/^\d{4}$/.test(imei.ano)) {
     return res.status(400).render('pages/editar-imei', { imei, error: 'Completa todos los campos con valores válidos. El IMEI debe tener 15 dígitos válidos.' });
   }
@@ -94,16 +95,15 @@ router.post('/imei/register', requireRecordCreator, async (req, res) => {
   try {
     const { imeiBase, nucObjetivo, curso_dc, ano } = req.body;
     const normalizedImeiBase = String(imeiBase || '').replace(/\D/g, '').slice(0, 14);
+    const imeiCompleto = normalizedImeiBase.length === 14
+      ? normalizedImeiBase + calculateLuhnCheckDigit(normalizedImeiBase)
+      : '';
+    // "Sin utilidad" means the IMEI came with no line, so it is registered under that text instead of a number.
     const sinUtilidad = req.body.sinUtilidad === 'true';
-    const imeiCompleto = sinUtilidad
-      ? IMEI_SIN_UTILIDAD
-      : normalizedImeiBase.length === 14
-        ? normalizedImeiBase + calculateLuhnCheckDigit(normalizedImeiBase)
-        : '';
-    const rawObjetivos = req.body.numObjetivo || req.body['numObjetivo[]'];
+    const rawObjetivos = sinUtilidad ? OBJETIVO_SIN_UTILIDAD : req.body.numObjetivo || req.body['numObjetivo[]'];
     const objetivos = Array.isArray(rawObjetivos) ? rawObjetivos : rawObjetivos ? [rawObjetivos] : [];
 
-    if ((!sinUtilidad && !/^\d{15}$/.test(imeiCompleto)) || objetivos.length === 0 || !nucObjetivo || !curso_dc || !ano) {
+    if (!/^\d{15}$/.test(imeiCompleto) || objetivos.length === 0 || !nucObjetivo || !curso_dc || !ano) {
       return res.redirect('/imei?message=' + encodeURIComponent('IMEI de 14 dígitos, al menos un Objetivo, NUC, Año y Tipo son requeridos.') + '&type=error');
     }
 
@@ -125,13 +125,8 @@ router.post('/imei/register', requireRecordCreator, async (req, res) => {
         continue;
       }
 
-      if (sinUtilidad) {
-        await agregarImei(imeiCompleto, idObjetivo);
-        inserted += 1;
-        continue;
-      }
-
-      const objectiveDuplicates = await imeiCoincidenciasPorObjetivo(numObjetivo, nucObjetivo, ano, imeiCompleto);
+      // Every IMEI without a line shares the same "objetivo", so matching by objetivo would only flag each other.
+      const objectiveDuplicates = sinUtilidad ? [] : await imeiCoincidenciasPorObjetivo(numObjetivo, nucObjetivo, ano, imeiCompleto);
       objectiveDuplicates.forEach((match) => {
         partialMatches.push({
           imei: match.imei,
@@ -143,7 +138,7 @@ router.post('/imei/register', requireRecordCreator, async (req, res) => {
         });
       });
 
-      const objetivoEnObjetivo = await buscarObjetivoEnObjetivo(numObjetivo, nucObjetivo, ano);
+      const objetivoEnObjetivo = sinUtilidad ? [] : await buscarObjetivoEnObjetivo(numObjetivo, nucObjetivo, ano);
       if (objetivoEnObjetivo.length > 0) {
         objetivoEnObjetivo.forEach((match) => {
           partialMatches.push({
@@ -184,8 +179,6 @@ router.post('/imei/register', requireRecordCreator, async (req, res) => {
     if (inserted === 0) {
       message = 'No se registró ningún IMEI porque todos los objetivos ya existen exactamente con ese IMEI.';
       messageType = 'error';
-    } else if (sinUtilidad) {
-      message = `Se registró ${inserted} objetivo(s) con IMEI sin utilidad.`;
     } else if (partialMatches.length > 0) {
       message = `IMEI registrado correctamente en ${inserted} objetivo(s). Existe una coincidencia parcial con otros objetivos/NUC/año.`;
     } else {
