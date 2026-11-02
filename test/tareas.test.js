@@ -89,10 +89,10 @@ test('columns list the oldest arrival first and editing never writes the arrival
   const columns = await store.board({}, '2026-11-02');
   assert.match(calls.at(-1).sql, /ORDER BY t.fecha_llegada, t.created_at, t.id$/);
   // Whatever was already in Enviada before November is archived and left off the board.
-  assert.match(calls.at(-1).sql, /AND NOT \(t.estado = 'enviada' AND t.enviada_el IS NOT NULL AND t.enviada_el < ?\?\)/);
+  assert.match(calls.at(-1).sql, /AND NOT \(t.estado = 'enviada' AND t.enviada_el IS NOT NULL AND t.enviada_el < \?\)/);
   assert.deepEqual(calls.at(-1).values, ['2026-11-01']);
   await store.archivo({ buscar: ' oficio ' }, '2026-11-02');
-  assert.match(calls.at(-1).sql, /WHERE t.estado = 'enviada' AND t.enviada_el IS NOT NULL AND t.enviada_el < ?\? AND CONCAT_WS[\s\S]*ORDER BY t.enviada_el DESC/);
+  assert.match(calls.at(-1).sql, /WHERE t.estado = 'enviada' AND t.enviada_el IS NOT NULL AND t.enviada_el < \? AND CONCAT_WS[\s\S]*ORDER BY t.enviada_el DESC/);
   assert.deepEqual(calls.at(-1).values, ['2026-11-01', '%oficio%']);
   // An unknown column falls back to Pendiente; the date is shown day first.
   assert.deepEqual(columns.pendiente.map((row) => [row.id, row.llegada]), [[4, '20/10/2026'], [9, '']]);
