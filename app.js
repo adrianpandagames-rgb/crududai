@@ -33,6 +33,9 @@ import { createImagenesRouter, createPublicImageRouter } from './src/imagenesRou
 import { createNombresRouter } from './src/nombresRouter.js';
 import { createPerfilesRouter } from './src/perfilesRouter.js';
 import { createTareasRouter } from './src/tareasRouter.js';
+import { createCuentaRouter } from './src/cuentaRouter.js';
+import { createCuentaStore } from './src/cuentaService.js';
+import { createNotificacionesStore } from './src/notificacionesService.js';
 import { obtenerMedidores } from './src/medidoresService.js';
 import { resetGoogleGeocodingQuota } from './src/googleGeocodingQuota.js';
 import {
@@ -74,7 +77,6 @@ app.use(express.urlencoded({ extended: true, limit: '10mb', parameterLimit: 5000
 app.use("/public", express.static(fileURLToPath(new URL('./public/', import.meta.url))));
 
 const sessions = new Map();
-const pendingRouteToasts = new Map();
 const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const loginRateLimiter = createLoginRateLimiter();
 setInterval(() => loginRateLimiter.prune(), LOGIN_WINDOW_MS).unref();
@@ -88,7 +90,6 @@ const writeAuditLog = ({ userId = null, userEmail = '', action, requestPath, sta
 };
 
 app.locals.writeAuditLog = writeAuditLog;
-app.locals.pendingRouteToasts = pendingRouteToasts;
 
 const getAuthToken = (req) => {
   const cookieHeader = req.headers.cookie || '';
@@ -97,26 +98,30 @@ const getAuthToken = (req) => {
   return authCookie ? authCookie.slice('auth='.length) : null;
 };
 
-// Task assignments queue up, so two in a row are both shown; the newest 20 are kept for someone who is away.
-const pendingTaskToasts = new Map();
-const MAX_TASK_TOASTS = 20;
-const queueTaskToast = (userId, toast) => {
-  const queue = pendingTaskToasts.get(Number(userId)) || [];
-  queue.push(toast);
-  pendingTaskToasts.set(Number(userId), queue.slice(-MAX_TASK_TOASTS));
-};
+const cuentas = createCuentaStore(pool);
+const notificaciones = createNotificacionesStore(pool);
 
-const consumePendingRouteToast = (userId) => {
-  if (typeof userId === 'undefined' || userId === null) return null;
-  const toast = pendingRouteToasts.get(userId);
-  if (typeof toast !== 'undefined') {
-    pendingRouteToasts.delete(userId);
-    return toast;
-  }
-  const queue = pendingTaskToasts.get(Number(userId));
+// Every notice (tasks, processed Ruta files, password changes) is kept in the person's notification list,
+// which survives restarts; the toast is only the moment it arrives. Toasts queue up, so two in a row are
+// both shown; the newest 20 are kept for someone who is away.
+const pendingToasts = new Map();
+const MAX_PENDING_TOASTS = 20;
+const notificar = (userId, toast) => {
+  const queue = pendingToasts.get(Number(userId)) || [];
+  queue.push(toast);
+  pendingToasts.set(Number(userId), queue.slice(-MAX_PENDING_TOASTS));
+  notificaciones.crear(Number(userId), { titulo: toast.title, mensaje: toast.message, url: toast.url })
+    .catch((error) => console.error('No se pudo guardar la notificación:', error.message));
+};
+app.locals.notificar = notificar;
+
+// Someone who turned toasts off still finds every notice in their list.
+const consumePendingRouteToast = (session) => {
+  const queue = pendingToasts.get(Number(session?.userId));
   if (!queue) return null;
-  if (queue.length <= 1) pendingTaskToasts.delete(Number(userId));
-  return queue.shift();
+  if (queue.length <= 1) pendingToasts.delete(Number(session.userId));
+  const toast = queue.shift();
+  return session.preferencias?.avisos === false ? null : toast;
 };
 
 const revokeUserSessions = (userId) => {
@@ -163,6 +168,12 @@ const requireAuth = async (req, res, next) => {
     session.isAdmin = Number(rows[0].is_admin) === 1 || rows[0].role === 'admin';
     session.role = session.isAdmin ? 'admin' : (rows[0].role || 'usuario');
     session.mustChangePassword = Number(rows[0].must_change_password) === 1;
+    // A failure here only costs the name, photo and counter on this page; it must not lock everyone out.
+    const [cuenta, noLeidas] = await Promise.all([
+      cuentas.get(session.userId, session.role).catch(() => ({ nombre: '', fotoVersion: '', preferencias: session.preferencias || {} })),
+      notificaciones.noLeidas(session.userId).catch(() => 0),
+    ]);
+    session.preferencias = cuenta.preferencias;
     sessions.set(token, session);
     req.session = session;
     res.locals.currentUser = {
@@ -171,9 +182,13 @@ const requireAuth = async (req, res, next) => {
       isAdmin: session.isAdmin === true,
       role: session.role,
       canEditRecords: session.isAdmin === true || session.role === 'semiadmin',
+      nombre: cuenta.nombre,
+      fotoVersion: cuenta.fotoVersion,
+      tema: cuenta.preferencias.tema,
+      noLeidas,
     };
 
-    const pendingToast = consumePendingRouteToast(session.userId);
+    const pendingToast = consumePendingRouteToast(session);
     if (pendingToast) {
       res.locals.toastMessage = pendingToast.message;
       res.locals.toastFileId = pendingToast.fileId;
@@ -230,7 +245,7 @@ app.use('/maigret', requireAuth, createMaigretRouter(pool, { searches: maigretSe
 app.use('/imagenes', requireAuth, createImagenesRouter(pool));
 app.use('/nombres', requireAuth, createNombresRouter(pool, { maigretSearches }));
 app.use('/perfiles', requireAuth, createPerfilesRouter(pool));
-app.use('/tareas', requireAuth, requireNonUecs, createTareasRouter(pool, { avisar: queueTaskToast }));
+app.use('/tareas', requireAuth, requireNonUecs, createTareasRouter(pool, { avisar: notificar }));
 // Reverse image search engines download the image without a session, through an expiring token.
 app.use('/imagen-publica', createPublicImageRouter(pool));
 
@@ -293,7 +308,9 @@ app.post('/login', requireSameOrigin, async (req, res) => {
         res.cookie('auth', authToken, buildSessionCookieOptions(shouldRemember));
         writeAuditLog({ userId: user.id, userEmail: user.email, action: 'LOGIN', requestPath: '/login', statusCode: 302, ipAddress: req.ip });
 
-        return res.redirect(Number(user.must_change_password) === 1 ? '/cambiar-contrasena' : '/Crud');
+        if (Number(user.must_change_password) === 1) return res.redirect('/cambiar-contrasena');
+        const cuenta = await cuentas.get(user.id, userRoleOf(user)).catch(() => null);
+        return res.redirect(cuenta?.preferencias.inicio || '/Crud');
     } catch (error) {
         console.error(error.stack || error);
         writeAuditLog({ userEmail: normalizedEmail, action: 'LOGIN_FAILED', requestPath: '/login', statusCode: 500, ipAddress: req.ip });
@@ -325,7 +342,7 @@ app.get('/api/route-toast', async (req, res) => {
     return res.status(401).json({ message: null, fileId: null });
   }
 
-  const pendingToast = consumePendingRouteToast(session.userId);
+  const pendingToast = consumePendingRouteToast(session);
   return res.json({
     message: pendingToast ? pendingToast.message : null,
     fileId: pendingToast ? pendingToast.fileId : null,
@@ -433,30 +450,62 @@ app.post('/cambiar-contrasena', requireSameOrigin, requireAuth, async (req, res,
   }
 
   try {
-    const passwordHash = await hashPassword(password);
-    const [result] = await pool.execute(
-      'UPDATE users SET password = ?, must_change_password = 0 WHERE id = ? AND BINARY password = ?',
-      [passwordHash, req.session.userId, expectedCredentialHash],
-    );
-    if (result.affectedRows !== 1) {
-      sessions.delete(getAuthToken(req));
-      res.clearCookie('auth', buildSessionCookieOptions());
-      return res.redirect('/');
-    }
-    revokeUserSessions(req.session.userId);
-    req.session = { ...req.session, credentialHash: passwordHash, mustChangePassword: false, lastActivity: Date.now() };
-    const authToken = crypto.randomBytes(24).toString('hex');
-    sessions.set(authToken, req.session);
-    res.cookie('auth', authToken, buildSessionCookieOptions());
+    if (!await guardarContrasena(req, res, password, expectedCredentialHash)) return res.redirect('/');
     const notification = await notifyUser(req.session.email, 'changed');
     if (!notification.sent) {
       return res.render('pages/cambiar-contrasena', { error: `Contraseña actualizada. ${notification.warning}`, completed: true });
     }
-    return res.redirect('/Crud');
+    return res.redirect(req.session.preferencias?.inicio || '/Crud');
   } catch (error) {
     return next(error);
   }
 });
+
+// Saves the new password only if the credential is still the one this session signed in with, then closes
+// every session of the person (on other devices too) and leaves this request on a fresh one.
+// Returns false, and signs this session out, when the password was changed elsewhere first.
+async function guardarContrasena(req, res, password, expectedCredentialHash) {
+  const passwordHash = await hashPassword(password);
+  const [result] = await pool.execute(
+    'UPDATE users SET password = ?, must_change_password = 0 WHERE id = ? AND BINARY password = ?',
+    [passwordHash, req.session.userId, expectedCredentialHash],
+  );
+  if (result.affectedRows !== 1) {
+    sessions.delete(getAuthToken(req));
+    res.clearCookie('auth', buildSessionCookieOptions());
+    return false;
+  }
+  revokeUserSessions(req.session.userId);
+  req.session = { ...req.session, credentialHash: passwordHash, mustChangePassword: false, lastActivity: Date.now() };
+  const authToken = crypto.randomBytes(24).toString('hex');
+  sessions.set(authToken, req.session);
+  res.cookie('auth', authToken, buildSessionCookieOptions());
+  notificar(req.session.userId, {
+    title: 'Contraseña actualizada',
+    message: 'Se cambió la contraseña de tu cuenta. Si no fuiste tú, avisa de inmediato al administrador.',
+    url: '/cuenta',
+  });
+  return true;
+}
+
+// A password change from Mi cuenta asks for the current one, so an unattended open session cannot be used to
+// take over the account. Wrong attempts count against the same limit as the login.
+const cambiarContrasenaPropia = async (req, res, { actual, nueva }) => {
+  const expectedCredentialHash = req.session.credentialHash;
+  const retryAfterMs = loginRateLimiter.retryAfterMs(req.ip, req.session.email);
+  if (retryAfterMs > 0) {
+    return { error: `Demasiados intentos fallidos. Intenta de nuevo en ${Math.ceil(retryAfterMs / 60000)} minuto(s).` };
+  }
+  if (!await verifyPassword(actual, expectedCredentialHash)) {
+    loginRateLimiter.recordFailure(req.ip, req.session.email);
+    return { error: 'La contraseña actual no es correcta.' };
+  }
+  if (!await guardarContrasena(req, res, nueva, expectedCredentialHash)) return { ended: true };
+  const notification = await notifyUser(req.session.email, 'changed');
+  return { warning: notification.sent ? null : notification.warning };
+};
+
+app.use('/cuenta', requireAuth, createCuentaRouter(pool, { cuentas, notificaciones, cambiarContrasena: cambiarContrasenaPropia }));
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const generateSecurePassword = () => crypto.randomBytes(24).toString('base64url');

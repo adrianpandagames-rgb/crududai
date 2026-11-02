@@ -75,10 +75,11 @@ const processRutaFile = async (job, buffer, extension, sourceMetadata, notificat
           [resultCsv, sourceMetadata ? JSON.stringify(sourceMetadata) : null, Math.max(rows.length - 1, 0), job.id],
     );
 
-    if (notification?.userId && notification?.pendingToasts) {
-      notification.pendingToasts.set(notification.userId, {
-        message: 'El archivo se procesó correctamente.',
-        fileId: job.id,
+    if (notification?.userId && notification?.notificar) {
+      notification.notificar(notification.userId, {
+        title: 'Archivo procesado',
+        message: 'El archivo de Ruta se procesó correctamente.',
+        url: `/ruta?highlight=${encodeURIComponent(job.id)}`,
       });
     }
   } catch (error) {
@@ -178,7 +179,7 @@ router.post('/ruta/importar', rutaUpload, async (req, res) => {
   const job = { id };
   const notification = {
     userId: req.session?.userId,
-    pendingToasts: req.app.locals.pendingRouteToasts,
+    notificar: req.app.locals.notificar,
   };
   setTimeout(() => processRutaFile(job, req.file.buffer, extension, sourceMetadata, notification), RUTA_PROCESSING_DELAY_MS);
 

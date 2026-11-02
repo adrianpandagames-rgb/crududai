@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <%- include('../includes/head') %>
+  </head>
+  <body>
+    <%- include('../includes/header') %>
+    <main class="container page-offset">
+      <div class="row justify-content-md-center">
+        <div class="col-lg-8 mt-5">
+          <h1 class="title text-center mb-4">Mi cuenta</h1>
+          <% if (message) { %><div class="alert alert-success"><%= message %></div><% } %>
+          <% if (error) { %><div class="alert alert-danger"><%= error %></div><% } %>
+
+          <section class="card p-4 mb-4" aria-labelledby="perfil-titulo">
+            <h2 class="h5 mb-3" id="perfil-titulo">Perfil</h2>
+            <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+              <% if (cuenta.fotoVersion) { %>
+              <img src="/cuenta/foto?v=<%= cuenta.fotoVersion %>" alt="Tu foto" width="96" height="96" class="rounded-circle" style="object-fit: cover;" />
+              <% } else { %>
+              <span class="rounded-circle d-inline-flex align-items-center justify-content-center text-white fs-2"
+                style="width: 96px; height: 96px; background: #198754;" aria-hidden="true"><%= ((cuenta.nombre || email)[0] || '?').toUpperCase() %></span>
+              <% } %>
+              <div class="flex-fill">
+                <div class="fw-semibold"><%= cuenta.nombre || 'Sin nombre' %></div>
+                <div class="text-muted small"><%= email %></div>
+              </div>
+            </div>
+
+            <form action="/cuenta/foto" method="POST" enctype="multipart/form-data" class="mb-3">
+              <label for="foto" class="form-label">Foto</label>
+              <div class="d-flex flex-wrap gap-2">
+                <input type="file" id="foto" name="foto" class="form-control flex-fill w-auto" accept="image/jpeg,image/png,image/webp,image/gif" required aria-describedby="fotoAyuda" />
+                <button class="btn btn-primary" type="submit">Subir foto</button>
+              </div>
+              <div id="fotoAyuda" class="form-text">JPG, PNG, WebP o GIF de hasta <%= maxFotoMb %> MB. Se recorta en cuadro y se le quitan los datos de ubicación.</div>
+            </form>
+            <% if (cuenta.fotoVersion) { %>
+            <form action="/cuenta/foto/eliminar" method="POST" class="mb-3">
+              <button class="btn btn-outline-danger btn-sm" type="submit">Quitar foto</button>
+            </form>
+            <% } %>
+
+            <form action="/cuenta/nombre" method="POST" autocomplete="off">
+              <label for="nombre" class="form-label">Nombre</label>
+              <div class="d-flex flex-wrap gap-2">
+                <input type="text" id="nombre" name="nombre" class="form-control flex-fill w-auto" maxlength="<%= MAX_NOMBRE_LENGTH %>" value="<%= cuenta.nombre %>" aria-describedby="nombreAyuda" />
+                <button class="btn btn-primary" type="submit">Guardar nombre</button>
+              </div>
+              <div id="nombreAyuda" class="form-text">Opcional. Si lo dejas vacío, se muestra tu correo.</div>
+            </form>
+          </section>
+
+          <section class="card p-4 mb-4" id="contrasena" aria-labelledby="contrasena-titulo">
+            <h2 class="h5 mb-3" id="contrasena-titulo">Contraseña</h2>
+            <form action="/cuenta/contrasena" method="POST">
+              <div class="mb-3">
+                <label class="form-label" for="currentPassword">Contraseña actual</label>
+                <input class="form-control" type="password" id="currentPassword" name="currentPassword" required autocomplete="current-password" />
+              </div>
+              <div class="row">
+                <div class="col-sm-6 mb-3">
+                  <label class="form-label" for="password">Nueva contraseña</label>
+                  <input class="form-control" type="password" id="password" name="password" minlength="8" required autocomplete="new-password" />
+                </div>
+                <div class="col-sm-6 mb-3">
+                  <label class="form-label" for="confirmPassword">Confirmar nueva contraseña</label>
+                  <input class="form-control" type="password" id="confirmPassword" name="confirmPassword" minlength="8" required autocomplete="new-password" />
+                </div>
+              </div>
+              <p class="small text-muted">Al cambiarla se cierran tus sesiones abiertas en otros equipos.</p>
+              <button class="btn btn-primary" type="submit">Cambiar contraseña</button>
+            </form>
+          </section>
+
+          <section class="card p-4 mb-4" id="preferencias" aria-labelledby="preferencias-titulo">
+            <h2 class="h5 mb-3" id="preferencias-titulo">Preferencias</h2>
+            <form action="/cuenta/preferencias" method="POST">
+              <div class="row">
+                <div class="col-sm-6 mb-3">
+                  <label for="tema" class="form-label">Tema</label>
+                  <select id="tema" name="tema" class="form-select">
+                    <% Object.entries(temas).forEach(([value, label]) => { %>
+                    <option value="<%= value %>"<%= cuenta.preferencias.tema === value ? ' selected' : '' %>><%= label %></option>
+                    <% }) %>
+                  </select>
+                </div>
+                <div class="col-sm-6 mb-3">
+                  <label for="inicio" class="form-label">Página al iniciar sesión</label>
+                  <select id="inicio" name="inicio" class="form-select">
+                    <% paginasInicio.forEach(({ path, label }) => { %>
+                    <option value="<%= path %>"<%= cuenta.preferencias.inicio === path ? ' selected' : '' %>><%= label %></option>
+                    <% }) %>
+                  </select>
+                </div>
+              </div>
+              <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="avisos" name="avisos" value="1"<%= cuenta.preferencias.avisos ? ' checked' : '' %> />
+                <label class="form-check-label" for="avisos">Mostrar avisos emergentes</label>
+                <div class="form-text">Si los desactivas, los avisos se siguen guardando en tus notificaciones.</div>
+              </div>
+              <button class="btn btn-primary" type="submit">Guardar preferencias</button>
+            </form>
+          </section>
+
+          <section class="card p-4 mb-4" aria-labelledby="notificaciones-titulo">
+            <h2 class="h5 mb-2" id="notificaciones-titulo">Notificaciones</h2>
+            <% const unread = Number(currentUser.noLeidas) || 0; %>
+            <p class="mb-3"><%= unread ? `Tienes ${unread} sin leer.` : 'No tienes notificaciones sin leer.' %></p>
+            <a class="btn btn-outline-primary align-self-start" href="/cuenta/notificaciones">Ver notificaciones</a>
+          </section>
+        </div>
+      </div>
+    </main>
+    <%- include('../includes/scripts') %>
+    <%- include('../includes/footer') %>
+  </body>
+</html>

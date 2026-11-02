@@ -23,6 +23,7 @@
     "migrate:ubicaciones": "node scripts/normalize-ubicaciones.js",
     "migrate:localidades": "node scripts/import-localidades.js",
     "migrate:tareas": "node scripts/add-tareas.js",
+    "migrate:cuentas": "node scripts/add-cuentas.js",
     "package:win": "pkg . --targets node18-win-x64 --output dist/correlatador.exe",
     "build": "node --check app.js"
   },

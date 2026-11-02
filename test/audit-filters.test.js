@@ -142,7 +142,7 @@ test('the menu is grouped and each role keeps exactly its links', async () => {
   const menu = async (currentUser) => {
     const html = await ejs.renderFile('views/includes/header.ejs', { currentUser, currentPath: '/' });
     return [...html.matchAll(/<summary[^>]*>([^<]+)<\/summary>|<a class="menu-item[^"]*" href="[^"]+"[^>]*>([^<]+)</g)]
-      .map(([, group, link]) => (group ? `[${group}]` : link));
+      .map(([, group, link]) => (group ? `[${group}]` : link.trim()));
   };
   assert.deepEqual(await menu({ isAdmin: true, role: 'admin' }), [
     'Métricas', 'Tareas',
@@ -150,7 +150,7 @@ test('the menu is grouped and each role keeps exactly its links', async () => {
     '[Mapeo]', 'Ubicaciones', 'Georeferenciación', 'Planeación geográfica', 'Ruta', 'Coincidencias de antenas',
     '[OSINT]', 'Líneas Internacionales', 'Maigret', 'RastroX', 'Búsqueda por imagen',
     '[Administración]', 'Usuarios', 'Auditoría', 'Medidores', 'Red telefónica',
-    'Cerrar sesión',
+    'Mi cuenta', 'Notificaciones', 'Cerrar sesión',
   ]);
   const user = await menu({ isAdmin: false, role: 'usuario' });
   assert.ok(user.includes('Métricas') && user.includes('Tareas') && !user.includes('Georeferenciación') && !user.includes('[Administración]'));

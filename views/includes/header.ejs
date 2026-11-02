@@ -62,8 +62,31 @@
       </details>
     </li>
     <% }) %>
-    <li>
-      <a class="menu-item logout-btn" href="/logout">Cerrar sesión</a>
+    <%# The person's own menu: their photo or initial, their name (or e-mail) and how many notices are unread. %>
+    <% const displayName = user.nombre || String(user.email || '').split('@')[0]; %>
+    <% const unread = Number(user.noLeidas) || 0; %>
+    <% const userCurrent = navAt('/cuenta'); %>
+    <li class="menu-group user-menu">
+      <details>
+        <summary class="menu-item<%= userCurrent ? ' is-current' : '' %>" aria-label="Mi cuenta: <%= displayName %><%= unread ? `, ${unread} notificaciones sin leer` : '' %>">
+          <% if (user.fotoVersion) { %>
+          <img class="user-avatar" src="/cuenta/foto?v=<%= user.fotoVersion %>" alt="" width="28" height="28" />
+          <% } else { %>
+          <span class="user-avatar user-avatar-initial" aria-hidden="true"><%= (displayName[0] || '?').toUpperCase() %></span>
+          <% } %>
+          <span class="user-name"><%= displayName %></span>
+          <% if (unread) { %><span class="badge rounded-pill bg-danger user-badge" aria-hidden="true"><%= unread > 99 ? '99+' : unread %></span><% } %>
+        </summary>
+        <ul class="menu-submenu user-submenu">
+          <li><a class="menu-item<%= navPath === '/cuenta' ? ' is-current' : '' %>" href="/cuenta">Mi cuenta</a></li>
+          <li>
+            <a class="menu-item<%= navAt('/cuenta/notificaciones') ? ' is-current' : '' %>" href="/cuenta/notificaciones">Notificaciones
+              <% if (unread) { %><span class="badge rounded-pill bg-danger ms-1"><%= unread > 99 ? '99+' : unread %></span><% } %>
+            </a>
+          </li>
+          <li><a class="menu-item logout-btn" href="/logout">Cerrar sesión</a></li>
+        </ul>
+      </details>
     </li>
   </ul>
 </header>

@@ -1,2 +1,6 @@
+<%# A signed-in person's saved theme wins over this browser's; theme.js reads it before the page is drawn. %>
+<% if (typeof currentUser !== 'undefined' && currentUser && currentUser.tema) { %>
+<meta name="tema-usuario" content="<%= currentUser.tema %>" />
+<% } %>
 <link rel="stylesheet" href="/public/css/theme.css" />
 <script src="/public/js/theme.js"></script>

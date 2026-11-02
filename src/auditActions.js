@@ -8,7 +8,7 @@ export const auditResources = {
   GEOREFERENCIACION: 'Georreferenciación', PLANEACION: 'Planeación geográfica',
   TELEFONO: 'Teléfono', RED: 'Red telefónica', AUDITORIA: 'Auditoría', METRICAS: 'Métricas',
   MAIGRET: 'Maigret', IMAGEN: 'Búsqueda por imagen', NOMBRE: 'RastroX',
-  COINCIDENCIA: 'Coincidencias de antenas', PERFIL: 'Perfil', TAREA: 'Tarea',
+  COINCIDENCIA: 'Coincidencias de antenas', PERFIL: 'Perfil', TAREA: 'Tarea', CUENTA: 'Mi cuenta',
 };
 
 const metricTypes = {
@@ -31,6 +31,7 @@ export const auditOperationSql = `CASE
   WHEN method IN ('PUT', 'PATCH')
     OR LOWER(request_path) REGEXP '/(editar|modificar|update|restablecer-contrasena|rol|estado|mover|puesto)(/|$)'
     OR LOWER(request_path) LIKE '/metricas/registros/%'
+    OR LOWER(request_path) REGEXP '^/cuenta/(nombre|foto|contrasena|preferencias|tema)$'
     OR LOWER(request_path) = '/cambiar-contrasena' THEN 'EDITADO'
   WHEN method = 'POST' THEN 'REGISTRO'
   ELSE 'OTRO' END`;
@@ -51,6 +52,7 @@ export const auditResourceSql = `CASE
   WHEN LOWER(request_path) REGEXP '^/nombres(/|$)' THEN 'NOMBRE'
   WHEN LOWER(request_path) REGEXP '^/perfiles(/|$)' THEN 'PERFIL'
   WHEN LOWER(request_path) REGEXP '^/tareas(/|$)' THEN 'TAREA'
+  WHEN LOWER(request_path) REGEXP '^/cuenta(/|$)' THEN 'CUENTA'
   WHEN LOWER(request_path) REGEXP '^/auditoria(/|$)' THEN 'AUDITORIA'
   WHEN LOWER(request_path) REGEXP '^/ubicaciones(/|$)' THEN 'UBICACION'
   WHEN LOWER(request_path) REGEXP '^/ruta(/|$)' THEN 'RUTA'

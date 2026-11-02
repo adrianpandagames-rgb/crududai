@@ -4,6 +4,16 @@
   let preference;
   try { preference = localStorage.getItem(key); } catch { /* Storage may be disabled. */ }
   if (preference !== 'dark' && preference !== 'light') preference = null;
+  // Signed in, the theme saved in Mi cuenta wins, so it is the same on every device; "sistema" follows the device.
+  const saved = document.querySelector('meta[name="tema-usuario"]')?.content;
+  const signedIn = Boolean(saved);
+  if (signedIn) {
+    preference = { claro: 'light', oscuro: 'dark' }[saved] || null;
+    try {
+      if (preference) localStorage.setItem(key, preference);
+      else localStorage.removeItem(key);
+    } catch { /* Storage may be disabled. */ }
+  }
 
   let button;
   const apply = (theme) => {
@@ -26,6 +36,11 @@
       preference = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
       try { localStorage.setItem(key, preference); } catch { /* Keep the session preference. */ }
       apply(preference);
+      if (signedIn) {
+        fetch('/cuenta/tema', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tema: preference }),
+        }).catch(() => { /* The choice still applies on this device. */ });
+      }
     });
     document.body.appendChild(button);
     apply(document.documentElement.dataset.theme);
