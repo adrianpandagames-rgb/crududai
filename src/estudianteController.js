@@ -1,5 +1,6 @@
 import pool from "./db.js";
 import { normalizeStoredCity } from './locationText.js';
+import { IMEI_SIN_UTILIDAD } from './imeiUtils.js';
 
 const formatCoordinateValue = (value) => {
   if (value === null || value === undefined || value === "") {
@@ -191,9 +192,10 @@ export const agregarImei = async (imei, idObjetivo, metadata = {}) => {
   try {
     const brandName = metadata.brand_name || null;
     const modelo = metadata.modelo || null;
+    // A "sin utilidad" row has no device to look up, so the daily metadata job skips it.
     await pool.query(
-      "INSERT INTO imei (imei, idObjetivo, brand_name, modelo) VALUES (?, ?, ?, ?)",
-      [imei, idObjetivo, brandName, modelo]
+      "INSERT INTO imei (imei, idObjetivo, brand_name, modelo, metadata_not_found) VALUES (?, ?, ?, ?, ?)",
+      [imei, idObjetivo, brandName, modelo, imei === IMEI_SIN_UTILIDAD ? 1 : 0]
     );
   } catch (error) {
     console.log(error);
@@ -291,7 +293,8 @@ export const listarImeis = async (searchTerm = "", page = 1, pageSize = 10, { pe
       values.push(`%${searchTerm.toString().trim()}%`);
     }
     if (pendientes) {
-      conditions.push('(i.brand_name IS NULL OR i.modelo IS NULL)');
+      conditions.push('(i.brand_name IS NULL OR i.modelo IS NULL)', 'i.imei <> ?');
+      values.push(IMEI_SIN_UTILIDAD);
     }
 
     const from = 'FROM imei i INNER JOIN objetivoImei o ON i.idObjetivo = o.idObjetivo'

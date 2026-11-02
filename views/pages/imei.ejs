@@ -72,6 +72,10 @@
                   </div>
                 </div>
                 <input type="hidden" id="imei" name="imei" />
+                <div class="form-check mt-2">
+                  <input type="checkbox" id="sinUtilidadImei" name="sinUtilidad" value="true" class="form-check-input" />
+                  <label for="sinUtilidadImei" class="form-check-label">Sin utilidad</label>
+                </div>
               </div>
               <div class="row g-3">
                 <div id="objetivoInputsContainer" class="col-md-8">
@@ -368,7 +372,21 @@
 
       imeiBaseInput?.addEventListener('input', updateImeiCheckDigit);
 
+      // "Sin utilidad" registers the objetivos without an IMEI number.
+      const sinUtilidadImeiInput = document.getElementById('sinUtilidadImei');
+      const updateSinUtilidadImei = () => {
+        const sinUtilidad = Boolean(sinUtilidadImeiInput?.checked);
+        imeiBaseInput.disabled = sinUtilidad;
+        imeiBaseInput.required = !sinUtilidad;
+        if (sinUtilidad) {
+          imeiBaseInput.value = '';
+          updateImeiCheckDigit();
+        }
+      };
+      sinUtilidadImeiInput?.addEventListener('change', updateSinUtilidadImei);
+
       imeiForm?.addEventListener('submit', (event) => {
+        if (sinUtilidadImeiInput?.checked) return;
         if (!updateImeiCheckDigit()) {
           event.preventDefault();
           imeiBaseInput.focus();

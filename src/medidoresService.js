@@ -38,7 +38,7 @@ export const obtenerMedidores = async (pool) => {
         (SELECT COUNT(*) FROM ubicaciones) AS ubicaciones,
         (SELECT COUNT(*) FROM users) AS usuarios,
         (SELECT COUNT(*) FROM imei WHERE brand_name IS NOT NULL AND modelo IS NOT NULL) AS imeisConMetadata,
-        (SELECT COUNT(*) FROM imei WHERE brand_name IS NULL OR modelo IS NULL) AS imeisPendientes,
+        (SELECT COUNT(*) FROM imei WHERE (brand_name IS NULL OR modelo IS NULL) AND imei <> 'sin utilidad') AS imeisPendientes,
         (SELECT COUNT(*) FROM ubicaciones WHERE latitude IS NULL OR longitude IS NULL) AS ubicacionesSinCoordenadas,
         (SELECT COUNT(*) FROM ubicaciones WHERE lugar IS NULL OR TRIM(lugar) = '') AS ubicacionesSinCiudad,
         (SELECT COUNT(*) FROM objetivoImei o WHERE NOT EXISTS (SELECT 1 FROM imei i WHERE i.idObjetivo = o.idObjetivo)) AS objetivosImeiSinImei,
