@@ -5,7 +5,7 @@ export const ESTADOS = ['pendiente', 'en_proceso', 'falta_oficio', 'terminada', 
 export const ESTADO_LABELS = {
   pendiente: 'Pendiente', en_proceso: 'En proceso', falta_oficio: 'Falta oficio', terminada: 'Terminada', enviada: 'Enviada',
 };
-export const MAX_LENGTHS = { titulo: 200, descripcion: 2000 };
+export const MAX_LENGTHS = { titulo: 200, descripcion: 2000, comentario: 1000 };
 
 // Whole days since a task arrived before its card is framed in yellow (2 to 3 days) and then in red (more than 3).
 export const DIAS_AMARILLO = 2;
@@ -62,6 +62,14 @@ export function validarTarea({ titulo, descripcion, licenciado, ingeniero, estad
   return { tarea };
 }
 
+// A comment keeps its line breaks, like the description.
+export function validarComentario(value) {
+  const texto = cleanText(value);
+  if (!texto) return { error: 'Escriba el comentario.' };
+  if (texto.length > MAX_LENGTHS.comentario) return { error: 'El comentario es demasiado largo.' };
+  return { texto };
+}
+
 // Only whoever created the task, an administrator or a semiadministrator may delete it.
 export const puedeEliminar = (tarea, session) => session?.isAdmin === true || session?.role === 'semiadmin'
   || (tarea.creadorId != null && tarea.creadorId === Number(session?.userId));
@@ -113,6 +121,16 @@ export function createTareasStore(pool) {
         await pool.query('ALTER TABLE tareas ADD COLUMN enviada_el DATE NULL');
         await pool.query("UPDATE tareas SET enviada_el = DATE(updated_at) WHERE estado = 'enviada'");
       }
+      // Each task's history: the comments people leave and a line for every change made to it.
+      await pool.query(`CREATE TABLE IF NOT EXISTS tareas_historial (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        tarea_id BIGINT UNSIGNED NOT NULL,
+        tipo VARCHAR(20) NOT NULL,
+        texto TEXT NOT NULL,
+        user_id BIGINT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX tareas_historial_tarea (tarea_id, id)
+      )`);
     }).catch((error) => { storage = null; throw error; });
     return storage;
   };
@@ -129,12 +147,13 @@ export function createTareasStore(pool) {
     t.licenciado_id AS licenciadoId, l.email AS licenciado, t.ingeniero_id AS ingenieroId, i.email AS ingeniero,
     DATE_FORMAT(t.licenciado_listo_at, '%d/%m/%Y %H:%i') AS licenciadoListo, DATE_FORMAT(t.ingeniero_listo_at, '%d/%m/%Y %H:%i') AS ingenieroListo,
     DATE_FORMAT(t.fecha_llegada, '%Y-%m-%d') AS fechaLlegada, DATE_FORMAT(t.enviada_el, '%Y-%m-%d') AS enviadaEl, t.user_id AS creadorId, c.email AS creador,
-    DATE_FORMAT(t.updated_at, '%Y-%m-%d %H:%i') AS actualizada
+    DATE_FORMAT(t.updated_at, '%Y-%m-%d %H:%i') AS actualizada,
+    (SELECT COUNT(*) FROM tareas_historial h WHERE h.tarea_id = t.id AND h.tipo = 'comentario') AS comentarios
     FROM tareas t LEFT JOIN users l ON l.id = t.licenciado_id LEFT JOIN users i ON i.id = t.ingeniero_id LEFT JOIN users c ON c.id = t.user_id`;
   const numberOrNull = (value) => (value == null ? null : Number(value));
   const normalize = (row) => ({
     ...row, id: Number(row.id), licenciadoId: numberOrNull(row.licenciadoId), ingenieroId: numberOrNull(row.ingenieroId),
-    creadorId: numberOrNull(row.creadorId),
+    creadorId: numberOrNull(row.creadorId), comentarios: Number(row.comentarios ?? 0),
     llegada: row.fechaLlegada ? row.fechaLlegada.split('-').reverse().join('/') : '', dias: diasDesde(row.fechaLlegada),
     enviada: row.enviadaEl ? row.enviadaEl.split('-').reverse().join('/') : '',
   });
@@ -223,8 +242,24 @@ export function createTareasStore(pool) {
     if (!current) return 'no-encontrada';
     if (!puedeEliminar(current, session)) return 'sin-permiso';
     await pool.execute('DELETE FROM tareas WHERE id = ?', [id]);
+    await pool.execute('DELETE FROM tareas_historial WHERE tarea_id = ?', [id]);
     return 'eliminada';
   };
 
-  return { initialize, responsables, board, archivo, get, create, move, update, marcarListo, remove };
+  // Adds a line to a task's history: tipo is 'comentario' for what someone wrote, 'cambio' for a change the board recorded.
+  const registrar = async (tareaId, tipo, texto, userId) => {
+    await initialize();
+    await pool.execute('INSERT INTO tareas_historial (tarea_id, tipo, texto, user_id) VALUES (?, ?, ?, ?)',
+      [tareaId, tipo, texto, userId == null ? null : Number(userId)]);
+  };
+
+  // A task's history, oldest first.
+  const historial = async (tareaId) => {
+    await initialize();
+    const [rows] = await pool.execute(`SELECT h.id, h.tipo, h.texto, u.email AS autor, DATE_FORMAT(h.created_at, '%d/%m/%Y %H:%i') AS fecha
+      FROM tareas_historial h LEFT JOIN users u ON u.id = h.user_id WHERE h.tarea_id = ? ORDER BY h.id`, [tareaId]);
+    return rows.map((row) => ({ ...row, id: Number(row.id) }));
+  };
+
+  return { initialize, responsables, board, archivo, get, create, move, update, marcarListo, remove, registrar, historial };
 }

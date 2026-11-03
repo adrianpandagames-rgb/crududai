@@ -50,7 +50,11 @@
               <button class="btn btn-sm btn-outline-secondary" type="submit" name="direccion" value="derecha"
                 title="Mover a la columna siguiente" aria-label="Mover a la columna siguiente"><i class="bi bi-arrow-right"></i></button>
             </form>
-            <a class="btn btn-sm btn-outline-primary ms-auto" href="/tareas/<%= tarea.id %>/editar<%= filtro ? `?volver=${filtro}` : '' %>"
+            <% const comentariosTexto = tarea.comentarios === 1 ? '1 comentario' : `${tarea.comentarios || 0} comentarios`; %>
+            <a class="btn btn-sm btn-outline-secondary ms-auto tarea-comentarios" href="/tareas/<%= tarea.id %>/editar<%= filtro ? `?volver=${filtro}` : '' %>#historial"
+              title="Comentarios e historial" aria-label="<%= comentariosTexto %> e historial de <%= tarea.titulo %>">
+              <i class="bi bi-chat-left-text" aria-hidden="true"></i><% if (tarea.comentarios) { %> <%= tarea.comentarios %><% } %></a>
+            <a class="btn btn-sm btn-outline-primary" href="/tareas/<%= tarea.id %>/editar<%= filtro ? `?volver=${filtro}` : '' %>"
               title="Editar" aria-label="Editar <%= tarea.titulo %>"><i class="bi bi-pencil"></i></a>
             <% if (puedeEliminar(tarea)) { %>
               <form action="/tareas/eliminar/<%= tarea.id %>" method="POST"

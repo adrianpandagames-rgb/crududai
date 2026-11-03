@@ -118,6 +118,12 @@ test('columns list the oldest arrival first and editing never writes the arrival
   assert.ok(await store.move(4, 'en_proceso'));
   assert.equal(await store.move(7, 'en_proceso'), false);
   assert.equal(await store.move(4, 'archivada'), false);
+  // Comments and changes go to the task's history, which is deleted with the task.
+  await store.registrar(4, 'comentario', 'Falta la firma', '5');
+  assert.match(calls.at(-1).sql, /^INSERT INTO tareas_historial \(tarea_id, tipo, texto, user_id\)/);
+  assert.deepEqual(calls.at(-1).values, [4, 'comentario', 'Falta la firma', 5]);
+  assert.equal(await store.remove(4, { isAdmin: true }), 'eliminada');
+  assert.deepEqual(calls.slice(-2).map((call) => call.sql), ['DELETE FROM tareas WHERE id = ?', 'DELETE FROM tareas_historial WHERE tarea_id = ?']);
 });
 
 test('the board is closed to UECS and moves cards by drag or by arrow', async (t) => {
@@ -135,6 +141,7 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
   const updated = [];
   const moves = [];
   const created = [];
+  const historia = [];
   const tareas = {
     responsables: async () => users,
     board: async ({ responsable }) => {
@@ -160,6 +167,9 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
       { id: 6, titulo: 'Oficio viejo', descripcion: '', ingeniero: 'beto@udai.mx', enviadaEl: '2026-09-28', enviada: '28/09/2026', llegada: '20/09/2026' },
     ].filter((task) => !buscar || task.titulo.includes(buscar)),
     remove: async (id, session) => (puedeEliminar(tasks.find((task) => String(task.id) === id), session) ? 'eliminada' : 'sin-permiso'),
+    registrar: async (tareaId, tipo, texto, userId) => { historia.push({ tareaId: Number(tareaId), tipo, texto, userId }); },
+    historial: async (tareaId) => historia.filter((entrada) => entrada.tareaId === Number(tareaId))
+      .map((entrada) => ({ ...entrada, autor: 'ana@udai.mx', fecha: '02/11/2026 11:00' })),
   };
   const app = express();
   app.set('views', fileURLToPath(new URL('../views', import.meta.url)));
@@ -168,7 +178,7 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
   app.use(express.urlencoded({ extended: false }));
   app.use((req, res, next) => {
     const role = req.headers['x-role'];
-    req.session = role ? { userId: 5, role } : undefined;
+    req.session = role ? { userId: 5, role, email: 'ana@udai.mx' } : undefined;
     res.locals.currentUser = req.session ? { id: 5, role } : undefined;
     next();
   });
@@ -219,6 +229,7 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
   assert.deepEqual([created[0].licenciadoId, created[0].ingenieroId, created[0].fechaLlegada], [5, 8, '2026-10-01']);
   // The engineer is told; the user who created it filled the licenciado slot themselves, so they are not.
   assert.deepEqual(toasts, [[8, { title: 'Nueva tarea asignada', message: 'Se te asignó “Revisar” como ingeniero.', url: '/tareas#tarea-3' }]]);
+  assert.deepEqual(historia, [{ tareaId: 3, tipo: 'cambio', texto: 'Creó la tarea en Pendiente.', userId: 5 }]);
 
   // Ana stops being a licenciada: the task she already has keeps her when it is edited, new tasks no longer offer her.
   users[0].puesto = 'ingeniero';
@@ -230,8 +241,14 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
   const edited = form({ titulo: 'Contestar oficio', licenciado: '5', ingeniero: '8', fechaLlegada: '2000-01-01' });
   assert.match(message(await fetch(`${base}/1/editar`, as('usuario', edited))), /actualizada/);
   assert.deepEqual([updated[0][1].licenciadoId, updated[0][1].ingenieroId, updated[0][1].fechaLlegada], [5, 8, undefined]);
-  // Saving a task without changing who has it notifies nobody again.
+  // Saving a task without changing who has it notifies nobody again, and with nothing changed its history gets no line.
   assert.equal(toasts.length, 1);
+  assert.equal(historia.length, 1);
+  const cambiado = form({ titulo: 'Contestar el oficio', descripcion: 'Urgente', licenciado: '', ingeniero: '8', estado: 'en_proceso' });
+  await fetch(`${base}/1/editar`, as('usuario', cambiado));
+  assert.equal(historia.at(-1).texto, 'Cambió el título de “Contestar oficio” a “Contestar el oficio”; cambió la descripción; '
+    + 'quitó a ana@udai.mx como licenciado; movió la tarea de Pendiente a En proceso.');
+  historia.length = 0;
   assert.equal((await fetch(base, as('usuario', form({ titulo: 'Otra', licenciado: '5', fechaLlegada: '2026-10-01' })))).status, 400);
   users[0].puesto = 'licenciado';
 
@@ -249,6 +266,10 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
   const pastEdge = await fetch(`${base}/1/mover`, as('usuario', form({ direccion: 'izquierda', estado: 'terminada' })));
   assert.ok(message(pastEdge).includes('no existe'));
   assert.deepEqual(moves, [[2, 'terminada'], [1, 'en_proceso'], [1, 'pendiente']]);
+  // Each move leaves a line in the task's history.
+  assert.deepEqual(historia.map(({ tareaId, texto }) => [tareaId, texto]), [
+    [2, 'Movió la tarea de En proceso a Terminada.'], [1, 'Movió la tarea de Pendiente a En proceso.'], [1, 'Movió la tarea de En proceso a Pendiente.']]);
+  historia.length = 0;
   // In Terminada and Enviada the frame is dropped by the column's style, so a card dragged there needs no redraw.
   assert.ok(page.includes('.tareas-lista:not([data-estado="terminada"], [data-estado="enviada"]) .tarea-card.is-roja'));
 
@@ -261,7 +282,7 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
   assert.match(message(notMine), /Solo el ingeniero asignado/);
   toasts.length = 0;
   assert.match(message(await fetch(`${base}/1/listo`, as('usuario', form({ puesto: 'licenciado', listo: '1' })))), /marcada como lista/);
-  // Beto, the engineer, hears about it; Ana, who marked it and created the task, does not.
+  // Beto, the engineer, hears about it; Ana, who marked it, does not, and neither would the creator.
   assert.deepEqual(toasts.map(([userId, toast]) => [userId, toast.message]),
     [[8, 'ana@udai.mx terminó su parte de “Contestar oficio” como licenciado.']]);
   const marcada = card(await (await fetch(base, as('usuario'))).text(), 1);
@@ -270,6 +291,23 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
   assert.match(await (await fetch(`${base}/1/editar`, as('usuario'))).text(), /Licenciado: ana@udai.mx terminó su parte el 02\/11\/2026 10:30/);
   assert.match(message(await fetch(`${base}/1/listo`, as('usuario', form({ puesto: 'licenciado', listo: '0' })))), /pendiente/);
   assert.equal(tasks[0].licenciadoListo, null);
+  assert.deepEqual(historia.map(({ texto }) => texto), ['Marcó su parte de licenciado como lista.', 'Desmarcó su parte de licenciado como lista.']);
+
+  // Anyone may comment; the assignees other than the author are told, and the comment shows with the changes.
+  toasts.length = 0;
+  const comentado = await fetch(`${base}/1/comentar`, as('usuario', form({ comentario: ' Falta la firma\r\ndel jefe ', volver: '5' })));
+  assert.equal(comentado.headers.get('location'), '/tareas/1/editar?volver=5#historial');
+  assert.deepEqual(historia.at(-1), { tareaId: 1, tipo: 'comentario', texto: 'Falta la firma\ndel jefe', userId: 5 });
+  assert.deepEqual(toasts, [[8, {
+    title: 'Nuevo comentario', message: 'ana@udai.mx comentó en “Contestar oficio”: Falta la firma\ndel jefe', url: '/tareas/1/editar#historial',
+  }]]);
+  const conHistorial = await (await fetch(`${base}/1/editar`, as('usuario'))).text();
+  assert.match(conHistorial, /tarea-comentario-texto">Falta la firma\ndel jefe</);
+  assert.ok(conHistorial.includes('ana@udai.mx: Marcó su parte de licenciado como lista.'));
+  const vacio = await fetch(`${base}/1/comentar`, as('usuario', form({ comentario: '   ' })));
+  assert.equal(vacio.status, 400);
+  assert.match(await vacio.text(), /is-invalid[\s\S]*Escriba el comentario/);
+  assert.equal(historia.length, 3);
 
   // The archive lists tasks by the month they were sent, and the board links to it.
   assert.ok(conBoton.includes('href="/tareas/archivo"'));
@@ -283,8 +321,9 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
   assert.match(message(await fetch(`${base}/eliminar/2`, as('usuario', form({})))), /Solo quien creó/);
   assert.match(message(await fetch(`${base}/eliminar/1`, as('usuario', form({})))), /eliminada/);
   assert.equal((await fetch(`${base}/eliminar/1`, as('uecs', form({})))).headers.get('location'), '/Crud');
-  // Every saved change tells the open boards (create, edit, drag, two arrows, two done marks, delete); rejected ones do not.
-  assert.equal(avisos, 8);
+  // Every saved change tells the open boards (create, two edits, drag, two arrows, two done marks, a comment, delete);
+  // rejected ones do not.
+  assert.equal(avisos, 10);
 
   const columns = await (await fetch(`${base}/tablero?responsable=5`, as('usuario'))).text();
   assert.ok(columns.includes('data-estado="pendiente"') && !columns.includes('<header') && !columns.includes('Nueva tarea'));

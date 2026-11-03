@@ -1,7 +1,8 @@
 import express from 'express';
 import { isSessionExpired } from './sessionUtils.js';
 import {
-  ESTADOS, ESTADO_LABELS, antiguedadOf, createTareasStore, haceDias, hoyLocal, puedeEliminar, validarLlegada, validarTarea,
+  ESTADOS, ESTADO_LABELS, MAX_LENGTHS, antiguedadOf, createTareasStore, haceDias, hoyLocal, puedeEliminar, validarComentario, validarLlegada,
+  validarTarea,
 } from './tareasService.js';
 import { puestoLabels, userPuestos } from './usuariosService.js';
 
@@ -64,6 +65,32 @@ export function createTareasRouter(pool, {
       });
     }
   };
+  // Every change to a task leaves one line in its history, made of the clauses given, e.g. "Movió la tarea de
+  // Pendiente a En proceso." Nothing is written when nothing changed.
+  const registrarCambio = async (req, cambios, tareaId = req.params.id) => {
+    if (!cambios.length) return;
+    const texto = cambios.join('; ');
+    await tareas.registrar(tareaId, 'cambio', `${texto[0].toUpperCase()}${texto.slice(1)}.`, req.session.userId);
+  };
+  const movida = (antes, despues) => `movió la tarea de ${ESTADO_LABELS[antes] ?? antes} a ${ESTADO_LABELS[despues]}`;
+  // What an edit changed, compared with the task as it was saved; opciones names the people in each slot.
+  const cambiosDe = (antes, despues, opciones) => {
+    const cambios = [];
+    if (antes.titulo !== despues.titulo) cambios.push(`cambió el título de “${antes.titulo}” a “${despues.titulo}”`);
+    if ((antes.descripcion || '') !== despues.descripcion) cambios.push('cambió la descripción');
+    for (const puesto of userPuestos) {
+      const [previo, nuevo] = [antes[`${puesto}Id`], despues[`${puesto}Id`]];
+      if (previo === nuevo) continue;
+      const nombre = (id) => opciones[puesto].find((user) => user.id === id)?.email || `Usuario ${id}`;
+      const puestoTexto = puestoLabels[puesto].toLowerCase();
+      if (previo == null) cambios.push(`asignó a ${nombre(nuevo)} como ${puestoTexto}`);
+      else if (nuevo == null) cambios.push(`quitó a ${nombre(previo)} como ${puestoTexto}`);
+      else cambios.push(`cambió el ${puestoTexto} de ${nombre(previo)} a ${nombre(nuevo)}`);
+    }
+    if (antes.estado !== despues.estado) cambios.push(movida(antes.estado, despues.estado));
+    return cambios;
+  };
+
   // Forms send the board's filter back in a hidden "volver" field, so an action returns to the same view.
   const filtroOf = (value) => (typeof value === 'string' && /^(\d+|sin)$/.test(value) ? value : '');
   const redirect = (res, message, type = 'error', { filtro = '', tareaId } = {}) => res.redirect('/tareas?' + new URLSearchParams({
@@ -108,8 +135,12 @@ export function createTareasRouter(pool, {
       ...locals, opciones, responsables, puestoLabels, hoy, form: { fechaLlegada: hoy }, formError: null, message: '', messageType: '', ...extra,
     });
   };
-  const renderEdit = (res, { tarea, opciones, error = null, volver = '' }, status = 200) => res.status(status).render('pages/editar-tarea', {
+  // The edit page also shows the task's history, with the form to comment on it.
+  const renderEdit = async (res, {
+    tarea, opciones, error = null, volver = '', comentario = { texto: '', error: null },
+  }, status = 200) => res.status(status).render('pages/editar-tarea', {
     tarea, opciones, puestoLabels, haceDias, ESTADOS, ESTADO_LABELS, error, volver,
+    historial: await tareas.historial(tarea.id), comentario, maxComentario: MAX_LENGTHS.comentario,
   });
 
   router.get('/eventos', (req, res) => eventos.subscribe(req, res));
@@ -159,6 +190,7 @@ export function createTareasRouter(pool, {
       const failure = error ? { message: error, field } : llegada.error ? { message: llegada.error, field: 'fechaLlegada' } : null;
       if (failure) return await renderBoard(req, res, { form: req.body, formError: failure }, 400);
       const tareaId = await tareas.create({ ...tarea, fechaLlegada: llegada.fecha }, req.session);
+      await registrarCambio(req, [`creó la tarea en ${ESTADO_LABELS[tarea.estado]}`], tareaId);
       eventos.notify();
       avisarAsignados(tareaId, tarea, req.session);
       return redirect(res, 'Tarea registrada correctamente.', 'success', { filtro: filtroOf(req.body.volver), tareaId });
@@ -171,7 +203,7 @@ export function createTareasRouter(pool, {
     try {
       const tarea = isId(req.params.id) ? await tareas.get(req.params.id) : null;
       if (!tarea) return redirect(res, 'La tarea no fue encontrada.');
-      return renderEdit(res, {
+      return await renderEdit(res, {
         tarea: { ...tarea, licenciado: tarea.licenciadoId ?? '', ingeniero: tarea.ingenieroId ?? '' },
         opciones: await opcionesOf(tarea), volver: filtroOf(req.query.volver),
       });
@@ -189,14 +221,44 @@ export function createTareasRouter(pool, {
       const opciones = await opcionesOf(actual);
       const { tarea, error } = validarTarea(req.body, allowedOf(opciones));
       // What was typed, over the saved task so the arrival date and creator still show.
-      if (error) return renderEdit(res, { tarea: { ...actual, ...req.body, id: req.params.id }, opciones, error, volver: filtro }, 400);
+      if (error) return await renderEdit(res, { tarea: { ...actual, ...req.body, id: req.params.id }, opciones, error, volver: filtro }, 400);
       const updated = await tareas.update(req.params.id, tarea);
       if (updated) {
+        await registrarCambio(req, cambiosDe(actual, tarea, opciones));
         eventos.notify();
         avisarAsignados(req.params.id, tarea, req.session, actual);
       }
       return updated ? redirect(res, 'Tarea actualizada correctamente.', 'success', { filtro, tareaId: req.params.id })
         : redirect(res, 'La tarea no fue encontrada.', 'error', { filtro });
+    } catch (failure) {
+      return next(failure);
+    }
+  });
+
+  // Anyone who can open the board may comment on a task; the people assigned to it are told, except the author.
+  router.post('/:id/comentar', async (req, res, next) => {
+    const filtro = filtroOf(req.body.volver);
+    if (!isId(req.params.id)) return redirect(res, 'La tarea no fue encontrada.', 'error', { filtro });
+    try {
+      const tarea = await tareas.get(req.params.id);
+      if (!tarea) return redirect(res, 'La tarea no fue encontrada.', 'error', { filtro });
+      const { texto, error } = validarComentario(req.body.comentario);
+      if (error) {
+        return await renderEdit(res, {
+          tarea: { ...tarea, licenciado: tarea.licenciadoId ?? '', ingeniero: tarea.ingenieroId ?? '' },
+          opciones: await opcionesOf(tarea), volver: filtro, comentario: { texto: req.body.comentario ?? '', error },
+        }, 400);
+      }
+      const userId = Number(req.session.userId);
+      await tareas.registrar(tarea.id, 'comentario', texto, userId);
+      eventos.notify();
+      const autor = req.session.email || 'Alguien';
+      new Set(userPuestos.map((puesto) => tarea[`${puesto}Id`]).filter((id) => id != null && id !== userId)).forEach((id) => avisar(id, {
+        title: 'Nuevo comentario',
+        message: `${autor} comentó en “${tarea.titulo}”: ${texto.length > 120 ? `${texto.slice(0, 120)}…` : texto}`,
+        url: `/tareas/${tarea.id}/editar#historial`,
+      }));
+      return res.redirect(`/tareas/${tarea.id}/editar${filtro ? `?volver=${filtro}` : ''}#historial`);
     } catch (failure) {
       return next(failure);
     }
@@ -210,15 +272,16 @@ export function createTareasRouter(pool, {
     if (!isId(req.params.id)) return fail(404, 'La tarea no fue encontrada.');
     try {
       let { estado } = req.body;
+      const desde = (await tareas.get(req.params.id))?.estado;
+      if (!desde) return fail(404, 'La tarea no fue encontrada.');
       if (!json) {
-        const current = await tareas.get(req.params.id);
-        if (!current) return fail(404, 'La tarea no fue encontrada.');
         const step = req.body.direccion === 'izquierda' ? -1 : req.body.direccion === 'derecha' ? 1 : 0;
-        estado = ESTADOS[ESTADOS.indexOf(current.estado) + step];
+        estado = ESTADOS[ESTADOS.indexOf(desde) + step];
       }
       if (!ESTADOS.includes(estado)) return fail(400, 'La columna indicada no existe.');
       const moved = await tareas.move(req.params.id, estado);
       if (!moved) return fail(404, 'La tarea no fue encontrada.');
+      if (estado !== desde) await registrarCambio(req, [movida(desde, estado)]);
       eventos.notify();
       return json ? res.json({ ok: true })
         : redirect(res, `Tarea movida a ${ESTADO_LABELS[estado]}.`, 'success', { filtro: filtroOf(req.body.volver), tareaId: req.params.id });
@@ -227,8 +290,8 @@ export function createTareasRouter(pool, {
     }
   });
 
-  // Whoever fills a slot marks their own part as done, or takes the mark back. The other assignee and the
-  // creator are told when a part is done.
+  // Whoever fills a slot marks their own part as done, or takes the mark back. The other assignee is told when
+  // a part is done.
   router.post('/:id/listo', async (req, res, next) => {
     const filtro = filtroOf(req.body.volver);
     const { puesto } = req.body;
@@ -242,9 +305,10 @@ export function createTareasRouter(pool, {
       }
       const listo = req.body.listo === '1';
       await tareas.marcarListo(tarea.id, puesto, userId, listo);
+      await registrarCambio(req, [`${listo ? 'marcó' : 'desmarcó'} su parte de ${puestoLabels[puesto].toLowerCase()} como lista`]);
       eventos.notify();
       if (listo) {
-        const avisados = new Set([...userPuestos.map((otro) => tarea[`${otro}Id`]), tarea.creadorId].filter((id) => id != null && id !== userId));
+        const avisados = new Set(userPuestos.map((otro) => tarea[`${otro}Id`]).filter((id) => id != null && id !== userId));
         avisados.forEach((id) => avisar(id, {
           title: 'Parte de tarea lista',
           message: `${tarea[puesto]} terminó su parte de “${tarea.titulo}” como ${puestoLabels[puesto].toLowerCase()}.`,
