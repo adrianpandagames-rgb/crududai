@@ -1,4 +1,4 @@
-import { coverageSector } from './planeacion-geometry.js?v=6';
+import { coverageSector, adjustSaturation } from './planeacion-geometry.js?v=7';
 import {
   summarizeAntennas, antennaClipboardText, antennaClipboardHtml, rowMatches, frequencyScale, selectionCsv,
 } from './planeacion-antenas.js?v=8';
@@ -138,7 +138,7 @@ if (!window.L) {
       const item = document.createElement('div');
       const swatch = document.createElement('span');
       swatch.className = 'planning-legend-swatch';
-      swatch.style.background = color;
+      swatch.style.background = adjustSaturation(color, saturation.value);
       item.append(swatch, label);
       return item;
     });
@@ -165,6 +165,28 @@ if (!window.L) {
   const nightEnd = byId('planningNightEnd');
   const nightShare = byId('planningNightShare');
   const nightRadius = byId('planningNightRadius');
+  const sectorColor = byId('planningSectorColor');
+  const rangeColor = byId('planningRangeColor');
+  const saturation = byId('planningSaturation');
+  const opacity = byId('planningOpacity');
+  // Coverage appearance is a per-viewer preference, remembered in this browser only.
+  const STYLE_KEY = 'planeacion-geografica-estilo';
+  const STYLE_DEFAULTS = { sector: '#087cf0', range: '#087cf0', saturation: '100', opacity: '22' };
+  const styleInputs = { sector: sectorColor, range: rangeColor, saturation, opacity };
+  function showStyleValues() {
+    byId('planningSaturationValue').textContent = saturation.value;
+    byId('planningOpacityValue').textContent = opacity.value;
+  }
+  try {
+    const saved = JSON.parse(localStorage.getItem(STYLE_KEY) || '{}');
+    for (const [name, input] of Object.entries(styleInputs)) if (typeof saved[name] === 'string') input.value = saved[name];
+  } catch { /* Without storage the defaults apply. */ }
+  showStyleValues();
+  function saveStyle() {
+    try {
+      localStorage.setItem(STYLE_KEY, JSON.stringify(Object.fromEntries(Object.entries(styleInputs).map(([n, i]) => [n, i.value]))));
+    } catch { /* Storage may be disabled; the choice lasts until reload. */ }
+  }
 
   const timeFilterActive = () => Boolean(data?.hasTimes && (from.value || to.value));
   function inPeriod(rowNumber) {
@@ -448,11 +470,13 @@ if (!window.L) {
       const key = `${point.lat},${point.lng},${coverageMode.value === 'range' && bearing !== null ? 'range' : bearing}`;
       if (!selectionActive && seen.has(key)) continue;
       seen.add(key);
-      const color = selectionActive ? selectionColors[index % selectionColors.length]
-        : scale ? scale.colorFor(counts.get(coordinateKey(point))) : '#087cf0';
+      const asRange = coverageMode.value === 'range';
+      const baseColor = selectionActive ? selectionColors[index % selectionColors.length]
+        : scale ? scale.colorFor(counts.get(coordinateKey(point))) : (asRange ? rangeColor.value : sectorColor.value);
+      const color = adjustSaturation(baseColor, saturation.value);
       if (bearing !== null) {
-        const style = { color, weight: 1.5, fillColor: color, fillOpacity: 0.22, interactive: false };
-        if (coverageMode.value === 'range') {
+        const style = { color, weight: 1.5, fillColor: color, fillOpacity: Number(opacity.value) / 100, interactive: false };
+        if (asRange) {
           L.circle([point.lat, point.lng], { ...style, radius: Number(radius.value) }).addTo(layers);
         } else {
           L.polygon(coverageSector(point.lat, point.lng, bearing, Number(radius.value), Number(beam.value)), style).addTo(layers);
@@ -637,6 +661,22 @@ if (!window.L) {
   beam.addEventListener('change', () => draw());
   radius.addEventListener('change', () => draw());
   colorMode.addEventListener('change', () => draw());
+  let styleFrame = 0;
+  for (const input of Object.values(styleInputs)) {
+    input.addEventListener('input', () => {
+      showStyleValues();
+      saveStyle();
+      // Sliders fire many events while dragging; redraw at most once per frame.
+      cancelAnimationFrame(styleFrame);
+      styleFrame = requestAnimationFrame(() => draw());
+    });
+  }
+  byId('planningStyleReset').addEventListener('click', () => {
+    for (const [name, input] of Object.entries(styleInputs)) input.value = STYLE_DEFAULTS[name];
+    showStyleValues();
+    saveStyle();
+    draw();
+  });
   const periodChanged = () => {
     if (!data) return;
     if (from.value && to.value && from.value > to.value) {

@@ -137,3 +137,13 @@ test('the file location wins and an earlier antenna number never matches an Ubic
   assert.equal(rows[3][place], '');
   assert.equal(extractPlanningPoints(rows).points.length, 3);
 });
+
+test('adjustSaturation keeps, removes or boosts the colour saturation', async () => {
+  const { adjustSaturation } = await import('../public/js/planeacion-geometry.js');
+  assert.equal(adjustSaturation('#087cf0', 100), '#087cf0');
+  assert.equal(adjustSaturation('#e8604f', 0), '#9c9c9c');
+  assert.equal(adjustSaturation('#087cf0', 50), '#427cb6');
+  assert.equal(adjustSaturation('#ff00ff', 200), '#ff00ff');
+  assert.equal(adjustSaturation('#808080', 150), '#808080');
+  assert.equal(adjustSaturation('not-a-colour', 50), 'not-a-colour');
+});
