@@ -36,7 +36,9 @@
             </form>
           </div>
 
-          <div class="card p-3 nombres-status">
+          <div id="nombresEstado" class="card p-3 nombres-status" data-live-region>
+            <%# Only without a search: refreshing a search page would run the whole search again every round. %>
+            <% if ((listStatus.some((list) => list.refreshing) || denueStatus.refreshing) && !search) { %><span data-live-refresh="15000" hidden></span><% } %>
             <h3 class="h6">Listas oficiales</h3>
             <% listStatus.forEach((list) => { %>
               <div class="mb-2">
@@ -243,9 +245,8 @@
         </div>
       </div>
     </main>
-    <% if ((listStatus.some((list) => list.refreshing) || denueStatus.refreshing) && !search) { %>
-      <script>setTimeout(() => { if (!document.getElementById('q').value) window.location.reload(); }, 15000);</script>
-    <% } %>
+    <%# The list status updates in place while a download runs, so the name being typed stays. %>
+    <script src="/public/js/live-refresh.js"></script>
     <%- include('../includes/scripts') %>
     <%- include('../includes/footer') %>
   </body>

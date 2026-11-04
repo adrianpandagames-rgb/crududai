@@ -120,11 +120,12 @@ test('the tab searches the lists without saving a history and sends variants to 
   });
   const denueCalls = [];
   let denueRefreshes = 0;
+  let denueRefreshing = false;
   const denue = {
     initialize: async () => {},
     refreshStale: async () => {},
     refresh: async () => { denueRefreshes++; },
-    status: async () => ({ label: 'DENUE', updatedAt: '2026-10-23 10:00', entries: 6000000, error: null, refreshing: false, progress: null }),
+    status: async () => ({ label: 'DENUE', updatedAt: '2026-10-23 10:00', entries: 6000000, error: null, refreshing: denueRefreshing, progress: null }),
     search: async (name, city) => {
       denueCalls.push([name, city]);
       if (name === 'Luis Ramirez') throw new Error('timeout');
@@ -201,6 +202,15 @@ test('the tab searches the lists without saving a history and sends variants to 
   capacity = 7;
   const partial = await fetch(`${base}/maigret`, { method: 'POST', redirect: 'manual', headers: { 'x-role': 'uecs', 'content-type': 'application/x-www-form-urlencoded' }, body: 'nombre=Luis+Ramirez' });
   assert.match(new URL(partial.headers.get('location'), base).searchParams.get('message'), /se enviaron 2 de 5/);
+
+  // While a download runs, the status card refreshes in place; never on a search page, which would search again.
+  denueRefreshing = true;
+  const downloading = await (await fetch(base, { headers: { 'x-role': 'uecs' } })).text();
+  assert.ok(downloading.includes('id="nombresEstado"') && downloading.includes('data-live-refresh="15000"'));
+  assert.ok(!downloading.includes('location.reload'));
+  const searching = await (await fetch(`${base}?q=Luis+Ramirez`, { headers: { 'x-role': 'uecs' } })).text();
+  assert.ok(!searching.includes('data-live-refresh'));
+  denueRefreshing = false;
 });
 
 // Builds a ZIP like INEGI's: each entry deflated, followed by the central directory.
