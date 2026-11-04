@@ -40,7 +40,8 @@
           </div>
         </div>
 
-        <div class="col-md-7 py-3 custom_table">
+        <div id="rutaArchivos" class="col-md-7 py-3 custom_table" data-live-region>
+          <% if (files.some((file) => file.status === 'pendiente')) { %><span data-live-refresh hidden></span><% } %>
           <h3 class="text-center">Archivos de Ruta</h3>
           <hr />
           <div class="table-responsive">
@@ -102,14 +103,8 @@
 
     <script src="/public/js/ruta-upload.js"></script>
 
-    <% if (files.some((file) => file.status === 'pendiente')) { %>
-      <script>
-        setInterval(() => {
-          // Never reload while a delete confirmation is waiting for an answer.
-          if (!document.querySelector('.confirm-toast')) window.location.reload();
-        }, 5000);
-      </script>
-    <% } %>
+    <%# Files in process update in place; reloading the whole page replayed its entrance and its notice. %>
+    <script src="/public/js/live-refresh.js"></script>
 
     <% if (highlightId) { %>
       <script>

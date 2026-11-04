@@ -2,6 +2,16 @@
 // Only the ones present when the page loads: messages that scripts write later, such as a registration's folio,
 // stay so they can be read and copied, and errors stay until the page changes. data-persistente opts a message out.
 (() => {
+  // The notice arrives in the address (?message=…&type=…); drop it once shown so reloading the page, or a page that
+  // refreshes itself, does not show it again.
+  try {
+    const url = new URL(location.href);
+    if (url.searchParams.has('message')) {
+      url.searchParams.delete('message');
+      url.searchParams.delete('type');
+      history.replaceState(history.state, '', url.pathname + url.search + url.hash);
+    }
+  } catch { /* An address that cannot be rewritten keeps its notice. */ }
   const VISIBLE_MS = 3000;
   const FADE_MS = 300;
   const start = () => {

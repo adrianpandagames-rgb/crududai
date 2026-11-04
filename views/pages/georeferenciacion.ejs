@@ -48,7 +48,8 @@
           </div>
         </div>
 
-        <div class="col-md-7 py-3 custom_table">
+        <div id="geoArchivos" class="col-md-7 py-3 custom_table" data-live-region>
+          <% if (files.some((file) => file.status === 'pendiente')) { %><span data-live-refresh hidden></span><% } %>
           <h3 class="text-center">Archivos de Georeferenciación</h3>
           <div class="table-responsive">
             <table class="table w-100 ruta-files-table">
@@ -116,7 +117,7 @@
           <button class="btn btn-primary" type="submit">Buscar</button>
           <a class="btn btn-outline-secondary" href="/georeferenciacion">Limpiar</a>
         </form>
-        <div class="table-responsive">
+        <div id="geoUbicaciones" class="table-responsive" data-live-region>
           <table class="table">
             <thead><tr><th>Ubicación</th><th>Lugar</th><th>Entre calle</th><th>Y calle</th><th>Entrecalles</th><th>Latitud</th><th>Longitud</th></tr></thead>
             <tbody>
@@ -128,7 +129,7 @@
           </table>
         </div>
         <p class="text-muted small">Entrecalles sugeridas automáticamente; verifica antes de utilizarlas. Datos viales: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a>. Si faltan datos o hay cruces ambiguos, se solicita revisión.</p>
-        <nav class="d-flex align-items-center gap-3" aria-label="Páginas de ubicaciones">
+        <nav id="geoUbicacionesPaginas" class="d-flex align-items-center gap-3" aria-label="Páginas de ubicaciones" data-live-region>
           <% if (page > 1) { %><a href="/georeferenciacion?<%= new URLSearchParams({ search, page: page - 1 }).toString() %>">Anterior</a><% } %>
           <span><%= total %> registros · Página <%= page %> de <%= pages %></span>
           <% if (page < pages) { %><a href="/georeferenciacion?<%= new URLSearchParams({ search, page: page + 1 }).toString() %>">Siguiente</a><% } %>
@@ -136,11 +137,8 @@
       </section>
     </main>
 
-    <% if (files.some((file) => file.status === 'pendiente')) { %>
-      <script>
-        setTimeout(() => window.location.reload(), 5000);
-      </script>
-    <% } %>
+    <%# Files in process update in place; reloading the whole page replayed its entrance and its notice. %>
+    <script src="/public/js/live-refresh.js"></script>
 
     <%- include('../includes/footer') %>
   </body>

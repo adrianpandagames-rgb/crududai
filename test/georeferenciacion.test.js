@@ -121,6 +121,15 @@ test('page renders configuration, progress, errors and download actions safely',
   assert.ok(html.includes('/georeferenciacion/exportar-xlsx/b'));
   assert.ok(html.includes('Cuota agotada'));
   assert.ok(html.includes('disabled>Importar y geocodificar'));
+  // Files in process refresh the table in place; the page no longer reloads itself.
+  assert.ok(html.includes('data-live-refresh') && html.includes('/public/js/live-refresh.js'));
+  assert.ok(!html.includes('location.reload'));
+  const done = await ejs.renderFile('views/pages/georeferenciacion.ejs', {
+    configured: true, message: '', messageType: '', currentUser: { isAdmin: false },
+    locations: [], search: '', total: 0, page: 1, pages: 1,
+    files: [{ id: 'b', name: 'ready.csv', lineNumber: '123', status: 'listo', processed: 50, total: 50 }],
+  });
+  assert.ok(!done.includes('data-live-refresh'));
 });
 
 test('routes require a session; admins reach every file and UECS only files uploaded by UECS', async () => {
