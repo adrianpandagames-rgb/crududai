@@ -45,3 +45,14 @@ html[data-theme="dark"] .planning-legend { background: rgba(31, 41, 55, .94); co
 /* The option whose records the map and the table are showing. */
 .planning-antenna.is-selected { border-color: #087cf0; background: #dceeff; box-shadow: inset 4px 0 0 #087cf0; }
 html[data-theme="dark"] .planning-antenna.is-selected { background: #16324f; color: #e6f0fa; }
+.planning-legend-bar { width: 140px; height: 10px; margin: 4px 0 1px; border: 1px solid rgba(0, 0, 0, .35); border-radius: 3px; }
+.planning-legend-ends { display: flex; justify-content: space-between; width: 140px; margin-bottom: 4px; font-size: 11px; opacity: .8; }
+.planning-palettes { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.planning-palette { display: grid; gap: 4px; padding: 6px 8px; border: 1px solid #d5e1ec; border-radius: 6px; background: #fff; cursor: pointer; font-size: 12px; color: #16456b; }
+.planning-palette input { position: absolute; opacity: 0; pointer-events: none; }
+.planning-palette-bar { display: block; height: 14px; border-radius: 3px; border: 1px solid rgba(0, 0, 0, .2); }
+.planning-palette:hover { background: #eaf3ff; }
+.planning-palette:has(input:checked) { border-color: #087cf0; box-shadow: 0 0 0 2px #087cf0; }
+.planning-palette:has(input:focus-visible) { outline: 2px solid #16456b; outline-offset: 2px; }
+html[data-theme="dark"] .planning-palette { background: #1f2937; border-color: #374151; color: var(--dark-text); }
+html[data-theme="dark"] .planning-palette:hover { background: #273449; }

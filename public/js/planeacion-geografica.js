@@ -1,8 +1,9 @@
 import { coverageSector, adjustSaturation } from './planeacion-geometry.js?v=7';
+import { COVERAGE_PALETTES, DEFAULT_PALETTE, paletteById } from './planeacion-paletas.js?v=1';
 import {
   summarizeAntennas, antennaClipboardText, antennaClipboardHtml, rowMatches, frequencyScale, selectionCsv,
-} from './planeacion-antenas.js?v=8';
-import { findOvernightLocations } from './planeacion-pernocta.js?v=1';
+} from './planeacion-antenas.js?v=9';
+import { findOvernightLocations } from './planeacion-pernocta.js?v=2';
 import { summarizeContacts, contactCells, contactsCsv, formatContactTime } from './planeacion-contactos.js?v=1';
 
 const byId = (id) => document.getElementById(id);
@@ -129,20 +130,40 @@ if (!window.L) {
     return legendElement;
   };
   legendControl.addTo(map);
+  // Fills are drawn opaque in their own pane and the pane itself is made transparent, so overlapping sectors
+  // keep the same transparency instead of piling up. Outlines sit in a pane above, always fully visible.
+  const fillPane = map.createPane('coverageFill');
+  fillPane.style.zIndex = '390';
+  fillPane.style.pointerEvents = 'none';
+  const linePane = map.createPane('coverageLine');
+  linePane.style.zIndex = '395';
+  linePane.style.pointerEvents = 'none';
   function renderLegend(scale) {
     legendElement.hidden = !scale;
     if (!scale) return;
     const title = document.createElement('strong');
-    title.textContent = 'Registros por punto';
-    const items = scale.legend.map(({ color, label }) => {
+    title.textContent = selectionActive ? 'Registros seleccionados por punto' : 'Registros por punto';
+    const tone = (color) => adjustSaturation(color, saturation.value);
+    // The bar shows the whole palette; the rows below give the count each colour stands for, most first.
+    const bar = document.createElement('div');
+    bar.className = 'planning-legend-bar';
+    bar.style.background = `linear-gradient(to right, ${paletteById(paletteId).colors.map(tone).join(', ')})`;
+    const ends = document.createElement('div');
+    ends.className = 'planning-legend-ends';
+    const fewer = document.createElement('span');
+    fewer.textContent = 'Menos';
+    const more = document.createElement('span');
+    more.textContent = 'Más';
+    ends.append(fewer, more);
+    const items = [...scale.legend].reverse().map(({ color, label }) => {
       const item = document.createElement('div');
       const swatch = document.createElement('span');
       swatch.className = 'planning-legend-swatch';
-      swatch.style.background = adjustSaturation(color, saturation.value);
+      swatch.style.background = tone(color);
       item.append(swatch, label);
       return item;
     });
-    legendElement.replaceChildren(title, ...items);
+    legendElement.replaceChildren(title, bar, ends, ...items);
   }
 
   const layers = L.featureGroup().addTo(map);
@@ -165,28 +186,52 @@ if (!window.L) {
   const nightEnd = byId('planningNightEnd');
   const nightShare = byId('planningNightShare');
   const nightRadius = byId('planningNightRadius');
-  const sectorColor = byId('planningSectorColor');
-  const rangeColor = byId('planningRangeColor');
   const saturation = byId('planningSaturation');
   const opacity = byId('planningOpacity');
+  const paletteList = byId('planningPalettes');
   // Coverage appearance is a per-viewer preference, remembered in this browser only.
   const STYLE_KEY = 'planeacion-geografica-estilo';
-  const STYLE_DEFAULTS = { sector: '#087cf0', range: '#087cf0', saturation: '100', opacity: '22' };
-  const styleInputs = { sector: sectorColor, range: rangeColor, saturation, opacity };
-  function showStyleValues() {
-    byId('planningSaturationValue').textContent = saturation.value;
-    byId('planningOpacityValue').textContent = opacity.value;
-  }
+  const STYLE_DEFAULTS = { palette: DEFAULT_PALETTE, saturation: '100', opacity: '30' };
+  let paletteId = DEFAULT_PALETTE;
   try {
     const saved = JSON.parse(localStorage.getItem(STYLE_KEY) || '{}');
-    for (const [name, input] of Object.entries(styleInputs)) if (typeof saved[name] === 'string') input.value = saved[name];
+    if (typeof saved.palette === 'string') paletteId = paletteById(saved.palette).id;
+    if (typeof saved.saturation === 'string') saturation.value = saved.saturation;
+    if (typeof saved.opacity === 'string') opacity.value = saved.opacity;
   } catch { /* Without storage the defaults apply. */ }
-  showStyleValues();
   function saveStyle() {
     try {
-      localStorage.setItem(STYLE_KEY, JSON.stringify(Object.fromEntries(Object.entries(styleInputs).map(([n, i]) => [n, i.value]))));
+      localStorage.setItem(STYLE_KEY, JSON.stringify({ palette: paletteId, saturation: saturation.value, opacity: opacity.value }));
     } catch { /* Storage may be disabled; the choice lasts until reload. */ }
   }
+  // Saturation recolours every swatch too, so each one previews what the map will show.
+  function renderPalettes() {
+    paletteList.replaceChildren(...COVERAGE_PALETTES.map((palette) => {
+      const label = document.createElement('label');
+      label.className = 'planning-palette';
+      label.title = palette.name;
+      const input = document.createElement('input');
+      input.type = 'radio';
+      input.name = 'planningPalette';
+      input.value = palette.id;
+      input.checked = palette.id === paletteId;
+      const bar = document.createElement('span');
+      bar.className = 'planning-palette-bar';
+      bar.style.background = `linear-gradient(to right, ${palette.colors.map((color) => adjustSaturation(color, saturation.value)).join(', ')})`;
+      const name = document.createElement('span');
+      name.className = 'planning-palette-name';
+      name.textContent = palette.name;
+      label.append(input, bar, name);
+      return label;
+    }));
+  }
+  function applyStyleValues() {
+    byId('planningSaturationValue').textContent = saturation.value;
+    byId('planningOpacityValue').textContent = opacity.value;
+    fillPane.style.opacity = String(Number(opacity.value) / 100);
+  }
+  renderPalettes();
+  applyStyleValues();
 
   const timeFilterActive = () => Boolean(data?.hasTimes && (from.value || to.value));
   function inPeriod(rowNumber) {
@@ -462,24 +507,31 @@ if (!window.L) {
       : data.points.filter((point) => inPeriod(point.row));
     const counts = new Map();
     for (const point of points) counts.set(coordinateKey(point), (counts.get(coordinateKey(point)) || 0) + 1);
-    const scale = !selectionActive && colorMode.value === 'frequency' && points.length
-      ? frequencyScale(Math.max(...counts.values())) : null;
-    const selectionColors = ['#087cf0', '#e07800', '#8a35c9', '#168449', '#cf3555', '#008b98'];
-    for (const [index, point] of points.entries()) {
+    const palette = paletteById(paletteId).colors;
+    const scale = colorMode.value === 'frequency' && points.length
+      ? frequencyScale(Math.max(...counts.values()), palette) : null;
+    const countOf = (point) => counts.get(coordinateKey(point));
+    // The busiest points are drawn last, so their darker colour stays on top where coverages overlap.
+    const ordered = [...points].sort((a, b) => countOf(a) - countOf(b));
+    const asRange = coverageMode.value === 'range';
+    for (const point of ordered) {
       const bearing = point.azimuth;
-      const key = `${point.lat},${point.lng},${coverageMode.value === 'range' && bearing !== null ? 'range' : bearing}`;
-      if (!selectionActive && seen.has(key)) continue;
+      // Records of the same antenna and azimuth share one coverage; repeating it would only darken it.
+      const key = `${point.lat},${point.lng},${asRange && bearing !== null ? 'range' : bearing}`;
+      if (seen.has(key)) continue;
       seen.add(key);
-      const asRange = coverageMode.value === 'range';
-      const baseColor = selectionActive ? selectionColors[index % selectionColors.length]
-        : scale ? scale.colorFor(counts.get(coordinateKey(point))) : (asRange ? rangeColor.value : sectorColor.value);
-      const color = adjustSaturation(baseColor, saturation.value);
+      const color = adjustSaturation(scale ? scale.colorFor(countOf(point)) : palette[3], saturation.value);
       if (bearing !== null) {
-        const style = { color, weight: 1.5, fillColor: color, fillOpacity: Number(opacity.value) / 100, interactive: false };
+        const fill = { pane: 'coverageFill', stroke: false, fillColor: color, fillOpacity: 1, interactive: false };
+        const line = { pane: 'coverageLine', color, weight: 1.5, fill: false, interactive: false };
         if (asRange) {
-          L.circle([point.lat, point.lng], { ...style, radius: Number(radius.value) }).addTo(layers);
+          const centre = [point.lat, point.lng];
+          L.circle(centre, { ...fill, radius: Number(radius.value) }).addTo(layers);
+          L.circle(centre, { ...line, radius: Number(radius.value) }).addTo(layers);
         } else {
-          L.polygon(coverageSector(point.lat, point.lng, bearing, Number(radius.value), Number(beam.value)), style).addTo(layers);
+          const sector = coverageSector(point.lat, point.lng, bearing, Number(radius.value), Number(beam.value));
+          L.polygon(sector, fill).addTo(layers);
+          L.polygon(sector, line).addTo(layers);
         }
       }
       // A dark outline keeps every point visible over roads, parks and water.
@@ -661,20 +713,29 @@ if (!window.L) {
   beam.addEventListener('change', () => draw());
   radius.addEventListener('change', () => draw());
   colorMode.addEventListener('change', () => draw());
+  // Opacity only changes the fill pane, so it needs no redraw.
+  opacity.addEventListener('input', () => { applyStyleValues(); saveStyle(); });
   let styleFrame = 0;
-  for (const input of Object.values(styleInputs)) {
-    input.addEventListener('input', () => {
-      showStyleValues();
-      saveStyle();
-      // Sliders fire many events while dragging; redraw at most once per frame.
-      cancelAnimationFrame(styleFrame);
-      styleFrame = requestAnimationFrame(() => draw());
-    });
-  }
-  byId('planningStyleReset').addEventListener('click', () => {
-    for (const [name, input] of Object.entries(styleInputs)) input.value = STYLE_DEFAULTS[name];
-    showStyleValues();
+  saturation.addEventListener('input', () => {
+    applyStyleValues();
     saveStyle();
+    // The slider fires many events while dragging; recolour at most once per frame.
+    cancelAnimationFrame(styleFrame);
+    styleFrame = requestAnimationFrame(() => { renderPalettes(); draw(); });
+  });
+  paletteList.addEventListener('change', (event) => {
+    if (event.target.name !== 'planningPalette') return;
+    paletteId = event.target.value;
+    saveStyle();
+    draw();
+  });
+  byId('planningStyleReset').addEventListener('click', () => {
+    paletteId = STYLE_DEFAULTS.palette;
+    saturation.value = STYLE_DEFAULTS.saturation;
+    opacity.value = STYLE_DEFAULTS.opacity;
+    applyStyleValues();
+    saveStyle();
+    renderPalettes();
     draw();
   });
   const periodChanged = () => {

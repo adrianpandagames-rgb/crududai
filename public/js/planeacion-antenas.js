@@ -57,10 +57,11 @@ export function rowMatches(row, term) {
 // (the earlier light blues sat at 1.5:1 and got lost).
 export const FREQUENCY_COLORS = ['#f08a7e', '#e8604f', '#d43d2f', '#a82820', '#6e140f'];
 
-export function frequencyScale(maxCount) {
+// `palette` goes from the lightest to the darkest colour; fewer counts than colours keep the darker end.
+export function frequencyScale(maxCount, palette = FREQUENCY_COLORS) {
   const max = Math.max(Math.floor(maxCount) || 1, 1);
-  const steps = Math.min(FREQUENCY_COLORS.length, max);
-  const colors = FREQUENCY_COLORS.slice(FREQUENCY_COLORS.length - steps);
+  const steps = Math.min(palette.length, max);
+  const colors = palette.slice(palette.length - steps);
   const upper = colors.map((_, index) => Math.ceil((max * (index + 1)) / steps));
   const legend = colors.map((color, index) => {
     const from = index === 0 ? 1 : upper[index - 1] + 1;

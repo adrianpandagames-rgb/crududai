@@ -147,3 +147,19 @@ test('adjustSaturation keeps, removes or boosts the colour saturation', async ()
   assert.equal(adjustSaturation('#808080', 150), '#808080');
   assert.equal(adjustSaturation('not-a-colour', 50), 'not-a-colour');
 });
+
+test('coverage palettes run light to dark and frequencyScale uses the chosen one', async () => {
+  const { COVERAGE_PALETTES, paletteById } = await import('../public/js/planeacion-paletas.js');
+  const lightness = (hex) => { const v = parseInt(hex.slice(1), 16); return 0.2126 * (v >> 16) + 0.7152 * ((v >> 8) & 255) + 0.0722 * (v & 255); };
+  assert.ok(COVERAGE_PALETTES.length >= 10);
+  for (const { colors } of COVERAGE_PALETTES) {
+    assert.equal(colors.length, 5);
+    for (let i = 1; i < colors.length; i++) assert.ok(lightness(colors[i]) < lightness(colors[i - 1]));
+  }
+  assert.equal(paletteById('desconocida').id, 'azul');
+  const rosa = paletteById('rosa').colors;
+  const scale = frequencyScale(10, rosa);
+  assert.equal(scale.colorFor(1), rosa[0]);
+  assert.equal(scale.colorFor(10), rosa[4]);
+  assert.deepEqual(frequencyScale(2, rosa).legend.map((item) => item.color), rosa.slice(3));
+});

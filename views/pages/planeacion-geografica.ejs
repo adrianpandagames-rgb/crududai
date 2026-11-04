@@ -3,7 +3,7 @@
 <head>
   <%- include('../includes/head') %>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <link rel="stylesheet" href="/public/css/planeacion-geografica.css?v=7" />
+  <link rel="stylesheet" href="/public/css/planeacion-geografica.css?v=8" />
 </head>
 <body>
   <%- include('../includes/header') %>
@@ -77,26 +77,22 @@
       <div id="planningMap" aria-label="Mapa con sectores de cobertura de las antenas"></div>
       <fieldset id="planningStyle" class="row align-items-end mt-3 mb-0">
         <legend class="h6 mb-2">Apariencia de la cobertura</legend>
-        <div class="col-6 col-md-3 col-xl-2 mb-2">
-          <label for="planningSectorColor" class="form-label small mb-1">Color del sector (azimut)</label>
-          <input id="planningSectorColor" type="color" class="form-control form-control-color w-100" value="#087cf0" />
+        <div class="col-12 mb-2">
+          <span id="planningPalettesLabel" class="form-label small mb-1 d-block">Paleta de colores</span>
+          <div id="planningPalettes" class="planning-palettes" role="radiogroup" aria-labelledby="planningPalettesLabel"></div>
         </div>
-        <div class="col-6 col-md-3 col-xl-2 mb-2">
-          <label for="planningRangeColor" class="form-label small mb-1">Color del rango</label>
-          <input id="planningRangeColor" type="color" class="form-control form-control-color w-100" value="#087cf0" />
-        </div>
-        <div class="col-6 col-md-3 col-xl-3 mb-2">
+        <div class="col-sm-6 col-xl-5 mb-2">
           <label for="planningSaturation" class="form-label small mb-1">Saturación: <output id="planningSaturationValue">100</output>%</label>
           <input id="planningSaturation" type="range" class="form-range" min="0" max="200" step="5" value="100" />
         </div>
-        <div class="col-6 col-md-3 col-xl-3 mb-2">
-          <label for="planningOpacity" class="form-label small mb-1">Opacidad del relleno: <output id="planningOpacityValue">22</output>%</label>
-          <input id="planningOpacity" type="range" class="form-range" min="0" max="100" step="1" value="22" />
+        <div class="col-sm-6 col-xl-5 mb-2">
+          <label for="planningOpacity" class="form-label small mb-1">Opacidad del relleno: <output id="planningOpacityValue">30</output>%</label>
+          <input id="planningOpacity" type="range" class="form-range" min="0" max="100" step="1" value="30" />
         </div>
         <div class="col-xl-2 mb-2">
           <button id="planningStyleReset" class="btn btn-sm btn-outline-secondary w-100" type="button">Restablecer</button>
         </div>
-        <p class="small text-muted mb-0">Los colores del sector y del rango se usan con “Un solo color”; con “Por frecuencia” y al seleccionar registros los colores indican datos, así que solo cambian la saturación y la opacidad.</p>
+        <p class="small text-muted mb-0">Con “Por frecuencia” el color va del tono más claro (menos registros en ese punto) al más oscuro (más registros); la leyenda del mapa indica cuántos registros representa cada tono, también al seleccionar registros. Con “Un solo color” se usa un tono oscuro de la paleta. La saturación y la opacidad se aplican a todas las coberturas por igual, aunque se encimen.</p>
       </fieldset>
     </section>
     <section id="planningData" class="card p-3 planning-data-panel">
@@ -157,7 +153,7 @@
   </main>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="/public/js/ruta-upload.js"></script>
-  <script type="module" src="/public/js/planeacion-geografica.js?v=11"></script>
+  <script type="module" src="/public/js/planeacion-geografica.js?v=12"></script>
   <%- include('../includes/footer') %>
 </body>
 </html>

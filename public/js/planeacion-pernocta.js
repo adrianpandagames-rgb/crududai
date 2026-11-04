@@ -1,4 +1,4 @@
-import { antennaColumns } from './planeacion-antenas.js?v=8';
+import { antennaColumns } from './planeacion-antenas.js?v=9';
 
 const minutesOf = (clock) => {
   const [hours, minutes] = String(clock).split(':').map(Number);
