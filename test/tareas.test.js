@@ -107,6 +107,11 @@ test('columns list the oldest arrival first and editing never writes the arrival
   assert.ok(set.indexOf('licenciado_listo_at = IF(licenciado_id <=> ?') < set.indexOf('licenciado_id = ?, ingeniero_id'));
   assert.ok(set.indexOf('enviada_el = IF') < set.indexOf('estado = ? WHERE'));
   assert.deepEqual(calls.at(-1).values.slice(0, 3), [5, null, 'terminada']);
+  assert.ok(!calls.at(-1).sql.includes('updated_at'));
+  // With the version the form was opened at, the row is only saved if nobody changed it since.
+  await store.update(4, { titulo: 'Vieja', descripcion: '', estado: 'terminada', licenciadoId: 5, ingenieroId: null }, '2026-11-02 10:00:00');
+  assert.match(calls.at(-1).sql, /WHERE id = \? AND updated_at = \?$/);
+  assert.deepEqual(calls.at(-1).values.slice(-2), [4, '2026-11-02 10:00:00']);
   assert.ok(await store.move(4, 'enviada'));
   assert.match(calls.at(-1).sql, /^UPDATE tareas SET enviada_el = IF\(\? = 'enviada'.*, estado = \? WHERE id = \?$/);
   assert.deepEqual([calls.at(-1).values[0], calls.at(-1).values[2]], ['enviada', 'enviada']);
@@ -150,7 +155,8 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
     },
     get: async (id) => tasks.find((task) => String(task.id) === String(id)) || null,
     create: async (tarea) => { created.push(tarea); return 3; },
-    update: async (id, tarea) => { updated.push([Number(id), tarea]); return true; },
+    // A save whose version still matches but loses the race in the database is refused, like the store does.
+    update: async (id, tarea, version) => { updated.push([Number(id), tarea, version]); return version !== 'carrera'; },
     move: async (id, estado) => {
       moves.push([Number(id), estado]);
       const task = tasks.find((candidate) => String(candidate.id) === String(id));
@@ -252,6 +258,28 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
   assert.equal((await fetch(base, as('usuario', form({ titulo: 'Otra', licenciado: '5', fechaLlegada: '2026-10-01' })))).status, 400);
   users[0].puesto = 'licenciado';
 
+  // The edit form carries the version it was opened at.
+  tasks[0].version = '2026-11-02 10:00:00';
+  assert.ok((await (await fetch(`${base}/1/editar`, as('usuario'))).text()).includes('name="version" value="2026-11-02 10:00:00"'));
+  // Someone saved the task after that: the form comes back with what was typed, who changed it and the new version.
+  tasks[0].version = '2026-11-02 10:05:00';
+  await tareas.registrar(1, 'cambio', 'Movió la tarea de Pendiente a En proceso.', 8);
+  const guardados = updated.length;
+  const viejo = await fetch(`${base}/1/editar`, as('usuario', form({ titulo: 'Mi versión', ingeniero: '8', version: '2026-11-02 10:00:00' })));
+  assert.equal(viejo.status, 409);
+  const conflicto = await viejo.text();
+  assert.match(conflicto, /Esta tarea cambió mientras la editabas\. ana@udai\.mx la modificó el 02\/11\/2026 11:00: Movió la tarea de Pendiente a En proceso\./);
+  assert.ok(conflicto.includes('value="Mi versión"') && conflicto.includes('name="version" value="2026-11-02 10:05:00"'));
+  assert.equal(updated.length, guardados);
+  // Saving again with the new version goes through, and the store gets the version to check it once more.
+  assert.match(message(await fetch(`${base}/1/editar`, as('usuario', form({ titulo: 'Mi versión', ingeniero: '8', version: '2026-11-02 10:05:00' })))), /actualizada/);
+  assert.equal(updated.at(-1)[2], '2026-11-02 10:05:00');
+  // A change that lands between the check and the save is caught by the store and handled the same way.
+  tasks[0].version = 'carrera';
+  assert.equal((await fetch(`${base}/1/editar`, as('usuario', form({ titulo: 'Mi versión', version: 'carrera' })))).status, 409);
+  delete tasks[0].version;
+  historia.length = 0;
+
   const dragged = await fetch(`${base}/2/mover`, as('usuario', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado: 'terminada' }),
   }));
@@ -321,9 +349,9 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
   assert.match(message(await fetch(`${base}/eliminar/2`, as('usuario', form({})))), /Solo quien creó/);
   assert.match(message(await fetch(`${base}/eliminar/1`, as('usuario', form({})))), /eliminada/);
   assert.equal((await fetch(`${base}/eliminar/1`, as('uecs', form({})))).headers.get('location'), '/Crud');
-  // Every saved change tells the open boards (create, two edits, drag, two arrows, two done marks, a comment, delete);
-  // rejected ones do not.
-  assert.equal(avisos, 10);
+  // Every saved change tells the open boards (create, three edits, drag, two arrows, two done marks, a comment, delete);
+  // rejected ones, conflicts among them, do not.
+  assert.equal(avisos, 11);
 
   const columns = await (await fetch(`${base}/tablero?responsable=5`, as('usuario'))).text();
   assert.ok(columns.includes('data-estado="pendiente"') && !columns.includes('<header') && !columns.includes('Nueva tarea'));

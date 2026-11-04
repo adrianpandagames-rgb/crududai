@@ -24,6 +24,8 @@
             <% if (error) { %><div class="alert alert-danger" role="alert"><%= error %></div><% } %>
             <form action="/tareas/<%= tarea.id %>/editar" method="POST" autocomplete="off">
               <input type="hidden" name="volver" value="<%= locals.volver || '' %>" />
+              <%# When the task was last saved; a save is refused if it changed since, so nobody overwrites another's edit unknowingly. %>
+              <input type="hidden" name="version" value="<%= tarea.version || '' %>" />
               <div class="mb-3">
                 <label for="titulo" class="form-label">Título <span class="text-danger" aria-hidden="true">*</span></label>
                 <input type="text" id="titulo" name="titulo" class="form-control" maxlength="200" required value="<%= tarea.titulo || '' %>" />

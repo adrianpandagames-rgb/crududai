@@ -147,7 +147,7 @@ export function createTareasStore(pool) {
     t.licenciado_id AS licenciadoId, l.email AS licenciado, t.ingeniero_id AS ingenieroId, i.email AS ingeniero,
     DATE_FORMAT(t.licenciado_listo_at, '%d/%m/%Y %H:%i') AS licenciadoListo, DATE_FORMAT(t.ingeniero_listo_at, '%d/%m/%Y %H:%i') AS ingenieroListo,
     DATE_FORMAT(t.fecha_llegada, '%Y-%m-%d') AS fechaLlegada, DATE_FORMAT(t.enviada_el, '%Y-%m-%d') AS enviadaEl, t.user_id AS creadorId, c.email AS creador,
-    DATE_FORMAT(t.updated_at, '%Y-%m-%d %H:%i') AS actualizada,
+    DATE_FORMAT(t.updated_at, '%Y-%m-%d %H:%i') AS actualizada, DATE_FORMAT(t.updated_at, '%Y-%m-%d %H:%i:%s') AS version,
     (SELECT COUNT(*) FROM tareas_historial h WHERE h.tarea_id = t.id AND h.tipo = 'comentario') AS comentarios
     FROM tareas t LEFT JOIN users l ON l.id = t.licenciado_id LEFT JOIN users i ON i.id = t.ingeniero_id LEFT JOIN users c ON c.id = t.user_id`;
   const numberOrNull = (value) => (value == null ? null : Number(value));
@@ -218,12 +218,15 @@ export function createTareasStore(pool) {
 
   // A slot given to someone else loses its done mark, which belonged to the person who had it. MySQL applies SET
   // left to right, so the marks are compared with the slots before the slots change.
-  const update = async (id, tarea) => {
+  // version is the task's updated_at when the form was opened; given, the task is only saved if nobody changed it since,
+  // and false comes back otherwise, as for a task that does not exist.
+  const update = async (id, tarea, version = '') => {
     await initialize();
     const [result] = await pool.execute(`UPDATE tareas SET
       licenciado_listo_at = IF(licenciado_id <=> ?, licenciado_listo_at, NULL), ingeniero_listo_at = IF(ingeniero_id <=> ?, ingeniero_listo_at, NULL),
-      ${enviadaSet}, titulo = ?, descripcion = ?, licenciado_id = ?, ingeniero_id = ?, estado = ? WHERE id = ?`,
-    [tarea.licenciadoId, tarea.ingenieroId, tarea.estado, hoyLocal(), tarea.titulo, tarea.descripcion, tarea.licenciadoId, tarea.ingenieroId, tarea.estado, id]);
+      ${enviadaSet}, titulo = ?, descripcion = ?, licenciado_id = ?, ingeniero_id = ?, estado = ? WHERE id = ?${version ? ' AND updated_at = ?' : ''}`,
+    [tarea.licenciadoId, tarea.ingenieroId, tarea.estado, hoyLocal(), tarea.titulo, tarea.descripcion, tarea.licenciadoId, tarea.ingenieroId, tarea.estado, id,
+      ...(version ? [version] : [])]);
     return result.affectedRows === 1;
   };
 

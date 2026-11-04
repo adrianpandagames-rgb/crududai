@@ -222,7 +222,23 @@ export function createTareasRouter(pool, {
       const { tarea, error } = validarTarea(req.body, allowedOf(opciones));
       // What was typed, over the saved task so the arrival date and creator still show.
       if (error) return await renderEdit(res, { tarea: { ...actual, ...req.body, id: req.params.id }, opciones, error, volver: filtro }, 400);
-      const updated = await tareas.update(req.params.id, tarea);
+      // Someone saved the task after this form was opened: the form comes back with what was typed, told who changed it,
+      // and with the new version, so saving again replaces their change on purpose. Forms opened before versions existed send none.
+      const version = typeof req.body.version === 'string' ? req.body.version : '';
+      const conflicto = async (vigente) => {
+        const ultimo = (await tareas.historial(vigente.id)).filter((entrada) => entrada.tipo === 'cambio').at(-1);
+        const quien = ultimo ? `${ultimo.autor || 'Otra persona'} la modificó el ${ultimo.fecha}: ${ultimo.texto}` : 'Alguien más la modificó.';
+        return renderEdit(res, {
+          tarea: { ...vigente, ...req.body, id: req.params.id, version: vigente.version }, opciones: await opcionesOf(vigente), volver: filtro,
+          error: `Esta tarea cambió mientras la editabas. ${quien} Revisa los datos; si guardas de nuevo, se guardará lo que tienes en el formulario.`,
+        }, 409);
+      };
+      if (version && version !== actual.version) return await conflicto(actual);
+      const updated = await tareas.update(req.params.id, tarea, version);
+      if (!updated && version) {
+        const vigente = await tareas.get(req.params.id);
+        if (vigente) return await conflicto(vigente);
+      }
       if (updated) {
         await registrarCambio(req, cambiosDe(actual, tarea, opciones));
         eventos.notify();
