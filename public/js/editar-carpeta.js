@@ -48,7 +48,7 @@
         if (input.tagName === 'TEXTAREA') input.rows = 3;
         if (field.tipo === 'select') {
           input.add(new Option('Seleccionar una opción', ''));
-          const options = field.nombre === 'agencia' ? data.agencias : field.nombre === 'ciudad' ? data.ciudades : field.nombre === 'medio' ? ['correo','fisico'] : ['si','no'];
+          const options = field.nombre === 'carpeta_resguardo' ? data.carpetasResguardo : field.nombre === 'agencia' ? data.agencias : field.nombre === 'ciudad' ? data.ciudades : field.nombre === 'medio' ? ['correo','fisico'] : ['si','no'];
           options.forEach(value => input.add(new Option(({correo:'Correo',fisico:'Físico',si:'Sí',no:'No'})[value] || value, value)));
           const old = data.registro[field.nombre];
           if (old && !options.includes(old)) input.add(new Option(old, old));

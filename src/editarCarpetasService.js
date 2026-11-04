@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 const normalizar = value => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
 const cabeceras = new Set(JSON.parse(readFileSync(new URL('./cabecerasSonora.json', import.meta.url), 'utf8')).cabeceras.map(normalizar));
 import { agencias } from './agencias.js';
+import { listarCarpetasResguardo, carpetaResguardoExiste } from './carpetasResguardoService.js';
 import { validarIdentificacion } from './identificacionesService.js';
 import { camposDatosConservados, validarDatosConservados } from './datosConservadosService.js';
 import { camposRecepcion, validarRecepcion } from './recepcionesService.js';
@@ -39,7 +40,8 @@ export async function obtenerCarpeta(db, tipo, id) {
     if (typeof registro[field.nombre] === 'string') registro[field.nombre] = JSON.parse(registro[field.nombre]);
   }
   const [ciudades] = await db.execute('SELECT localidad FROM localidades_mexico WHERE estado = ? ORDER BY localidad', ['Sonora']);
-  return { registro, campos: c.campos, agencias, ciudades: ciudades.map(r => r.localidad).filter(ciudad => cabeceras.has(normalizar(ciudad))) };
+  const carpetasResguardo = c.campos.some(f => f.columna === 'carpeta_resguardo') ? await listarCarpetasResguardo(db) : [];
+  return { registro, campos: c.campos, agencias, carpetasResguardo, ciudades: ciudades.map(r => r.localidad).filter(ciudad => cabeceras.has(normalizar(ciudad))) };
 }
 export async function actualizarCarpeta(db, tipo, id, body) {
   const c = config(tipo, id);
@@ -49,6 +51,9 @@ export async function actualizarCarpeta(db, tipo, id, body) {
   if (datos.ciudad) {
     const [rows] = await db.execute('SELECT localidad FROM localidades_mexico WHERE estado = ? AND localidad = ?', ['Sonora', datos.ciudad]);
     if (!rows.length) throw Object.assign(new Error('Ciudad inválida.'), { status: 400 });
+  }
+  if ('carpeta_resguardo' in datos && !(await carpetaResguardoExiste(db, datos.carpeta_resguardo))) {
+    throw Object.assign(new Error('Selecciona una carpeta resguardo de la lista.'), { status: 400 });
   }
   const values = c.campos.map(f => f.tipo === 'lines' && datos[f.nombre] != null ? JSON.stringify(datos[f.nombre]) : datos[f.nombre]);
   const [result] = await db.execute(`UPDATE ${c.tabla} SET ${c.campos.map(f => `${f.columna} = ?`).join(', ')} WHERE id = ?`, [...values, id]);

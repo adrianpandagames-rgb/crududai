@@ -1,0 +1,17 @@
+<div data-carpeta-resguardo>
+  <div class="input-group input-group-sm">
+    <select id="<%= selectId %>" name="carpeta_resguardo" class="form-select form-select-sm">
+      <option value="">Seleccionar una opción</option>
+      <% carpetasResguardo.forEach((nombre) => { %>
+        <option value="<%= nombre %>"><%= nombre %></option>
+      <% }); %>
+    </select>
+    <button type="button" class="btn btn-outline-secondary" data-carpeta-agregar aria-label="Agregar carpeta resguardo" title="Agregar opción">+</button>
+  </div>
+  <div class="input-group input-group-sm mt-1" data-carpeta-nueva hidden>
+    <input type="text" class="form-control form-control-sm" maxlength="255" placeholder="Nueva carpeta resguardo" aria-label="Nueva carpeta resguardo" />
+    <button type="button" class="btn btn-primary" data-carpeta-guardar>Agregar</button>
+    <button type="button" class="btn btn-outline-secondary" data-carpeta-cancelar>Cancelar</button>
+  </div>
+  <div class="form-text" role="status" data-carpeta-estado></div>
+</div>

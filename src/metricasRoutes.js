@@ -12,12 +12,43 @@ import { camposRecepcion, validarRecepcion, guardarRecepcion } from './recepcion
 import { camposDatosConservados, validarDatosConservados, guardarDatosConservados } from './datosConservadosService.js';
 import { validarPeriodo, validarFiltrosMetricas, obtenerMetricas, fuentesMetricas } from './metricasService.js';
 import { validarIdentificacion, guardarIdentificacion } from './identificacionesService.js';
+import { listarCarpetasResguardo, agregarCarpetaResguardo, carpetaResguardoExiste } from './carpetasResguardoService.js';
 import pool from "./db.js";
 
 const router = forwardAsyncErrors(express.Router());
 
-router.get('/metricas', (_req, res) => {
-  res.render('pages/metricas', { agencias, fuentesMetricas, camposDatosConservados, camposRecepcion, camposExtraccion, camposInspeccion, camposOficiosVarios, camposViaAlcance });
+router.get('/metricas', async (_req, res) => {
+  let carpetasResguardo = [];
+  try {
+    carpetasResguardo = await listarCarpetasResguardo(pool);
+  } catch (error) {
+    // The page still works without the catalog; run `npm run migrate:carpeta-resguardo` to create it.
+    console.error('No fue posible cargar las carpetas resguardo:', error.code || 'Error de base de datos');
+  }
+  res.render('pages/metricas', { agencias, fuentesMetricas, carpetasResguardo, camposDatosConservados, camposRecepcion, camposExtraccion, camposInspeccion, camposOficiosVarios, camposViaAlcance });
+});
+
+router.get('/metricas/carpetas-resguardo', async (_req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    return res.json({ carpetas: await listarCarpetasResguardo(pool) });
+  } catch {
+    return res.status(500).json({ error: 'No fue posible cargar las carpetas resguardo.' });
+  }
+});
+
+router.post('/metricas/carpetas-resguardo', async (req, res) => {
+  let nombre;
+  try {
+    nombre = await agregarCarpetaResguardo(pool, req.body?.nombre, req.session.userId);
+  } catch (error) {
+    if (error.code) {
+      console.error('No fue posible agregar la carpeta resguardo:', error.code);
+      return res.status(500).json({ error: 'No fue posible agregar la opción. Intenta nuevamente.' });
+    }
+    return res.status(400).json({ error: error.message });
+  }
+  return res.status(201).json({ nombre, message: `Opción "${nombre}" agregada.` });
 });
 
 // The folder forms share one flow: validate, check the Sonora city when given, save.
@@ -33,6 +64,9 @@ const registrarFormulario = (ruta, validar, guardar, { registro, exito, fallo })
       if (datos.ciudad) {
         const [rows] = await pool.execute('SELECT localidad FROM localidades_mexico WHERE estado = ? AND localidad = ? LIMIT 1', ['Sonora', datos.ciudad]);
         if (!rows.length) return res.status(400).json({ error: 'Selecciona una ciudad del catálogo de Sonora.' });
+      }
+      if ('carpeta_resguardo' in datos && !(await carpetaResguardoExiste(pool, datos.carpeta_resguardo))) {
+        return res.status(400).json({ error: 'Selecciona una carpeta resguardo de la lista o agrégala con +.' });
       }
       const id = await guardar(pool, datos, req.session.userId);
       return res.status(201).json({ id, message: exito });

@@ -10,6 +10,7 @@ export const camposInspeccion = [
   ['delito', 'Delito', 'text'], ['indicios', 'Indicios', 'text'], ['cantidad', 'Cantidad', 'number'],
   ['id_indicios', 'ID. indicios', 'text'], ['fecha', 'Fecha', 'date'], ['nota', 'Nota', 'textarea'],
   ['elaboro', 'Elaboró', 'text'], ['firma', 'Firma', 'text'], ['enviado_a', 'Enviado a', 'text'],
+  ['carpeta_resguardo', 'Carpeta resguardo', 'select'],
 ];
 
 const normalize = value => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
