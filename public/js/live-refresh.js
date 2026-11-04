@@ -1,12 +1,12 @@
 // While a page shows files still in process (a [data-live-refresh] marker), it asks the server for the same page
 // every few seconds and swaps in the contents of each [data-live-region] by id, instead of reloading: no entrance
 // animation, no repeated notice, and what the person is typing or scrolling stays put. It stops once the server
-// renders the page without the marker.
+// renders the page without the marker. The marker's value, in milliseconds, sets the pace (5 seconds otherwise).
 (() => {
-  const INTERVAL_MS = 5000;
-  if (!document.querySelector('[data-live-refresh]')) return;
+  let marker = document.querySelector('[data-live-refresh]');
+  if (!marker) return;
   let timer = 0;
-  const schedule = () => { timer = setTimeout(refresh, INTERVAL_MS); };
+  const schedule = () => { timer = setTimeout(refresh, Math.max(Number(marker.dataset.liveRefresh) || 5000, 1000)); };
   async function refresh() {
     timer = 0;
     // A delete confirmation waiting for an answer belongs to the rows on screen; try again later.
@@ -20,7 +20,8 @@
         const fresh = next.getElementById(region.id);
         if (fresh) region.replaceChildren(...fresh.childNodes);
       }
-      if (next.querySelector('[data-live-refresh]')) schedule();
+      marker = next.querySelector('[data-live-refresh]');
+      if (marker) schedule();
     } catch {
       schedule(); // A dropped connection retries on the next round.
     }

@@ -167,6 +167,21 @@ test('result pages show confidence for usernames and registrations for e-mails',
   assert.match(list, /type-correo/);
   assert.match(list, /data-confirm="¿Eliminar la búsqueda de x@y.com\?"/);
   assert.doesNotMatch(list, /onsubmit=/);
+  assert.doesNotMatch(list, /data-live-refresh/);
+
+  // Searches in progress refresh in place instead of reloading the page.
+  const running = await render('maigret', {
+    searches: [{ id: '2', type: 'usuario', username: 'soxoj', mode: 'rapida', status: 'procesando', accounts: 0, createdAt: '' }],
+    modes, types: SEARCH_TYPES, selectedType: 'usuario', message: '', messageType: '',
+  });
+  assert.match(running, /data-live-refresh="10000"/);
+  const waiting = await render('maigret-resultado', {
+    search: { ...base, type: 'usuario', username: 'soxoj', status: 'pendiente', accounts: 0 }, modes, types: SEARCH_TYPES, groups: [],
+    extras: { crossChecked: null, unverified: [], notes: [], aliasSearchId: null },
+  });
+  assert.match(waiting, /id="maigretResultado" data-live-region/);
+  assert.match(waiting, /data-live-refresh="10000"/);
+  for (const html of [running, waiting]) assert.doesNotMatch(html, /location\.reload/);
 });
 
 test('the PDF names the kind of search', async () => {

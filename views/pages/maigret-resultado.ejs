@@ -22,6 +22,8 @@
     <% const confirmedCount = all.filter((account) => confidence(account).css === 'confirmed').length; %>
 
     <main class="container page-offset">
+      <%# While the search runs its result fills in here without reloading the page. %>
+      <div id="maigretResultado" data-live-region>
       <div class="row justify-content-md-center mb-4">
         <div class="col-md-12 mt-5">
           <h2 class="text-center title text-break"><%= titles[search.type] %> · <%= shown %> <hr /></h2>
@@ -54,8 +56,7 @@
       </div>
 
       <% if (search.status === 'pendiente' || search.status === 'procesando') { %>
-        <div class="alert alert-info">La búsqueda sigue en proceso. Esta página se actualizará sola.</div>
-        <script>setTimeout(() => window.location.reload(), 10000);</script>
+        <div class="alert alert-info" data-live-refresh="10000">La búsqueda sigue en proceso. Esta página se actualizará sola.</div>
       <% } else if (search.status === 'error') { %>
         <div class="alert alert-danger"><%= search.error || 'La búsqueda no pudo completarse.' %></div>
       <% } else { %>
@@ -129,7 +130,9 @@
             : 'Que un sitio indique que el dato está registrado no dice quién es el titular de la cuenta: verifícalo antes de usarlo.' %>
         </p>
       <% } %>
+      </div>
     </main>
+    <script src="/public/js/live-refresh.js"></script>
     <%- include('../includes/scripts') %>
     <%- include('../includes/footer') %>
   </body>

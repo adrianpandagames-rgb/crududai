@@ -86,7 +86,8 @@
           </div>
         </div>
 
-        <div class="col-md-7 py-3 custom_table">
+        <div id="maigretBusquedas" class="col-md-7 py-3 custom_table" data-live-region>
+          <% if (searches.some((search) => search.status === 'pendiente' || search.status === 'procesando')) { %><span data-live-refresh="10000" hidden></span><% } %>
           <h3 class="text-center">Búsquedas</h3>
           <hr />
           <div class="table-responsive">
@@ -149,16 +150,8 @@
       </div>
     </main>
 
-    <% if (searches.some((search) => search.status === 'pendiente' || search.status === 'procesando')) { %>
-      <script>
-        // Reload while searches run, unless the analyst is typing a new one.
-        setInterval(() => {
-          const typing = [...document.querySelectorAll('#maigretForm input[type="text"], #maigretForm input[type="email"]')]
-            .some((input) => input.value && input.defaultValue !== input.value);
-          if (!typing) window.location.reload();
-        }, 10000);
-      </script>
-    <% } %>
+    <%# Searches in progress update the list in place, so the form being typed in is never touched. %>
+    <script src="/public/js/live-refresh.js"></script>
     <%- include('../includes/scripts') %>
     <%- include('../includes/footer') %>
   </body>
