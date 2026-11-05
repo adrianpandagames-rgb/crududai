@@ -4,24 +4,61 @@ from io import BytesIO
 from .api import api_get
 
 
+DECIMAL = r'[+-]?\d+(?:\.\d+)?'
+DMS = r'''\d{1,3}\s*[°º]\s*\d{1,2}\s*['’′]\s*\d{1,2}(?:\.\d+)?\s*["”″]?\s*[NSEWO]'''
+TOKEN = f'(?:{DMS}|{DECIMAL})'
+COORDINATES = rf'({TOKEN})[\s,;]+({TOKEN})'
+
+
+def coordinate(value, axis):
+    parts = re.fullmatch(r'''(\d{1,3})\s*[°º]\s*(\d{1,2})\s*['’′]\s*(\d{1,2}(?:\.\d+)?)\s*["”″]?\s*([NSEWO])''', value, re.IGNORECASE)
+    if not parts:
+        return float(value)
+    degrees, minutes, seconds, direction = parts.groups()
+    direction = direction.upper()
+    if float(minutes) >= 60 or float(seconds) >= 60 or direction not in ('NS' if axis == 'lat' else 'EWO'):
+        raise ValueError('DMS inválido: verifica minutos, segundos y hemisferio.')
+    result = float(degrees) + float(minutes) / 60 + float(seconds) / 3600
+    return -result if direction in 'SWO' else result
+
+
+def coverage_coordinates(text):
+    """Validate only the coordinates answered in the guided /cobertura flow."""
+    match = re.fullmatch(COORDINATES, (text or '').strip(), re.IGNORECASE)
+    if not match:
+        raise ValueError('Envía latitud y longitud, en decimal o DMS. Ejemplo: 29.0729 -110.9559')
+    lat, lng = coordinate(match[1], 'lat'), coordinate(match[2], 'lng')
+    if not (-85 <= lat <= 85 and -180 <= lng <= 180):
+        raise ValueError('Latitud: -85 a 85; longitud: -180 a 180.')
+    return f'{match[1]}, {match[2]}'
+
+
+def coverage_azimuth(text):
+    try:
+        value = float((text or '').strip().rstrip('°º').strip())
+    except ValueError:
+        value = math.nan
+    if not (math.isfinite(value) and 0 <= value <= 360):
+        raise ValueError('El azimut debe ser un número de 0 a 360 grados.')
+    return str(value)
+
+
+def coverage_radius(text):
+    cleaned = (text or '').strip().lower()
+    cleaned = cleaned[:-1].strip() if cleaned.endswith('m') else cleaned
+    try:
+        value = float(cleaned)
+    except ValueError:
+        value = math.nan
+    if not (math.isfinite(value) and 1 <= value <= 10000):
+        raise ValueError('El alcance debe ser un número de 1 a 10000 metros.')
+    return str(value)
+
+
 def coverage_parameters(args):
-    decimal = r'[+-]?\d+(?:\.\d+)?'
-    dms = r'''\d{1,3}\s*[°º]\s*\d{1,2}\s*['’′]\s*\d{1,2}(?:\.\d+)?\s*["”″]?\s*[NSEWO]'''
-    token = f'(?:{dms}|{decimal})'
-    match = re.fullmatch(f'({token})[\\s,;]+({token})(?:\\s+(.*))?', ' '.join(args).strip(), re.IGNORECASE)
+    match = re.fullmatch(rf'{COORDINATES}(?:\s+(.*))?', ' '.join(args).strip(), re.IGNORECASE)
     if not match:
         raise ValueError('Uso: /cobertura latitud longitud [azimut] [alcance_m]\nAcepta decimal o DMS con hemisferio. Ejemplo: /cobertura 29°4\'19.2"N, 110°57\'21.6"W 50')
-
-    def coordinate(value, axis):
-        parts = re.fullmatch(r'''(\d{1,3})\s*[°º]\s*(\d{1,2})\s*['’′]\s*(\d{1,2}(?:\.\d+)?)\s*["”″]?\s*([NSEWO])''', value, re.IGNORECASE)
-        if not parts:
-            return float(value)
-        degrees, minutes, seconds, direction = parts.groups()
-        direction = direction.upper()
-        if float(minutes) >= 60 or float(seconds) >= 60 or direction not in ('NS' if axis == 'lat' else 'EWO'):
-            raise ValueError('DMS inválido: verifica minutos, segundos y hemisferio.')
-        result = float(degrees) + float(minutes) / 60 + float(seconds) / 3600
-        return -result if direction in 'SWO' else result
 
     options = (match[3] or '').split()
     positional = []

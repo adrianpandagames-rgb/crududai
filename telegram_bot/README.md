@@ -65,6 +65,8 @@ Busca en más de 200 fuentes públicas un dominio, IP (v4 o v6), red CIDR, ASN, 
 
 Los argumentos obligatorios son latitud y longitud: acepta decimal o DMS con hemisferios N/S y E/W/O, y convierte DMS a decimal. Azimut y alcance son opcionales. Sin azimut muestra únicamente la antena; con azimut muestra un sector de ±45°. El alcance predeterminado es 500 m (máximo 10000). Para indicar alcance sin azimut usa `--alcance 1000`; también acepta `--azimut 50`. El bot muestra los mismos datos registrados que `/antena` y envía la imagen PNG del mapa. Si no hay coincidencias, genera igualmente la imagen con la ubicación indicada. La imagen no muestra flechas ni etiquetas de ángulos.
 
+Si se toca `/cobertura` en el menú sin escribir datos, el bot pregunta en tres pasos: coordenadas, azimut y alcance. En el azimut, el botón **Sin azimut: circunferencia** dibuja los 360° alrededor de la antena; en el alcance, el botón **500 m** usa el valor predeterminado. Una respuesta inválida repite la misma pregunta. `/cancelar` sale, y la pregunta caduca a los 10 minutos. Los demás comandos (`/linea`, `/imei`, `/antena`, `/maigret`, `/spiderfoot`) también preguntan su dato cuando se envían vacíos.
+
 El mapa usa OpenStreetMap, incluye la atribución y conserva las teselas visibles en `data/map-tiles/` durante al menos siete días. Requiere conexión a Internet desde Node y no añade claves API. El comando mantiene los permisos del bot y solo admite chats privados. Reinicia Node y el bot después de actualizar el código.
 
 `nodemon.json` excluye datos generados, respaldos, certificados y el entorno virtual. Así, guardar la caché del mapa no reinicia Node ni interrumpe la descarga de imágenes del bot.

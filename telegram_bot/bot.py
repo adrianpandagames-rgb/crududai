@@ -12,11 +12,14 @@ from .core import PAGE_SIZE, can_query, format_row, query_for
 from .coverage import coverage_parameters, coverage_image, send_coverage, coverage_geocoding
 from .maigret import MODES as MAIGRET_MODES, follow_search, maigret_arguments
 from .spiderfoot import MODES as SPIDERFOOT_MODES, follow_spiderfoot, spiderfoot_arguments
+from .prompts import BUTTONS, CANCEL, COVERAGE_STEPS, SINGLE_VALUE, Prompts
 
 MAX_ACTIVE_MAIGRET_PER_USER = 2
 MAX_ACTIVE_SPIDERFOOT_PER_USER = 2
 
 HELP = ('Consultas disponibles:\n'
+        'Toca un comando del menú sin escribir datos y el bot te pregunta lo que necesita, paso a paso. '
+        '/cancelar sale de la pregunta.\n'
         '/cobertura 29.0729 -110.9559 — solo antena, sin azimut\n'
         '/cobertura 29°4\'19.2"N, 110°57\'21.6"W 50 — también acepta DMS\n'
         'Azimut y alcance opcionales. Usa --alcance 1000 para indicar solo el alcance.\n'
@@ -41,8 +44,9 @@ logger = logging.getLogger(__name__)
 
 def main():
     from dotenv import load_dotenv
-    from telegram import BotCommand, LinkPreviewOptions
-    from telegram.ext import Application, CommandHandler
+    from telegram import BotCommand, ForceReply, InlineKeyboardButton, InlineKeyboardMarkup, LinkPreviewOptions
+    from telegram.error import BadRequest
+    from telegram.ext import Application, CallbackQueryHandler, CommandHandler, MessageHandler, filters
     from telegram.request import HTTPXRequest
 
     load_dotenv(Path(__file__).resolve().parents[1] / '.env')
@@ -75,9 +79,87 @@ def main():
         if update.effective_chat and update.effective_chat.type == 'private' and update.effective_user and update.effective_message:
             await update.effective_message.reply_text(f'Tu ID de Telegram: {update.effective_user.id}')
 
+    prompts = Prompts()
+
+    async def ask(update, command, step):
+        message = update.effective_message
+        if command != 'cobertura':
+            question, placeholder, _ = SINGLE_VALUE[command]
+            await message.reply_text(question + '\nEscribe /cancelar para salir.',
+                                     reply_markup=ForceReply(input_field_placeholder=placeholder))
+            return
+        question, placeholder = COVERAGE_STEPS[step]
+        buttons = [[InlineKeyboardButton(label, callback_data=data)]
+                   for data, (button_step, _, label) in BUTTONS.items() if button_step == step]
+        if buttons:
+            buttons.append([InlineKeyboardButton('Cancelar', callback_data=CANCEL)])
+            await message.reply_text(question, reply_markup=InlineKeyboardMarkup(buttons))
+        else:
+            await message.reply_text(question + '\nEscribe /cancelar para salir.',
+                                     reply_markup=ForceReply(input_field_placeholder=placeholder))
+
+    async def start_prompt(update, command):
+        await ask(update, command, prompts.start(update.effective_user.id, command))
+
+    async def answer_prompt(update, context, text):
+        try:
+            result = prompts.answer(update.effective_user.id, text)
+        except ValueError as error:
+            await update.effective_message.reply_text(f'{error}\nInténtalo de nuevo o escribe /cancelar.')
+            return
+        if result is None:
+            return
+        if result[0] == 'ask':
+            await ask(update, 'cobertura', result[1])
+        elif result[0] == 'coverage':
+            await generate_coverage(update, result[1])
+        else:
+            await handlers[result[1]](update, context, result[2])
+
+    async def prompt_reply(update, context):
+        if not update.effective_user or prompts.get(update.effective_user.id) is None or not await authorized(update):
+            return
+        await answer_prompt(update, context, update.effective_message.text)
+
+    async def prompt_button(update, context):
+        query = update.callback_query
+        await query.answer()
+        if not await authorized(update):
+            return
+        user_id = update.effective_user.id
+        state = prompts.get(user_id)
+        chosen = BUTTONS.get(query.data)
+        active = state is not None and (query.data == CANCEL or (chosen is not None and state['step'] == chosen[0]))
+        label = 'Cancelado' if query.data == CANCEL else chosen[2] if chosen else ''
+        try:
+            # Drop the buttons so an old question cannot be answered twice.
+            await query.edit_message_text(f'{query.message.text}\n→ {label}' if active else query.message.text)
+        except BadRequest:
+            pass
+        if not active:
+            await update.effective_message.reply_text('Esa pregunta ya no está activa. Vuelve a elegir el comando del menú.')
+        elif query.data == CANCEL:
+            prompts.clear(user_id)
+        else:
+            await answer_prompt(update, context, chosen[1])
+
+    async def cancel_command(update, context):
+        if await authorized(update):
+            cancelled = prompts.clear(update.effective_user.id)
+            await update.effective_message.reply_text('Pregunta cancelada.' if cancelled else 'No hay ninguna pregunta pendiente.')
+
+    async def drop_prompt(update, context):
+        # Any other command replaces the question that was waiting for an answer.
+        if update.effective_user:
+            prompts.clear(update.effective_user.id)
+
     def search_handler(command):
-        async def search(update, context):
+        async def search(update, context, args=None):
             if not await authorized(update):
+                return
+            args = context.args if args is None else args
+            if not args:
+                await start_prompt(update, command)
                 return
             user_id = update.effective_user.id
             now = time.monotonic()
@@ -85,7 +167,7 @@ def main():
                 await update.effective_message.reply_text('Espera dos segundos entre consultas.')
                 return
             try:
-                term, page = query_for(command, context.args)
+                term, page = query_for(command, args)
                 if command == 'linea':
                     page = 1
             except ValueError as error:
@@ -115,15 +197,21 @@ def main():
     async def coverage_command(update, context):
         if not await authorized(update):
             return
-        user_id = update.effective_user.id
-        now = time.monotonic()
-        if now - last_query.get(user_id, float('-inf')) < 2:
-            await update.effective_message.reply_text('Espera dos segundos entre consultas.')
+        if not context.args:
+            await start_prompt(update, 'cobertura')
             return
         try:
             parameters = coverage_parameters(context.args)
         except ValueError as error:
             await update.effective_message.reply_text(str(error))
+            return
+        await generate_coverage(update, parameters)
+
+    async def generate_coverage(update, parameters):
+        user_id = update.effective_user.id
+        now = time.monotonic()
+        if now - last_query.get(user_id, float('-inf')) < 2:
+            await update.effective_message.reply_text('Espera dos segundos entre consultas.')
             return
         last_query[user_id] = now
         await update.effective_message.reply_text('Generando mapa de cobertura…')
@@ -160,8 +248,12 @@ def main():
 
     active_maigret = {}
 
-    async def maigret_command(update, context):
+    async def maigret_command(update, context, args=None):
         if not await authorized(update):
+            return
+        args = context.args if args is None else args
+        if not args:
+            await start_prompt(update, 'maigret')
             return
         user_id = update.effective_user.id
         message = update.effective_message
@@ -170,7 +262,7 @@ def main():
             await message.reply_text('Espera dos segundos entre consultas.')
             return
         try:
-            username, mode = maigret_arguments(context.args)
+            username, mode = maigret_arguments(args)
         except ValueError as error:
             await message.reply_text(str(error))
             return
@@ -213,8 +305,12 @@ def main():
 
     active_spiderfoot = {}
 
-    async def spiderfoot_command(update, context):
+    async def spiderfoot_command(update, context, args=None):
         if not await authorized(update):
+            return
+        args = context.args if args is None else args
+        if not args:
+            await start_prompt(update, 'spiderfoot')
             return
         user_id = update.effective_user.id
         message = update.effective_message
@@ -223,7 +319,7 @@ def main():
             await message.reply_text('Espera dos segundos entre consultas.')
             return
         try:
-            kind, target, mode = spiderfoot_arguments(context.args)
+            kind, target, mode = spiderfoot_arguments(args)
         except ValueError as error:
             await message.reply_text(str(error))
             return
@@ -269,11 +365,12 @@ def main():
             BotCommand('linea', 'Consultar una línea'),
             BotCommand('imei', 'Consultar un IMEI'),
             BotCommand('antena', 'Consultar ubicacion de antena'),
-            BotCommand('cobertura', 'Mapa de antena: latitud longitud azimut'),
+            BotCommand('cobertura', 'Mapa de cobertura: coordenadas, azimut y alcance'),
             BotCommand('maigret', 'Buscar un nombre de usuario en sitios públicos'),
             BotCommand('spiderfoot', 'OSINT de dominio, IP, correo, teléfono, usuario o nombre'),
             BotCommand('ayuda', 'Ver comandos y ejemplos'),
             BotCommand('miid', 'Ver tu ID de Telegram'),
+            BotCommand('cancelar', 'Salir de la pregunta pendiente'),
         ])
 
     async def on_error(update, context):
@@ -295,18 +392,26 @@ def main():
     application = (Application.builder().token(token)
                    .request(telegram_request()).get_updates_request(telegram_request())
                    .post_init(post_init).post_shutdown(post_shutdown).build())
+    cancel_text = filters.Regex(r'^/cancelar(?:@\w+)?(?:\s|$)')
+    application.add_handler(MessageHandler(filters.Regex(r'^/') & ~cancel_text, drop_prompt), group=-1)
     application.add_handler(CommandHandler(['start', 'ayuda', 'help'], help_command))
+    application.add_handler(CommandHandler('cancelar', cancel_command))
     application.add_handler(CommandHandler('miid', my_id))
     application.add_handler(CommandHandler('cobertura', coverage_command))
     application.add_handler(CommandHandler('maigret', maigret_command))
     application.add_handler(CommandHandler('spiderfoot', spiderfoot_command))
+    handlers = {command: search_handler(command) for command in ('linea', 'imei', 'antena')}
+    handlers.update(maigret=maigret_command, spiderfoot=spiderfoot_command)
     for command in ('linea', 'imei', 'antena'):
-        application.add_handler(CommandHandler(command, search_handler(command)))
-    application.add_handler(line_alias_handler(search_handler('linea')))
+        application.add_handler(CommandHandler(command, handlers[command]))
+    application.add_handler(line_alias_handler(handlers['linea']))
+    # Plain text only answers a pending question; commands keep their own handlers.
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.Regex(r'^/'), prompt_reply))
+    application.add_handler(CallbackQueryHandler(prompt_button, pattern=r'^guia:'))
     application.add_error_handler(on_error)
     from telegram.error import NetworkError
     try:
-        application.run_polling(allowed_updates=['message'], drop_pending_updates=True, bootstrap_retries=3)
+        application.run_polling(allowed_updates=['message', 'callback_query'], drop_pending_updates=True, bootstrap_retries=3)
     except NetworkError:
         raise SystemExit('No fue posible conectar con Telegram después de los reintentos. Revisa la conexión a Internet y el acceso a api.telegram.org:443.') from None
 
