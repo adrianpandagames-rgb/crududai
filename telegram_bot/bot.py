@@ -3,15 +3,18 @@ import os
 import time
 from pathlib import Path
 
-from .api import create_client, maigret_report, maigret_status, search_api, start_maigret
+from .api import (create_client, maigret_report, maigret_status, rejected_reason, search_api, spiderfoot_csv,
+                  spiderfoot_status, start_maigret, start_spiderfoot)
 from .line_results import send_line_results
 from .errors import api_error_details
 from .command_aliases import line_alias_handler
 from .core import PAGE_SIZE, can_query, format_row, query_for
 from .coverage import coverage_parameters, coverage_image, send_coverage, coverage_geocoding
 from .maigret import MODES as MAIGRET_MODES, follow_search, maigret_arguments
+from .spiderfoot import MODES as SPIDERFOOT_MODES, follow_spiderfoot, spiderfoot_arguments
 
 MAX_ACTIVE_MAIGRET_PER_USER = 2
+MAX_ACTIVE_SPIDERFOOT_PER_USER = 2
 
 HELP = ('Consultas disponibles:\n'
         '/cobertura 29.0729 -110.9559 — solo antena, sin azimut\n'
@@ -30,6 +33,8 @@ HELP = ('Consultas disponibles:\n'
         'En IMEI y antenas, para más resultados añade: --pagina 2\n'
         '/maigret guero_hmo — buscar un nombre de usuario en 100 sitios públicos\n'
         '/maigret guero_hmo --normal — buscar en 500 sitios (tarda más)\n'
+        '/spiderfoot ejemplo.com — OSINT con SpiderFoot: dominio, IP, red, ASN, correo, +52 teléfono, @usuario, nombre o bitcoin\n'
+        '/spiderfoot usuario juan.perez — indicar el tipo; --normal busca hasta 1 hora\n'
         '/miid — ver tu ID de Telegram')
 logger = logging.getLogger(__name__)
 
@@ -206,6 +211,59 @@ def main():
         active_maigret[user_id] = active_maigret.get(user_id, 0) + 1
         context.application.create_task(follow())
 
+    active_spiderfoot = {}
+
+    async def spiderfoot_command(update, context):
+        if not await authorized(update):
+            return
+        user_id = update.effective_user.id
+        message = update.effective_message
+        now = time.monotonic()
+        if now - last_query.get(user_id, float('-inf')) < 2:
+            await message.reply_text('Espera dos segundos entre consultas.')
+            return
+        try:
+            kind, target, mode = spiderfoot_arguments(context.args)
+        except ValueError as error:
+            await message.reply_text(str(error))
+            return
+        if active_spiderfoot.get(user_id, 0) >= MAX_ACTIVE_SPIDERFOOT_PER_USER:
+            await message.reply_text('Ya tienes dos búsquedas de SpiderFoot en curso. Espera a que termine alguna.')
+            return
+        last_query[user_id] = now
+        try:
+            started = await start_spiderfoot(api_client, kind, target, mode, user_id)
+        except Exception as error:
+            code, error_message = api_error_details(error)
+            logger.error('SpiderFoot fallido: usuario=%s codigo=%s', user_id, code)
+            await message.reply_text(rejected_reason(error) or error_message)
+            return
+        await message.reply_text(f"Búsqueda de {started.get('target', target)} ({started.get('type_label', '')}) en cola "
+                                 f'({SPIDERFOOT_MODES[mode]}). Te aviso aquí cuando termine.')
+
+        async def send_text(text):
+            await message.reply_text(text, protect_content=True, link_preview_options=LinkPreviewOptions(is_disabled=True))
+
+        async def send_csv(search_id, name):
+            try:
+                csv = await spiderfoot_csv(api_client, search_id, user_id)
+                safe_name = ''.join(char if char.isalnum() or char in '@._-' else '_' for char in name)
+                await message.reply_document(document=csv, filename=f'SpiderFoot-{safe_name}.csv', protect_content=True)
+            except Exception as error:
+                logger.error('CSV SpiderFoot fallido: usuario=%s codigo=%s', user_id, api_error_details(error)[0])
+
+        async def follow():
+            try:
+                await follow_spiderfoot(started['id'], mode, lambda search_id: spiderfoot_status(api_client, search_id, user_id),
+                                        send_text, send_csv)
+            except Exception as error:
+                logger.error('Seguimiento SpiderFoot fallido: usuario=%s error=%s', user_id, type(error).__name__)
+            finally:
+                active_spiderfoot[user_id] -= 1
+
+        active_spiderfoot[user_id] = active_spiderfoot.get(user_id, 0) + 1
+        context.application.create_task(follow())
+
     async def post_init(application):
         await application.bot.set_my_commands([
             BotCommand('linea', 'Consultar una línea'),
@@ -213,6 +271,7 @@ def main():
             BotCommand('antena', 'Consultar ubicacion de antena'),
             BotCommand('cobertura', 'Mapa de antena: latitud longitud azimut'),
             BotCommand('maigret', 'Buscar un nombre de usuario en sitios públicos'),
+            BotCommand('spiderfoot', 'OSINT de dominio, IP, correo, teléfono, usuario o nombre'),
             BotCommand('ayuda', 'Ver comandos y ejemplos'),
             BotCommand('miid', 'Ver tu ID de Telegram'),
         ])
@@ -240,6 +299,7 @@ def main():
     application.add_handler(CommandHandler('miid', my_id))
     application.add_handler(CommandHandler('cobertura', coverage_command))
     application.add_handler(CommandHandler('maigret', maigret_command))
+    application.add_handler(CommandHandler('spiderfoot', spiderfoot_command))
     for command in ('linea', 'imei', 'antena'):
         application.add_handler(CommandHandler(command, search_handler(command)))
     application.add_handler(line_alias_handler(search_handler('linea')))

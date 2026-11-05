@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <%- include('../includes/head') %>
+    <link rel="stylesheet" href="/public/css/maigret.css" />
+    <link rel="stylesheet" href="/public/css/spiderfoot.css" />
+  </head>
+  <body>
+    <%- include('../includes/header') %>
+
+    <%# URLs inside a result become links; the text around them stays plain (and escaped). %>
+    <% const pieces = (text) => String(text).split(/(https?:\/\/[^\s<>"']+)/); %>
+    <% const running = search.status === 'pendiente' || search.status === 'procesando'; %>
+
+    <main class="container page-offset">
+      <%# While the search runs its result fills in here without reloading the page. %>
+      <div id="spiderfootResultado" data-live-region>
+      <div class="row justify-content-md-center mb-4">
+        <div class="col-md-12 mt-5">
+          <h2 class="text-center title text-break">SPIDERFOOT · <%= search.target %> <hr /></h2>
+        </div>
+      </div>
+
+      <% if (message) { %>
+        <div class="alert <%= messageType === 'error' ? 'alert-danger' : 'alert-success' %>"><%= message %></div>
+      <% } %>
+
+      <div class="maigret-summary card p-3 mb-4">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+          <div>
+            <div><strong>Tipo:</strong> <%= types[search.type]?.label || search.type %> · <%= modes[search.mode]?.label || search.mode %></div>
+            <div><strong>Solicitó:</strong> <%= search.requestedBy || '—' %> · <%= search.createdAt %><%= search.finishedAt ? ` · terminó ${search.finishedAt}` : '' %></div>
+            <% if (search.status === 'listo') { %>
+              <div><strong>Resultados:</strong> <%= search.events %><%= results.partial ? ' (parciales)' : '' %></div>
+            <% } %>
+          </div>
+          <div class="d-flex gap-2 flex-wrap">
+            <a class="btn btn-outline-secondary" href="/spiderfoot">Volver</a>
+            <% if (running) { %>
+              <form action="/spiderfoot/detener/<%= search.id %>" method="POST" class="m-0"
+                data-confirm="¿Detener la búsqueda? Se guardará lo encontrado hasta ahora.">
+                <button type="submit" class="btn btn-outline-danger"><i class="bi bi-stop-circle"></i> Detener y guardar</button>
+              </form>
+            <% } %>
+            <% if (search.status === 'listo' && search.events > 0) { %>
+              <a class="btn btn-primary" href="/spiderfoot/<%= search.id %>/csv"><i class="bi bi-filetype-csv"></i> Descargar CSV</a>
+            <% } %>
+          </div>
+        </div>
+      </div>
+
+      <% if (running) { %>
+        <div class="alert alert-info" data-live-refresh="15000">
+          <%= search.status === 'procesando' ? 'La búsqueda está en proceso' : 'La búsqueda está en cola' %>. Puede tardar hasta <%= modes[search.mode]?.limit || 'varias horas' %>; esta página se actualizará sola.
+        </div>
+      <% } else if (search.status === 'error') { %>
+        <div class="alert alert-danger"><%= search.error || 'La búsqueda no pudo completarse.' %></div>
+      <% } else { %>
+        <% results.notes.forEach((note) => { %><div class="alert alert-warning"><%= note %></div><% }) %>
+        <% if (categories.length === 0) { %>
+          <div class="alert alert-secondary">SpiderFoot no encontró información sobre este objetivo.</div>
+        <% } else { %>
+          <nav class="spiderfoot-categories mb-3" aria-label="Categorías">
+            <% categories.forEach((category) => { %>
+              <a href="#cat-<%= category.key %>"><%= category.label %> <span><%= category.total %></span></a>
+            <% }) %>
+          </nav>
+          <div class="mb-4">
+            <label for="spiderfootFiltro" class="form-label">Filtrar resultados</label>
+            <input type="search" id="spiderfootFiltro" class="form-control" placeholder="Escribe parte de un dato, un tipo o un módulo" autocomplete="off" />
+            <div id="spiderfootFiltroEstado" class="form-text" aria-live="polite"></div>
+          </div>
+          <% categories.forEach((category) => { %>
+            <section id="cat-<%= category.key %>" class="custom_table mb-4 spiderfoot-category">
+              <h3 class="h5 mb-3"><%= category.label %> <span class="maigret-badge spiderfoot-count"><%= category.total %></span></h3>
+              <% category.types.forEach((group) => { %>
+                <details class="spiderfoot-type-group"<%- ['personas', 'riesgos'].includes(category.key) && group.events.length <= 50 ? ' open' : '' %>>
+                  <summary><span class="fw-semibold"><%= group.label %></span> <span class="maigret-badge spiderfoot-count"><%= group.events.length %></span>
+                    <% if (group.label !== group.type) { %><span class="small text-muted"><%= group.type %></span><% } %></summary>
+                  <div class="table-responsive">
+                    <table class="table w-100 maigret-table table-stack mb-0">
+                      <thead><tr><th>Dato</th><th>Módulo</th><th>Encontrado a partir de</th></tr></thead>
+                      <tbody>
+                        <% group.events.forEach((event) => { %>
+                          <tr data-filter-text="<%= `${group.label} ${group.type} ${event.data} ${event.module} ${event.source}`.toLowerCase() %>">
+                            <td data-label="Dato" class="spiderfoot-data"><% pieces(event.data).forEach((piece, index) => { %><% if (index % 2) { %><a href="<%= piece %>" target="_blank" rel="noopener noreferrer"><%= piece %></a><% } else { %><%= piece %><% } %><% }) %></td>
+                            <td data-label="Módulo"><code><%= event.module %></code></td>
+                            <td data-label="Encontrado a partir de" class="spiderfoot-source"><%= event.source %></td>
+                          </tr>
+                        <% }) %>
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+              <% }) %>
+            </section>
+          <% }) %>
+        <% } %>
+        <p class="small text-muted">
+          SpiderFoot reúne coincidencias de fuentes públicas y de terceros. Un dato listado no confirma que pertenezca a la persona u organización buscada: verifícalo antes de usarlo.
+        </p>
+      <% } %>
+      </div>
+    </main>
+    <script src="/public/js/live-refresh.js"></script>
+    <script src="/public/js/spiderfoot-filtro.js"></script>
+    <%- include('../includes/scripts') %>
+    <%- include('../includes/footer') %>
+  </body>
+</html>

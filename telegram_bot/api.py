@@ -65,6 +65,43 @@ async def maigret_report(client, search_id, user_id):
     return response.content
 
 
+async def start_spiderfoot(client, kind, target, mode, user_id):
+    # Starting a search is not idempotent, so it is never retried.
+    body = {'objetivo': target, 'modo': mode, **({'tipo': kind} if kind else {})}
+    response = await client.post('api/bot/spiderfoot', json=body, headers={'X-Telegram-User-Id': str(user_id)})
+    response.raise_for_status()
+    data = response.json()
+    if not isinstance(data, dict) or not isinstance(data.get('id'), str):
+        raise ValueError('Respuesta de API inválida.')
+    return data
+
+
+async def spiderfoot_status(client, search_id, user_id):
+    response = await api_get(client, f'api/bot/spiderfoot/{search_id}', headers={'X-Telegram-User-Id': str(user_id)})
+    response.raise_for_status()
+    data = response.json()
+    if not isinstance(data, dict) or not isinstance(data.get('status'), str) or not isinstance(data.get('categories'), list):
+        raise ValueError('Respuesta de API inválida.')
+    return data
+
+
+async def spiderfoot_csv(client, search_id, user_id):
+    response = await api_get(client, f'api/bot/spiderfoot/{search_id}/csv', headers={'X-Telegram-User-Id': str(user_id)})
+    response.raise_for_status()
+    return response.content
+
+
+def rejected_reason(error):
+    """The server's own explanation of a rejected request (e.g. an invalid target), when it sent one."""
+    try:
+        if error.response.status_code == 400:
+            message = error.response.json().get('error')
+            return message if isinstance(message, str) and message else None
+    except Exception:
+        pass
+    return None
+
+
 async def search_api(client, command, term, page, user_id):
     if command not in ('linea', 'imei', 'antena'):
         raise ValueError('Comando desconocido.')

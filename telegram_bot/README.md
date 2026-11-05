@@ -38,6 +38,21 @@ Después de cambiar estas variables, reinicia Node con
 
 Busca el nombre de usuario en 100 sitios públicos (o 500 con `--normal`) y sigue los alias que encuentre. La búsqueda entra en la misma cola que la pestaña Maigret del sistema, a nombre del usuario vinculado y con sus mismas reglas de grupo, así que también aparece en la web. El bot avisa que quedó en cola y, al terminar, envía las cuentas encontradas, el reporte HTML y la liga al detalle (usa `PUBLIC_BASE_URL`). Cada usuario puede tener dos búsquedas en curso. Si el bot se reinicia mientras espera, el resultado sigue disponible en la web.
 
+### OSINT con SpiderFoot
+
+```text
+/spiderfoot ejemplo.com
+/spiderfoot 189.203.10.5
+/spiderfoot nombre@gmail.com
+/spiderfoot +52 6621234567
+/spiderfoot @guero_hmo
+/spiderfoot Juan Pérez López
+/spiderfoot usuario juan.perez
+/spiderfoot ejemplo.com --normal
+```
+
+Busca en más de 200 fuentes públicas un dominio, IP (v4 o v6), red CIDR, ASN, correo, teléfono (con la clave de país separada), usuario, nombre de persona o dirección de Bitcoin. El tipo se deduce del texto; si es ambiguo (`juan.perez` se lee como dominio) escríbelo antes del objetivo, o usa `@` para un usuario. La búsqueda rápida dura hasta 15 minutos y `--normal` hasta 1 hora; ambas son pasivas, no contactan al objetivo. La búsqueda completa (activa) solo está en la pestaña web. Entra en la misma cola que la pestaña SpiderFoot, a nombre del usuario vinculado y con sus reglas de grupo. Al terminar, el bot envía un resumen por categoría con ejemplos, el CSV con todos los resultados y la liga al detalle. Cada usuario puede tener dos búsquedas en curso.
+
 ### Imagen de cobertura de una antena
 
 ```text

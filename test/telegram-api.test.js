@@ -136,3 +136,68 @@ test('bot Maigret searches run as the linked user and only expose quick or norma
   assert.equal(report.headers.get('content-type'), 'text/html; charset=utf-8');
   assert.equal(await report.text(), '<p>reporte</p>');
 });
+
+test('bot SpiderFoot searches run as the linked user, guess the target and send a summary and the CSV', async t => {
+  const { SpiderfootQueueFullError } = await import('../src/spiderfootRouter.js');
+  const token = 'a'.repeat(64);
+  const config = { ...telegramTestConfig(token), PUBLIC_BASE_URL: 'https://app.example/' };
+  const { telegramIdHash } = await import('../src/telegramIdCrypto.js');
+  const linked = telegramIdHash('123', config);
+  const pool = { execute: async (_sql, [hash]) => [hash === linked ? [{ id: 7, role: 'uecs', is_admin: 0 }] : []] };
+  const enqueued = [];
+  let queueFull = false;
+  const id = '0f8fad5b-d9cb-469f-a165-70867728950e';
+  const events = [
+    { type: 'Email Address', data: 'a@ejemplo.com', module: 'email', source: 'ejemplo.com' },
+    { type: 'Raw DNS Records', data: 'ejemplo.com. 300 IN A 1.2.3.4', module: 'dnsraw', source: 'ejemplo.com' },
+  ];
+  const searches = {
+    initialize: async () => {},
+    enqueue: async (user, search) => {
+      if (queueFull) throw new SpiderfootQueueFullError();
+      enqueued.push({ user, search });
+      return id;
+    },
+    find: async (user, searchId) => (searchId === id ? {
+      id, type: 'dominio', target: 'ejemplo.com', mode: 'rapida', status: 'listo', total: 2, error: null,
+      results: JSON.stringify({ events, notes: ['nota'], partial: false }),
+    } : null),
+  };
+  const app = express();
+  app.use('/api/bot', createTelegramApiRouter(pool, config, undefined, async () => ({}), null, searches));
+  app.use('/sin-spiderfoot', createTelegramApiRouter(pool, config, undefined, async () => ({})));
+  const server = app.listen(0, '127.0.0.1');
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  await new Promise(resolve => server.once('listening', resolve));
+  const root = `http://127.0.0.1:${server.address().port}`;
+  const headers = { Authorization: `Bearer ${token}`, 'X-Telegram-User-Id': '123', 'Content-Type': 'application/json' };
+  const start = (body, path = '/api/bot') => fetch(`${root}${path}/spiderfoot`, { method: 'POST', headers, body: JSON.stringify(body) });
+
+  const rejected = await start({ objetivo: '-u all', tipo: 'dominio' });
+  assert.equal(rejected.status, 400);
+  assert.match((await rejected.json()).error, /dominio válido/);
+  const accepted = await start({ objetivo: 'juan.perez', tipo: 'usuario', modo: 'completa' });
+  assert.equal(accepted.status, 202);
+  assert.deepEqual(await accepted.json(), { id, target: '@juan.perez', type: 'usuario', type_label: 'Usuario', mode: 'rapida' });
+  assert.equal((await start({ objetivo: '+52 6621234567', modo: 'normal' })).status, 202);
+  assert.deepEqual(enqueued.map(({ search }) => [search.type, search.targetType, search.mode]),
+    [['usuario', 'USERNAME', 'rapida'], ['telefono', 'PHONE_NUMBER', 'normal']]);
+  assert.deepEqual(enqueued[0].user, { userId: 7, isAdmin: false, role: 'uecs' });
+  queueFull = true;
+  assert.equal((await start({ objetivo: 'ejemplo.com' })).status, 429);
+  assert.equal((await start({ objetivo: 'ejemplo.com' }, '/sin-spiderfoot')).status, 503);
+
+  const status = await (await fetch(`${root}/api/bot/spiderfoot/${id}`, { headers })).json();
+  assert.deepEqual(status, {
+    id, target: 'ejemplo.com', type_label: 'Dominio', mode: 'rapida', status: 'listo', total: 2, error: null, notes: ['nota'],
+    web_url: `https://app.example/spiderfoot/${id}`,
+    categories: [
+      { label: 'Personas, cuentas y contacto', total: 1, types: [{ label: 'Correo electrónico', count: 1, examples: ['a@ejemplo.com'] }] },
+      { label: 'Datos sin procesar', total: 1, types: [{ label: 'Registros DNS crudos', count: 1, examples: [] }] },
+    ],
+  });
+  assert.equal((await fetch(`${root}/api/bot/spiderfoot/otro-id`, { headers })).status, 404);
+  const csv = await fetch(`${root}/api/bot/spiderfoot/${id}/csv`, { headers });
+  assert.equal(csv.headers.get('content-type'), 'text/csv; charset=utf-8');
+  assert.match(await csv.text(), /Correo electrónico,a@ejemplo.com,email,ejemplo.com/);
+});

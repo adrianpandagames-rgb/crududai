@@ -29,6 +29,7 @@ import { createPlaneacionRouter } from './src/planeacionRouter.js';
 import { createCoincidenciasRouter } from './src/coincidenciasRouter.js';
 import { createRedTelefonicaRouter } from './src/redTelefonicaRouter.js';
 import { createMaigretRouter, createMaigretSearches } from './src/maigretRouter.js';
+import { createSpiderfootRouter, createSpiderfootSearches } from './src/spiderfootRouter.js';
 import { createImagenesRouter, createPublicImageRouter } from './src/imagenesRouter.js';
 import { createNombresRouter } from './src/nombresRouter.js';
 import { createPerfilesRouter } from './src/perfilesRouter.js';
@@ -236,12 +237,14 @@ const requireNonUecs = (req, res, next) => {
 
 app.use(['/metricas', '/Crud', '/imei', '/lineas', '/ubicaciones', '/api/ubicaciones', '/estudiantes', '/georeferenciacion', '/ruta', '/inicio', '/telefono', '/api/telefono', '/api/localidades', '/cambiar-contrasena'], requireAuth);
 app.use('/metricas', requireNonUecs);
-// The web tab and the Telegram bot share one Maigret queue.
+// The web tabs and the Telegram bot share one Maigret queue and one SpiderFoot queue.
 const maigretSearches = createMaigretSearches(pool);
-app.use('/api/bot', createTelegramApiRouter(pool, process.env, undefined, undefined, maigretSearches));
+const spiderfootSearches = createSpiderfootSearches(pool);
+app.use('/api/bot', createTelegramApiRouter(pool, process.env, undefined, undefined, maigretSearches, spiderfootSearches));
 app.use('/planeacion-geografica', requireAuth, createPlaneacionRouter(pool));
 app.use('/coincidencias', requireAuth, createCoincidenciasRouter(pool));
 app.use('/maigret', requireAuth, createMaigretRouter(pool, { searches: maigretSearches }));
+app.use('/spiderfoot', requireAuth, createSpiderfootRouter(pool, { searches: spiderfootSearches }));
 app.use('/imagenes', requireAuth, createImagenesRouter(pool));
 app.use('/nombres', requireAuth, createNombresRouter(pool, { maigretSearches }));
 app.use('/perfiles', requireAuth, createPerfilesRouter(pool));

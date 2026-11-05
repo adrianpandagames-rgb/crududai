@@ -7,9 +7,28 @@ import { buildAuditDetails } from './auditDetails.js';
 import { telegramIdHash } from './telegramIdCrypto.js';
 import { MaigretQueueFullError } from './maigretRouter.js';
 import { isValidUsername, normalizeUsername } from './maigretService.js';
+import { SpiderfootQueueFullError, groupEvents, spiderfootCsv, spiderfootFileName } from './spiderfootRouter.js';
+import { SPIDERFOOT_TYPES, parseTextTarget } from './spiderfootService.js';
 
 const PAGE_SIZE = 5;
 const MAX_BOT_MAIGRET_ACCOUNTS = 100;
+// A chat shows a summary: a few examples per type (more for people and leaks), none of the raw data.
+const BOT_EXAMPLES = { personas: 10, riesgos: 10, crudos: 0 };
+const BOT_DEFAULT_EXAMPLES = 3;
+const BOT_EXAMPLE_LENGTH = 200;
+
+export function spiderfootBotSummary(events) {
+  return groupEvents(events).map((category) => ({
+    label: category.label,
+    total: category.total,
+    types: category.types.map((group) => ({
+      label: group.label,
+      count: group.events.length,
+      examples: group.events.slice(0, BOT_EXAMPLES[category.key] ?? BOT_DEFAULT_EXAMPLES)
+        .map((event) => event.data.replace(/\s+/g, ' ').slice(0, BOT_EXAMPLE_LENGTH)),
+    })),
+  }));
+}
 
 export function buildTelegramQuery(command, term, page) {
   if (typeof term !== 'string' || !term.trim() || term.length > 120 || !Number.isInteger(page) || page < 1 || page > 100) {
@@ -51,7 +70,7 @@ export function buildTelegramQuery(command, term, page) {
   return { sql, params: command === 'linea' ? params : [...params, PAGE_SIZE + 1, (page - 1) * PAGE_SIZE] };
 }
 
-export function createTelegramApiRouter(pool, config = process.env, mapRenderer = generateAntennaMap, geocodingLookup = createCoverageGeocoder(pool), maigretSearches = null) {
+export function createTelegramApiRouter(pool, config = process.env, mapRenderer = generateAntennaMap, geocodingLookup = createCoverageGeocoder(pool), maigretSearches = null, spiderfootSearches = null) {
   const router = express.Router();
   router.use((req, res, next) => {
     res.set('Cache-Control', 'no-store');
@@ -173,6 +192,66 @@ export function createTelegramApiRouter(pool, config = process.env, mapRenderer 
       return res.type('text/html; charset=utf-8').send(search.report_html);
     } catch {
       return res.status(503).json({ error: 'No fue posible obtener el reporte.' });
+    }
+  });
+  const requireSpiderfoot = async (req, res, next) => {
+    if (!spiderfootSearches) return res.status(503).json({ error: 'SpiderFoot no está disponible.' });
+    try {
+      await spiderfootSearches.initialize();
+      return next();
+    } catch {
+      return res.status(503).json({ error: 'No fue posible acceder a las búsquedas de SpiderFoot.' });
+    }
+  };
+  // Like Maigret, the bot offers only the passive depths; the active one stays on the web, with its warning.
+  router.post('/spiderfoot', express.json({ limit: '2kb' }), requireSpiderfoot, async (req, res) => {
+    const text = typeof req.body?.objetivo === 'string' ? req.body.objetivo : '';
+    const type = typeof req.body?.tipo === 'string' && req.body.tipo ? req.body.tipo : undefined;
+    if (!text.trim() || text.length > 255) return res.status(400).json({ error: 'Indica qué buscar.' });
+    const parsed = parseTextTarget(text, type);
+    if (parsed.error) return res.status(400).json({ error: parsed.error });
+    const mode = req.body?.modo === 'normal' ? 'normal' : 'rapida';
+    const shown = parsed.shown ?? parsed.target;
+    try {
+      const id = await spiderfootSearches.enqueue(req.botUser, { type: parsed.type, target: parsed.target, targetType: parsed.targetType, shown, mode });
+      return res.status(202).json({ id, target: shown, type: parsed.type, type_label: SPIDERFOOT_TYPES[parsed.type].label, mode });
+    } catch (error) {
+      if (error instanceof SpiderfootQueueFullError) return res.status(429).json({ error: error.message });
+      return res.status(503).json({ error: 'No fue posible iniciar la búsqueda.' });
+    }
+  });
+  router.get('/spiderfoot/:id', requireSpiderfoot, async (req, res) => {
+    try {
+      const search = await spiderfootSearches.find(req.botUser, req.params.id,
+        's.search_uuid AS id, s.search_type AS type, s.target_shown AS target, s.mode, s.status, s.events_found AS total, s.results, s.error_message AS error');
+      if (!search) return res.status(404).json({ error: 'Búsqueda no encontrada.' });
+      const results = { events: [], notes: [], ...(search.results ? JSON.parse(search.results) : {}) };
+      const baseUrl = (config.PUBLIC_BASE_URL || '').replace(/\/+$/, '');
+      return res.json({
+        id: search.id,
+        target: search.target,
+        type_label: SPIDERFOOT_TYPES[search.type]?.label || search.type,
+        mode: search.mode,
+        status: search.status,
+        total: Number(search.total),
+        error: search.error,
+        notes: results.notes,
+        web_url: baseUrl ? `${baseUrl}/spiderfoot/${search.id}` : null,
+        categories: spiderfootBotSummary(results.events),
+      });
+    } catch {
+      return res.status(503).json({ error: 'No fue posible consultar la búsqueda.' });
+    }
+  });
+  router.get('/spiderfoot/:id/csv', requireSpiderfoot, async (req, res) => {
+    try {
+      const search = await spiderfootSearches.find(req.botUser, req.params.id, 's.target_shown AS target, s.status, s.results');
+      if (!search || search.status !== 'listo') return res.status(404).json({ error: 'Resultados no disponibles.' });
+      res.type('text/csv; charset=utf-8');
+      res.attachment(`${spiderfootFileName(search.target)}.csv`);
+      return res.send(spiderfootCsv(search.results ? JSON.parse(search.results).events : []));
+    } catch {
+      return res.status(503).json({ error: 'No fue posible obtener los resultados.' });
     }
   });
   for (const command of ['linea', 'imei', 'antena']) {

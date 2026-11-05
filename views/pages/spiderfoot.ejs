@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <%- include('../includes/head') %>
+    <link rel="stylesheet" href="/public/css/maigret.css" />
+    <link rel="stylesheet" href="/public/css/spiderfoot.css" />
+  </head>
+  <body>
+    <%- include('../includes/header') %>
+
+    <main class="container page-offset">
+      <div class="row justify-content-md-center mb-5">
+        <div class="col-md-12 mt-5">
+          <h2 class="text-center title">SPIDERFOOT <hr /></h2>
+        </div>
+      </div>
+
+      <% if (message) { %>
+        <div class="alert <%= messageType === 'error' ? 'alert-danger' : 'alert-success' %>"><%= message %></div>
+      <% } %>
+
+      <% const selected = types[selectedType]; %>
+      <div class="row justify-content-md-center mb-4">
+        <div class="col-md-5 mb-4">
+          <div class="card p-4">
+            <h3 class="text-center mb-3">Nueva búsqueda</h3>
+            <nav class="maigret-type-switch spiderfoot-type-switch mb-4" aria-label="Tipo de búsqueda">
+              <% Object.entries(types).forEach(([value, type]) => { %>
+                <a href="/spiderfoot?tipo=<%= value %>" class="<%= selectedType === value ? 'is-selected' : '' %>"<%- selectedType === value ? ' aria-current="page"' : '' %>><%= type.label %></a>
+              <% }) %>
+            </nav>
+            <form action="/spiderfoot/buscar" method="POST" autocomplete="off">
+              <input type="hidden" name="tipo" value="<%= selectedType %>" />
+              <% if (selectedType === 'telefono') { %>
+                <div class="row g-2 mb-3">
+                  <div class="col-4">
+                    <label for="lada" class="form-label">Clave de país</label>
+                    <input type="text" id="lada" name="lada" class="form-control" inputmode="numeric" maxlength="4" required value="52" pattern="\+?[1-9][0-9]{0,2}" />
+                  </div>
+                  <div class="col-8">
+                    <label for="telefono" class="form-label">Teléfono</label>
+                    <input type="text" id="telefono" name="telefono" class="form-control" inputmode="numeric" maxlength="20" required placeholder="<%= selected.placeholder %>" />
+                  </div>
+                </div>
+              <% } else { %>
+                <div class="mb-3">
+                  <label for="objetivo" class="form-label"><%= selected.label %></label>
+                  <input type="<%= selectedType === 'correo' ? 'email' : 'text' %>" id="objetivo" name="objetivo" class="form-control" maxlength="255" required
+                    placeholder="<%= selected.placeholder %>"<%- ['ip', 'red', 'asn'].includes(selectedType) ? ' inputmode="decimal"' : '' %> aria-describedby="objetivoAyuda" />
+                  <div id="objetivoAyuda" class="form-text"><%= selected.hint %></div>
+                </div>
+              <% } %>
+              <div class="mb-3">
+                <label for="modo" class="form-label">Profundidad</label>
+                <select id="modo" name="modo" class="form-select">
+                  <% Object.entries(modes).forEach(([value, mode]) => { %>
+                    <option value="<%= value %>"><%= mode.label %></option>
+                  <% }) %>
+                </select>
+                <div class="form-text">Las pasivas solo consultan fuentes públicas y nunca contactan al objetivo. La completa también lo contacta directamente (escaneo de puertos, recorrido de sus sitios), así que el objetivo podría notarlo.</div>
+              </div>
+              <button type="submit" class="btn btn-primary w-100">Iniciar búsqueda</button>
+              <p class="small text-muted mt-3 mb-0">
+                SpiderFoot consulta más de 200 fuentes y encadena lo que encuentra: un correo lleva a un dominio, el dominio a sus IPs, y así. Si llega al tiempo máximo, o la detienes, se guarda lo encontrado hasta ese momento. Lo que reporta son coincidencias en fuentes públicas: verifica cada dato antes de usarlo.
+              </p>
+            </form>
+          </div>
+        </div>
+
+        <div id="spiderfootBusquedas" class="col-md-7 py-3 custom_table" data-live-region>
+          <% if (searches.some((search) => search.status === 'pendiente' || search.status === 'procesando')) { %><span data-live-refresh="15000" hidden></span><% } %>
+          <h3 class="text-center">Búsquedas</h3>
+          <hr />
+          <div class="table-responsive">
+            <table class="table w-100 maigret-table table-stack">
+              <thead>
+                <tr>
+                  <th>Búsqueda</th>
+                  <th>Profundidad</th>
+                  <th>Solicitó</th>
+                  <th>Estado</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% if (searches.length === 0) { %>
+                  <tr><td colspan="5" class="text-center">No hay búsquedas</td></tr>
+                <% } else { %>
+                  <% searches.forEach((search) => { %>
+                    <tr>
+                      <td data-label="Búsqueda">
+                        <span class="maigret-badge spiderfoot-type"><%= types[search.type]?.label || search.type %></span>
+                        <div class="fw-semibold text-break"><%= search.target %></div>
+                        <div class="small text-muted"><%= search.createdAt %></div>
+                      </td>
+                      <td data-label="Profundidad"><%= modes[search.mode]?.label || search.mode %></td>
+                      <td data-label="Solicitó"><%= search.requestedBy || '—' %></td>
+                      <td data-label="Estado">
+                        <% if (search.status === 'listo') { %>
+                          <span class="maigret-badge ready"><%= search.events %> resultado(s)</span>
+                        <% } else if (search.status === 'error') { %>
+                          <span class="maigret-badge error" title="<%= search.error %>">Error</span>
+                        <% } else if (search.status === 'procesando') { %>
+                          <span class="maigret-badge pending">Buscando…</span>
+                        <% } else { %>
+                          <span class="maigret-badge pending">En cola</span>
+                        <% } %>
+                      </td>
+                      <td data-label="Acción">
+                        <div class="d-flex align-items-center gap-2 flex-nowrap">
+                          <a class="btn btn-sm btn-outline-primary" href="/spiderfoot/<%= search.id %>">Ver</a>
+                          <form action="/spiderfoot/eliminar/<%= search.id %>" method="POST" class="m-0"
+                            data-confirm="¿Eliminar la búsqueda de <%= search.target %>?">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" aria-label="Eliminar búsqueda" title="Eliminar búsqueda">
+                              <i class="bi bi-trash3" aria-hidden="true"></i>
+                            </button>
+                          </form>
+                        </div>
+                      </td>
+                    </tr>
+                  <% }) %>
+                <% } %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script src="/public/js/live-refresh.js"></script>
+    <%- include('../includes/scripts') %>
+    <%- include('../includes/footer') %>
+  </body>
+</html>

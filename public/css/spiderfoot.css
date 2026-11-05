@@ -1,0 +1,16 @@
+/* SpiderFoot reuses the Maigret badges and switch (maigret.css); these are its own pieces. */
+.spiderfoot-type-switch { flex-wrap: wrap; }
+.spiderfoot-type-switch a { flex: 1 0 calc(33.333% - 4px); padding: .4rem .25rem; font-size: .9rem; }
+.maigret-badge.spiderfoot-type { margin-bottom: .25rem; font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; background: #e7f3f4; color: #075d67; }
+.maigret-badge.spiderfoot-count { background: #e2e3e5; color: #41464b; font-size: .75rem; vertical-align: middle; }
+.spiderfoot-categories { display: flex; flex-wrap: wrap; gap: .5rem; }
+.spiderfoot-categories a { padding: .35rem .75rem; border-radius: 999px; background: #eef2f6; color: #334155; font-weight: 600; text-decoration: none; font-size: .9rem; }
+.spiderfoot-categories a:hover { background: #dbe7f3; color: #0f5d9a; }
+.spiderfoot-categories a span { margin-left: .25rem; opacity: .7; font-variant-numeric: tabular-nums; }
+.spiderfoot-type-group { border-top: 1px solid rgba(100, 116, 139, .25); padding: .5rem 0; }
+.spiderfoot-type-group > summary { cursor: pointer; display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .25rem 0; }
+.spiderfoot-type-group[open] > summary { margin-bottom: .5rem; }
+.spiderfoot-data { white-space: pre-line; word-break: break-word; max-width: 60ch; }
+.spiderfoot-source { word-break: break-word; font-size: .85rem; opacity: .8; }
+html[data-theme="dark"] .spiderfoot-categories a { background: #111c2c; color: var(--dark-muted); }
+html[data-theme="dark"] .spiderfoot-categories a:hover { background: #243d59; color: #fff; }

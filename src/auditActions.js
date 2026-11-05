@@ -7,7 +7,7 @@ export const auditResources = {
   ESTUDIANTE: 'Estudiante', OTRO: 'Otro',
   GEOREFERENCIACION: 'Georreferenciación', PLANEACION: 'Planeación geográfica',
   TELEFONO: 'Teléfono', RED: 'Red telefónica', AUDITORIA: 'Auditoría', METRICAS: 'Métricas',
-  MAIGRET: 'Maigret', IMAGEN: 'Búsqueda por imagen', NOMBRE: 'RastroX',
+  MAIGRET: 'Maigret', SPIDERFOOT: 'SpiderFoot', IMAGEN: 'Búsqueda por imagen', NOMBRE: 'RastroX',
   COINCIDENCIA: 'Coincidencias de antenas', PERFIL: 'Perfil', TAREA: 'Tarea', CUENTA: 'Mi cuenta',
 };
 
@@ -48,6 +48,7 @@ export const auditResourceSql = `CASE
   WHEN LOWER(request_path) REGEXP '^/(api/)?telefono(/|$)' THEN 'TELEFONO'
   WHEN LOWER(request_path) REGEXP '^/red-telefonica(/|$)' THEN 'RED'
   WHEN LOWER(request_path) REGEXP '^/maigret(/|$)' THEN 'MAIGRET'
+  WHEN LOWER(request_path) REGEXP '^/(api/bot/)?spiderfoot(/|$)' THEN 'SPIDERFOOT'
   WHEN LOWER(request_path) REGEXP '^/imagenes(/|$)' THEN 'IMAGEN'
   WHEN LOWER(request_path) REGEXP '^/nombres(/|$)' THEN 'NOMBRE'
   WHEN LOWER(request_path) REGEXP '^/perfiles(/|$)' THEN 'PERFIL'
@@ -106,6 +107,9 @@ const specificActions = [
   [/^\/usuarios\/\d+\/telegram\/?$/i, 'Vinculó Telegram'],
   [/^\/cambiar-contrasena\/?$/i, 'Cambió su contraseña'],
   [/^\/maigret\/?$/i, 'Búsqueda en Maigret'],
+  [/^\/spiderfoot\/buscar\/?$/i, 'Búsqueda en SpiderFoot'],
+  [/^\/spiderfoot\/detener\//i, 'Detuvo búsqueda de SpiderFoot'],
+  [/^\/spiderfoot\/eliminar\//i, 'Eliminó búsqueda de SpiderFoot'],
   [/^\/(medidores|usuarios)\/google-geocoding\/reiniciar\/?$/i, 'Reinició contador de Geocoding'],
   [/\/(editar|modificar)(\/|$)/i, 'Editó registro'],
 ];
