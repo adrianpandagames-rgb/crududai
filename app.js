@@ -416,6 +416,17 @@ app.get("/", (req, res) => {
   res.render("index", { error: null, success: null });
 });
 
+// Installed app (PWA). The service worker lives at the root so its scope covers the whole site; it is checked
+// for updates on every visit, so it is never cached. /app is where the installed app opens: the person's start
+// page when signed in, the login otherwise (requireAuth sends them there).
+app.get('/sw.js', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Service-Worker-Allowed', '/');
+  res.type('application/javascript');
+  res.sendFile(fileURLToPath(new URL('./public/sw.js', import.meta.url)));
+});
+app.get('/app', requireAuth, (req, res) => res.redirect(req.session.preferencias?.inicio || '/Crud'));
+
 app.get('/terminos', (_req, res) => {
   res.setHeader('Cache-Control', 'public, max-age=3600');
   return res.render('pages/terminos');

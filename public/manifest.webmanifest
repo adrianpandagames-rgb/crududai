@@ -1,0 +1,24 @@
+{
+  "name": "Unidad de Análisis e Inteligencia",
+  "short_name": "UDAI",
+  "description": "Panel de la Unidad de Análisis e Inteligencia.",
+  "id": "/app",
+  "start_url": "/app",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "lang": "es-MX",
+  "background_color": "#000000",
+  "theme_color": "#111827",
+  "icons": [
+    { "src": "/public/imgs/pwa/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/public/imgs/pwa/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/public/imgs/pwa/maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/public/imgs/pwa/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Tareas", "url": "/tareas", "icons": [{ "src": "/public/imgs/pwa/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Líneas", "url": "/Crud", "icons": [{ "src": "/public/imgs/pwa/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Notificaciones", "url": "/cuenta/notificaciones", "icons": [{ "src": "/public/imgs/pwa/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

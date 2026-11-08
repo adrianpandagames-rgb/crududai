@@ -85,6 +85,8 @@
               <% if (unread) { %><span class="badge rounded-pill bg-danger ms-1"><%= unread > 99 ? '99+' : unread %></span><% } %>
             </a>
           </li>
+          <%# Shown by pwa.js only when the browser can install the app. %>
+          <li hidden><a class="menu-item" href="#" data-instalar-app><i class="bi bi-download" aria-hidden="true"></i> Instalar app</a></li>
           <li><a class="menu-item logout-btn" href="/logout">Cerrar sesión</a></li>
         </ul>
       </details>

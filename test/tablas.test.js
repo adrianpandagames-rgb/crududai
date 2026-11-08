@@ -68,4 +68,6 @@ test('Mi cuenta reads and saves only the signed-in person\'s tables, and it is n
 
   assert.equal(auditRequestAction({ method: 'PUT', originalUrl: '/cuenta/tablas', query: {} }), null);
   assert.equal(auditRequestAction({ method: 'GET', originalUrl: '/cuenta/tablas', query: {} }), null);
+  // Nor is the browser checking the installed app's service worker.
+  assert.equal(auditRequestAction({ method: 'GET', originalUrl: '/sw.js', query: {} }), null);
 });

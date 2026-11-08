@@ -4,8 +4,9 @@ import { automaticAuditPaths } from './auditFilters.js';
 
 const mutations = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 // The task board's live stream and the column refreshes it triggers are not the user's actions, and neither is
-// arranging a table's columns, which saves after every drag.
-const backgroundPaths = new Set(['/health', '/health/ready', '/api/route-toast', '/tareas/eventos', '/tareas/tablero', '/cuenta/tablas', ...automaticAuditPaths]);
+// arranging a table's columns, which saves after every drag, nor the browser checking the app's service worker.
+const backgroundPaths = new Set(['/health', '/health/ready', '/api/route-toast', '/tareas/eventos', '/tareas/tablero', '/cuenta/tablas', '/sw.js',
+  ...automaticAuditPaths]);
 const presentationParameters = new Set(['page', 'pagina', 'pageSize', 'partial', 'message', 'type', 'toastMessage']);
 
 // Inside a mounted router req.path loses its prefix ("/planeacion-geografica/importar" reads "/importar"),
