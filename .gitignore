@@ -186,3 +186,9 @@ __pycache__/
 
 # Claude rule
 .claude/settings.local.json
+
+# Herramientas de IA (skills, config local de Claude)
+.agents/
+.claude/
+.impeccable/
+skills-lock.json
