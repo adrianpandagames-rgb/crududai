@@ -8,13 +8,27 @@ import {
 import { createMaigretPdf } from './maigretPdf.js';
 
 const MAX_QUEUED_SEARCHES = 10;
+// One person may hold part of the shared queue, not all of it: a few searches (the names tab sends up to five
+// quick ones at once) and a single long "completa" one, so others and the bot are not locked out for hours.
+export const MAX_SEARCHES_PER_USER = 6;
+export const MAX_LONG_SEARCHES_PER_USER = 1;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export class MaigretQueueFullError extends Error {
-  constructor() {
-    super('Hay demasiadas búsquedas en cola. Espera a que terminen algunas.');
+  constructor(message = 'Hay demasiadas búsquedas en cola. Espera a que terminen algunas.') {
+    super(message);
   }
 }
+
+// Counts what one person has waiting or running in a queue whose jobs map holds { userId, mode }.
+export const userQueueError = (jobs, userId, mode) => {
+  const own = [...jobs.values()].filter((job) => job.userId === Number(userId));
+  if (own.length >= MAX_SEARCHES_PER_USER) return `Ya tienes ${own.length} búsquedas en cola. Espera a que terminen antes de iniciar otra.`;
+  if (mode === 'completa' && own.filter((job) => job.mode === 'completa').length >= MAX_LONG_SEARCHES_PER_USER) {
+    return 'Ya tienes una búsqueda completa en cola. Espera a que termine antes de iniciar otra.';
+  }
+  return null;
+};
 
 // One queue shared by the web tab and the Telegram bot, so only one Maigret process runs at a time.
 export function createMaigretSearches(pool, { runSearch = runOsintSearch } = {}) {
@@ -72,11 +86,19 @@ export function createMaigretSearches(pool, { runSearch = runOsintSearch } = {})
   const enqueue = async (session, { type = 'usuario', username, mode, recursive, countryCode, phone, aliasSearchId = null }) => {
     await initialize();
     if (jobs.size >= MAX_QUEUED_SEARCHES) throw new MaigretQueueFullError();
+    const ownLimit = userQueueError(jobs, session.userId, mode);
+    if (ownLimit) throw new MaigretQueueFullError(ownLimit);
     const id = crypto.randomUUID();
-    await pool.execute(`INSERT INTO maigret_busquedas (search_uuid, user_id, owner_group, username, mode, recursive_search, status, search_type)
-      VALUES (?, ?, ?, ?, ?, ?, 'pendiente', ?)`, [id, session.userId, fileGroupOf(session), username, mode, recursive ? 1 : 0, type]);
     const controller = new AbortController();
-    jobs.set(id, controller);
+    // Reserved before the INSERT awaits, so two requests at once cannot both slip under the limits.
+    jobs.set(id, { controller, userId: Number(session.userId), mode });
+    try {
+      await pool.execute(`INSERT INTO maigret_busquedas (search_uuid, user_id, owner_group, username, mode, recursive_search, status, search_type)
+        VALUES (?, ?, ?, ?, ?, ?, 'pendiente', ?)`, [id, session.userId, fileGroupOf(session), username, mode, recursive ? 1 : 0, type]);
+    } catch (error) {
+      jobs.delete(id);
+      throw error;
+    }
     queue = queue.then(async () => {
       if (controller.signal.aborted) return;
       try {
@@ -109,7 +131,7 @@ export function createMaigretSearches(pool, { runSearch = runOsintSearch } = {})
     const scope = visibleFiles(session, 'm');
     const [result] = await pool.execute(`DELETE m FROM maigret_busquedas m WHERE m.search_uuid = ? AND ${scope.where}`,
       [id, ...scope.values]);
-    if (result.affectedRows) jobs.get(id)?.abort();
+    if (result.affectedRows) jobs.get(id)?.controller.abort();
     return result.affectedRows > 0;
   };
 

@@ -80,6 +80,8 @@ app.use("/public", express.static(fileURLToPath(new URL('./public/', import.meta
 const sessions = new Map();
 const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const loginRateLimiter = createLoginRateLimiter();
+// The longest valid e-mail address (RFC 5321).
+const MAX_EMAIL_LENGTH = 254;
 setInterval(() => loginRateLimiter.prune(), LOGIN_WINDOW_MS).unref();
 
 const writeAuditLog = ({ userId = null, userEmail = '', action, requestPath, statusCode, ipAddress, details = null }) => {
@@ -125,9 +127,16 @@ const consumePendingRouteToast = (session) => {
   return session.preferencias?.avisos === false ? null : toast;
 };
 
+// A removed session is also marked, so a request already in flight with it cannot carry on as if it were valid.
+const endSession = (token) => {
+  const session = sessions.get(token);
+  if (session) session.revoked = true;
+  sessions.delete(token);
+};
+
 const revokeUserSessions = (userId) => {
   for (const [token, session] of sessions.entries()) {
-    if (session.userId === userId) sessions.delete(token);
+    if (session.userId === userId) endSession(token);
   }
 };
 
@@ -175,7 +184,12 @@ const requireAuth = async (req, res, next) => {
       notificaciones.noLeidas(session.userId).catch(() => 0),
     ]);
     session.preferencias = cuenta.preferencias;
-    sessions.set(token, session);
+    // A logout, password change or admin revocation may have removed this session while the queries above ran.
+    // The session object is updated in place, so it is never put back in the map: a removed one stays removed.
+    if (session.revoked || sessions.get(token) !== session) {
+      res.clearCookie('auth', buildSessionCookieOptions());
+      return res.redirect('/');
+    }
     req.session = session;
     res.locals.currentUser = {
       id: session.userId,
@@ -272,6 +286,14 @@ app.post('/login', requireSameOrigin, async (req, res) => {
         return res.status(429).render('index', { error: `Demasiados intentos fallidos. Intenta de nuevo en ${minutes} minuto(s).`, success: null });
     }
 
+    // An address longer than any real one is refused before it is kept anywhere (the rate limiter remembers
+    // failed addresses for a while); the attempt still counts against this IP.
+    if (normalizedEmail.length > MAX_EMAIL_LENGTH) {
+        loginRateLimiter.recordFailure(req.ip, '');
+        writeAuditLog({ userEmail: normalizedEmail.slice(0, MAX_EMAIL_LENGTH), action: 'LOGIN_FAILED', requestPath: '/login', statusCode: 400, ipAddress: req.ip });
+        return res.status(400).render('index', { error: 'Invalid credentials.', success: null });
+    }
+
     if (!email || !password) {
         writeAuditLog({ userEmail: normalizedEmail, action: 'LOGIN_FAILED', requestPath: '/login', statusCode: 400, ipAddress: req.ip });
         return res.render('index', { error: 'Email and password are required.', success: null });
@@ -323,9 +345,7 @@ app.post('/login', requireSameOrigin, async (req, res) => {
 
 app.get('/logout', (req, res) => {
   const token = getAuthToken(req);
-  if (token) {
-    sessions.delete(token);
-  }
+  if (token) endSession(token);
 
   res.clearCookie('auth', buildSessionCookieOptions());
   return res.redirect('/');
@@ -339,7 +359,7 @@ app.get('/api/route-toast', async (req, res) => {
 
   const session = sessions.get(token);
   const now = Date.now();
-  if (isSessionExpired(session, now)) {
+  if (session.revoked || isSessionExpired(session, now)) {
     sessions.delete(token);
     res.clearCookie('auth', buildSessionCookieOptions());
     return res.status(401).json({ message: null, fileId: null });
@@ -446,11 +466,16 @@ app.get('/inicio', (req, res) => {
   res.render('inicio');
 });
 
-app.get('/cambiar-contrasena', requireAuth, (req, res) => {
+// This page sets the password without asking for the current one, which is only right for an account that must
+// change it (a new account or an admin reset). Everyone else changes it from Mi cuenta, which asks for the current
+// one, so an open session left unattended cannot be used to take over the account.
+const soloCambioObligatorio = (req, res, next) => (req.session.mustChangePassword ? next() : res.redirect('/cuenta#contrasena'));
+
+app.get('/cambiar-contrasena', requireAuth, soloCambioObligatorio, (req, res) => {
   return res.render('pages/cambiar-contrasena', { error: null });
 });
 
-app.post('/cambiar-contrasena', requireSameOrigin, requireAuth, async (req, res, next) => {
+app.post('/cambiar-contrasena', requireSameOrigin, requireAuth, soloCambioObligatorio, async (req, res, next) => {
   const password = String(req.body.password || '');
   const confirmPassword = String(req.body.confirmPassword || '');
   // Capture the credential before bcrypt yields; other requests may rotate sessions.
@@ -490,7 +515,8 @@ async function guardarContrasena(req, res, password, expectedCredentialHash) {
     return false;
   }
   revokeUserSessions(req.session.userId);
-  req.session = { ...req.session, credentialHash: passwordHash, mustChangePassword: false, lastActivity: Date.now() };
+  // The old session object was just marked revoked; the fresh one starts clean.
+  req.session = { ...req.session, credentialHash: passwordHash, mustChangePassword: false, lastActivity: Date.now(), revoked: false };
   const authToken = crypto.randomBytes(24).toString('hex');
   sessions.set(authToken, req.session);
   res.cookie('auth', authToken, buildSessionCookieOptions());

@@ -36,7 +36,7 @@ router.get('/telefono', (req, res) => {
  */
 router.post('/api/telefono/validar', async (req, res) => {
   try {
-    const result = await validatePhoneNumber(req.body?.number);
+    const result = await validatePhoneNumber(req.body?.number, { userId: req.session?.userId });
     return res.json({ result });
   } catch (error) {
     return res.status(error.status || 500).json({ error: error.message || 'No fue posible validar el número.' });

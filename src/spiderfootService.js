@@ -28,8 +28,12 @@ export const SPIDERFOOT_TYPES = {
 export const SPIDERFOOT_MODES = {
   rapida: { label: 'Rápida (pasiva, hasta 15 minutos)', limit: '15 minutos', args: ['-u', 'passive'], timeoutMs: 15 * 60 * 1000 },
   normal: { label: 'Normal (pasiva, hasta 1 hora)', limit: '1 hora', args: ['-u', 'passive'], timeoutMs: 60 * 60 * 1000 },
-  completa: { label: 'Completa (activa, hasta 3 horas)', limit: '3 horas', args: ['-u', 'all'], timeoutMs: 3 * 60 * 60 * 1000 },
+  completa: { label: 'Completa (activa, hasta 3 horas)', limit: '3 horas', args: ['-u', 'all'], timeoutMs: 3 * 60 * 60 * 1000, adminOnly: true },
 };
+// The active mode contacts the target directly from the server (port scans, crawling), and a domain may resolve
+// to an internal address, so only administrators may start it.
+export const modesFor = (session) => Object.fromEntries(Object.entries(SPIDERFOOT_MODES)
+  .filter(([, mode]) => !mode.adminOnly || session?.isAdmin === true));
 
 export const STOP_REASON = 'detener';
 const LOG_TAIL_LENGTH = 4000;
@@ -37,6 +41,37 @@ const MAX_EVENTS = 8000;
 const MAX_DATA_LENGTH = 1500;
 const MAX_TOTAL_DATA = 6 * 1024 * 1024;
 const SCAN_SCRIPT = fileURLToPath(new URL('../tools/spiderfoot_scan.py', import.meta.url));
+
+// Addresses that are not on the public internet: the server's own loopback, private and carrier-grade networks,
+// link-local (cloud metadata lives at 169.254.169.254), documentation, multicast and reserved ranges. A scan run
+// from the VPS against these would probe the server itself and the networks around it instead of a public target.
+const NON_PUBLIC = new net.BlockList();
+[
+  ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16], ['172.16.0.0', 12],
+  ['192.0.0.0', 24], ['192.0.2.0', 24], ['192.168.0.0', 16], ['198.18.0.0', 15], ['198.51.100.0', 24], ['203.0.113.0', 24],
+  ['224.0.0.0', 4], ['240.0.0.0', 4],
+].forEach(([address, prefix]) => NON_PUBLIC.addSubnet(address, prefix, 'ipv4'));
+// IPv4-mapped IPv6 (::ffff:a.b.c.d) is refused separately below: a BlockList rule for ::ffff:0:0/96 would also
+// match every plain IPv4 address.
+[['::', 128], ['::1', 128], ['fc00::', 7], ['fe80::', 10], ['ff00::', 8], ['2001:db8::', 32]]
+  .forEach(([address, prefix]) => NON_PUBLIC.addSubnet(address, prefix, 'ipv6'));
+const IPV4_MAPPED = /^(?:0{0,4}:){0,5}:?ffff:/i;
+
+// The first address of an IPv4 network, so "10.0.5.7/16" is checked as 10.0.0.0/16.
+const ipv4NetworkStart = (address, prefix) => {
+  const value = address.split('.').reduce((acc, part) => (acc * 256) + Number(part), 0);
+  const start = prefix === 0 ? 0 : value - (value % (2 ** (32 - prefix)));
+  return [24, 16, 8, 0].map((shift) => Math.floor(start / (2 ** shift)) % 256).join('.');
+};
+// Every non-public range is aligned on /16 or wider, or lies inside a reserved block, so checking the address
+// given and the start of its network is enough for the /16-or-narrower networks accepted here.
+export const isPublicAddress = (address, prefix) => {
+  const type = net.isIPv4(address) ? 'ipv4' : 'ipv6';
+  if (type === 'ipv6' && IPV4_MAPPED.test(address)) return false;
+  if (NON_PUBLIC.check(address, type)) return false;
+  return !(type === 'ipv4' && prefix !== undefined && NON_PUBLIC.check(ipv4NetworkStart(address, prefix), 'ipv4'));
+};
+const NON_PUBLIC_ERROR = 'Solo se pueden buscar direcciones públicas de internet: no se aceptan redes privadas, locales ni reservadas.';
 
 const HOSTNAME = /^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,62}[a-z0-9]$/;
 const BITCOIN = /^(bc(0([ac-hj-np-z02-9]{39}|[ac-hj-np-z02-9]{59})|1[ac-hj-np-z02-9]{8,87})|[13][a-km-zA-HJ-NP-Z1-9]{25,35})$/;
@@ -53,6 +88,7 @@ export function parseTarget(type, body = {}) {
   }
   if (type === 'ip') {
     const version = net.isIP(value);
+    if (version && !isPublicAddress(value)) return { error: NON_PUBLIC_ERROR };
     if (version === 4) return { target: value, targetType: 'IP_ADDRESS' };
     if (version === 6) return { target: value.toLowerCase(), targetType: 'IPV6_ADDRESS' };
     return { error: 'Ingresa una dirección IP válida, por ejemplo 189.203.10.5.' };
@@ -60,6 +96,7 @@ export function parseTarget(type, body = {}) {
   if (type === 'red') {
     const [address, prefixText, extra] = value.toLowerCase().split('/');
     const prefix = /^\d{1,3}$/.test(prefixText ?? '') ? Number(prefixText) : NaN;
+    if (extra === undefined && net.isIP(address) && !Number.isNaN(prefix) && !isPublicAddress(address, prefix)) return { error: NON_PUBLIC_ERROR };
     if (extra === undefined && net.isIPv4(address) && prefix >= 16 && prefix <= 32) return { target: `${address}/${prefix}`, targetType: 'NETBLOCK_OWNER' };
     if (extra === undefined && net.isIPv6(address) && prefix >= 32 && prefix <= 128) return { target: `${address}/${prefix}`, targetType: 'NETBLOCKV6_OWNER' };
     return { error: 'Ingresa la red en notación CIDR, por ejemplo 189.203.10.0/24 (de /16 a /32).' };

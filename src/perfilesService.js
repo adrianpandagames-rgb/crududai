@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { boundSheet, readWorkbook } from './xlsxSafe.js';
 import { fileGroupOf, visibleFiles } from './fileGroups.js';
 import { IMAGE_TYPES, detectImageType } from './imageService.js';
 import { buildNameIndex, normalizeName, searchNameIndex } from './nameSearchService.js';
@@ -57,8 +58,8 @@ export function extractTitular(sheets) {
 export const titularHasNoRecord = (sheets) => sheets.flat(2).some((cell) => NO_RECORD_PATTERN.test(plain(cell)));
 
 export function readXlsxSheets(buffer) {
-  const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: false });
-  return workbook.SheetNames.map((name) => XLSX.utils.sheet_to_json(workbook.Sheets[name], {
+  const workbook = readWorkbook(buffer, { type: 'buffer', cellDates: false });
+  return workbook.SheetNames.map((name) => XLSX.utils.sheet_to_json(boundSheet(workbook.Sheets[name]), {
     header: 1, defval: '', raw: false, blankrows: false,
   }));
 }

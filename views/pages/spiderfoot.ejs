@@ -57,7 +57,7 @@
                     <option value="<%= value %>"><%= mode.label %></option>
                   <% }) %>
                 </select>
-                <div class="form-text">Las pasivas solo consultan fuentes públicas y nunca contactan al objetivo. La completa también lo contacta directamente (escaneo de puertos, recorrido de sus sitios), así que el objetivo podría notarlo.</div>
+                <div class="form-text">Las pasivas solo consultan fuentes públicas y nunca contactan al objetivo.<% if (modes.completa) { %> La completa también lo contacta directamente (escaneo de puertos, recorrido de sus sitios), así que el objetivo podría notarlo.<% } else { %> La búsqueda completa (activa) solo la puede iniciar un administrador.<% } %></div>
               </div>
               <button type="submit" class="btn btn-primary w-100">Iniciar búsqueda</button>
               <p class="small text-muted mt-3 mb-0">

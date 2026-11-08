@@ -76,7 +76,11 @@ export function contactCells(contact, totalRecords) {
 
 export const CONTACT_HEADERS = ['Contacto', 'Registros', 'Porcentaje', 'Salientes', 'Entrantes', 'Primer contacto', 'Último contacto'];
 
-const csvCell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+// Cells starting with =, +, -, @ run as formulas in spreadsheet apps; they get a leading apostrophe, except plain
+// numbers (negative longitudes must stay numbers). Same rule as csvEscape in src/rutaService.js.
+const PLAIN_NUMBER = /^[+-]?(\d+([.,]\d*)?|[.,]\d+)([eE][+-]?\d+)?$/;
+const neutralizeFormula = (text) => (/^[=+\-@\t\r]/.test(text) && !PLAIN_NUMBER.test(text) ? `'${text}` : text);
+const csvCell = (value) => `"${neutralizeFormula(String(value ?? '')).replace(/"/g, '""')}"`;
 
 export function contactsCsv(summary) {
   const total = summary.contacts.reduce((sum, contact) => sum + contact.total, 0);

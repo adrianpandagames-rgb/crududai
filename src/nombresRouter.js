@@ -12,11 +12,43 @@ const RETRY_AFTER_ERROR_MINUTES = 60;
 const DOWNLOAD_TIMEOUT_MS = 120000;
 const INSERT_CHUNK = 1000;
 
-const download = async (fetchImpl, url, encoding) => {
-  const response = await fetchImpl(url, { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS), headers: { 'User-Agent': 'CRUDUDAI/1.0' } });
+// The lists are a few megabytes (SAT 69-B about 4.5 MB, OFAC less); anything far larger is not the list and would
+// only fill the memory of the single process that also holds every session.
+export const MAX_LIST_BYTES = 25 * 1024 * 1024;
+
+// Redirects are refused: SAT serves the 69-B list only over plain http (its https port does not answer), so a
+// redirect is the easiest way for someone on the network path to substitute the file.
+export const download = async (fetchImpl, url, encoding) => {
+  const response = await fetchImpl(url, {
+    signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS), redirect: 'error', headers: { 'User-Agent': 'CRUDUDAI/1.0' },
+  });
   if (!response.ok) throw new Error(`La descarga respondió ${response.status}.`);
-  return new TextDecoder(encoding).decode(await response.arrayBuffer());
+  const tooLarge = () => new Error('La lista descargada es mucho más grande de lo esperado.');
+  if (Number(response.headers?.get?.('content-length')) > MAX_LIST_BYTES) throw tooLarge();
+  if (!response.body?.getReader) {
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length > MAX_LIST_BYTES) throw tooLarge();
+    return new TextDecoder(encoding).decode(buffer);
+  }
+  const reader = response.body.getReader();
+  const chunks = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > MAX_LIST_BYTES) {
+      await reader.cancel().catch(() => {});
+      throw tooLarge();
+    }
+    chunks.push(value);
+  }
+  return new TextDecoder(encoding).decode(Buffer.concat(chunks));
 };
+
+// A real list changes a little from one day to the next. A download that halves it or makes it three times
+// larger is treated as damaged or tampered with, and the stored list is kept.
+export const suspiciousChange = (previous, next) => previous >= 100 && (next < previous / 2 || next > previous * 3);
 
 const loaders = {
   ofac: async (fetchImpl) => parseOfac(
@@ -70,6 +102,10 @@ export function createNameLists(pool, { fetchImpl = fetch } = {}) {
         const entries = await loaders[source](fetchImpl);
         // A list that suddenly comes back nearly empty is a broken download, not a real update.
         if (entries.length < 100) throw new Error(`La lista descargada solo trae ${entries.length} registros.`);
+        const [[stored]] = await pool.query('SELECT entries FROM nombre_listas_fuentes WHERE source = ?', [source]);
+        if (suspiciousChange(Number(stored?.entries || 0), entries.length)) {
+          throw new Error(`La lista descargada trae ${entries.length} registros contra ${stored.entries} guardados; se conserva la anterior por si la descarga está dañada.`);
+        }
         const connection = await pool.getConnection();
         try {
           await connection.beginTransaction();

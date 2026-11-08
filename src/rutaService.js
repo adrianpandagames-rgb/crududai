@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { boundSheet, readWorkbook } from './xlsxSafe.js';
 import sharp from 'sharp';
 import PDFDocument from 'pdfkit';
 
@@ -111,9 +112,16 @@ export const parseCsv = (text, delimiter = detectCsvDelimiter(text)) => {
   return rows;
 };
 
-const csvEscape = (value) => {
-  const text = String(value ?? '');
-  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+// Spreadsheet apps run a cell that starts with =, +, -, @ (or a tab/CR before them) as a formula, and exported
+// cells can come from uploaded files or from the shared Ubicaciones text. Such cells get a leading apostrophe,
+// except plain numbers: longitudes in Sonora are negative and must stay numbers.
+const PLAIN_NUMBER = /^[+-]?(\d+([.,]\d*)?|[.,]\d+)([eE][+-]?\d+)?$/;
+export const neutralizeFormula = (text) => (/^[=+\-@\t\r]/.test(text) && !PLAIN_NUMBER.test(text) ? `'${text}` : text);
+
+// Quotes a cell that contains the delimiter actually used (',', ';' or tab), a quote or a line break.
+export const csvEscape = (value, delimiter = ',') => {
+  const text = neutralizeFormula(String(value ?? ''));
+  return text.includes(delimiter) || /["\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 };
 
 const normalizeRutaTime = (value) => {
@@ -354,11 +362,11 @@ const formatExcelDateCells = (worksheet, date1904) => {
 };
 
 export const readRutaXlsxRows = (buffer) => {
-  const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: false, cellNF: true });
+  const workbook = readWorkbook(buffer, { type: 'buffer', cellDates: false, cellNF: true });
   const firstSheetName = workbook.SheetNames[0];
   if (!firstSheetName) throw new Error('El archivo Excel no contiene hojas.');
 
-  const worksheet = workbook.Sheets[firstSheetName];
+  const worksheet = boundSheet(workbook.Sheets[firstSheetName]);
   const date1904 = workbook.Workbook?.WBProps?.date1904 === true;
   formatExcelDateCells(worksheet, date1904);
 
@@ -397,12 +405,12 @@ export const readRutaXlsxRows = (buffer) => {
 export const processRutaXlsx = (buffer, locations) => processRutaRows(readRutaXlsxRows(buffer), locations);
 
 export const getRutaXlsxMetadata = (buffer) => {
-  const workbook = XLSX.read(buffer, { type: 'buffer', bookProps: true, bookFiles: false });
+  const workbook = readWorkbook(buffer, { type: 'buffer', bookProps: true, bookFiles: false });
   return workbook.Props || {};
 };
 
 export const createRutaCsv = (rows, delimiter = rows.delimiter || ',') => rows
-  .map((row) => row.map(csvEscape).join(delimiter))
+  .map((row) => row.map((cell) => csvEscape(cell, delimiter)).join(delimiter))
   .join('\r\n') + '\r\n';
 
 const extractRouteHeatmapPointsFromRows = (rows) => {
@@ -447,8 +455,8 @@ export const generateRutaHeatmapImageFromSource = async (buffer, extension, opti
   const normalizedExtension = String(extension || '').toLowerCase();
 
   if (normalizedExtension === '.xlsx') {
-    const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: false, raw: false });
-    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+    const workbook = readWorkbook(buffer, { type: 'buffer', cellDates: false, raw: false });
+    const worksheet = boundSheet(workbook.Sheets[workbook.SheetNames[0]]);
     if (!worksheet) return null;
     const rows = XLSX.utils.sheet_to_json(worksheet, {
       header: 1,

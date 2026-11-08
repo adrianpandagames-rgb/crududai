@@ -92,9 +92,9 @@ async def spiderfoot_csv(client, search_id, user_id):
 
 
 def rejected_reason(error):
-    """The server's own explanation of a rejected request (e.g. an invalid target), when it sent one."""
+    """The server's own explanation of a rejected request (an invalid target, or a limit reached), when it sent one."""
     try:
-        if error.response.status_code == 400:
+        if error.response.status_code in (400, 429):
             message = error.response.json().get('error')
             return message if isinstance(message, str) and message else None
     except Exception:

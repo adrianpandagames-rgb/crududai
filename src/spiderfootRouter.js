@@ -2,15 +2,16 @@ import express from 'express';
 import crypto from 'node:crypto';
 import { fileGroupOf, visibleFiles } from './fileGroups.js';
 import {
-  EVENT_CATEGORIES, SPIDERFOOT_MODES, SPIDERFOOT_TYPES, STOP_REASON, describeEventType, parseTarget, runSpiderfoot,
+  EVENT_CATEGORIES, SPIDERFOOT_MODES, SPIDERFOOT_TYPES, STOP_REASON, describeEventType, modesFor, parseTarget, runSpiderfoot,
 } from './spiderfootService.js';
+import { userQueueError } from './maigretRouter.js';
 
 const MAX_QUEUED_SEARCHES = 10;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export class SpiderfootQueueFullError extends Error {
-  constructor() {
-    super('Hay demasiadas búsquedas en cola. Espera a que terminen algunas.');
+  constructor(message = 'Hay demasiadas búsquedas en cola. Espera a que terminen algunas.') {
+    super(message);
   }
 }
 
@@ -61,11 +62,19 @@ export function createSpiderfootSearches(pool, { runSearch = runSpiderfoot } = {
   const enqueue = async (session, { type, target, targetType, shown, mode }) => {
     await initialize();
     if (jobs.size >= MAX_QUEUED_SEARCHES) throw new SpiderfootQueueFullError();
+    const ownLimit = userQueueError(jobs, session.userId, mode);
+    if (ownLimit) throw new SpiderfootQueueFullError(ownLimit);
     const id = crypto.randomUUID();
-    await pool.execute(`INSERT INTO spiderfoot_busquedas (search_uuid, user_id, owner_group, search_type, target, target_shown, target_type, mode, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pendiente')`, [id, session.userId, fileGroupOf(session), type, target, shown, targetType, mode]);
     const controller = new AbortController();
-    jobs.set(id, controller);
+    // Reserved before the INSERT awaits, so two requests at once cannot both slip under the limits.
+    jobs.set(id, { controller, userId: Number(session.userId), mode });
+    try {
+      await pool.execute(`INSERT INTO spiderfoot_busquedas (search_uuid, user_id, owner_group, search_type, target, target_shown, target_type, mode, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pendiente')`, [id, session.userId, fileGroupOf(session), type, target, shown, targetType, mode]);
+    } catch (error) {
+      jobs.delete(id);
+      throw error;
+    }
     queue = queue.then(async () => {
       try {
         if (controller.signal.aborted) {
@@ -96,7 +105,7 @@ export function createSpiderfootSearches(pool, { runSearch = runSpiderfoot } = {
     const search = await find(session, id, 's.search_uuid');
     const job = search && jobs.get(id);
     if (!job) return false;
-    job.abort(STOP_REASON);
+    job.controller.abort(STOP_REASON);
     return true;
   };
 
@@ -106,7 +115,7 @@ export function createSpiderfootSearches(pool, { runSearch = runSpiderfoot } = {
     const scope = visibleFiles(session, 's');
     const [result] = await pool.execute(`DELETE s FROM spiderfoot_busquedas s WHERE s.search_uuid = ? AND ${scope.where}`,
       [id, ...scope.values]);
-    if (result.affectedRows) jobs.get(id)?.abort();
+    if (result.affectedRows) jobs.get(id)?.controller.abort();
     return result.affectedRows > 0;
   };
 
@@ -172,7 +181,7 @@ export function createSpiderfootRouter(pool, { runSearch, searches = createSpide
         FROM spiderfoot_busquedas s LEFT JOIN users u ON u.id = s.user_id
         WHERE ${scope.where} ORDER BY s.id DESC LIMIT 200`, scope.values);
       return res.render('pages/spiderfoot', {
-        searches: rows, modes: SPIDERFOOT_MODES, types: SPIDERFOOT_TYPES,
+        searches: rows, modes: modesFor(req.session), types: SPIDERFOOT_TYPES,
         selectedType: Object.hasOwn(SPIDERFOOT_TYPES, req.query.tipo) ? req.query.tipo : 'dominio',
         message: typeof req.query.message === 'string' ? req.query.message : '',
         messageType: req.query.type,
@@ -187,6 +196,7 @@ export function createSpiderfootRouter(pool, { runSearch, searches = createSpide
     const parsed = parseTarget(type, req.body);
     if (parsed.error) return back(res, parsed.error, 'error', type);
     const mode = Object.hasOwn(SPIDERFOOT_MODES, req.body.modo) ? req.body.modo : 'rapida';
+    if (!Object.hasOwn(modesFor(req.session), mode)) return back(res, 'Solo un administrador puede iniciar una búsqueda completa (activa).', 'error', type);
     const shown = parsed.shown ?? parsed.target;
     try {
       await searches.enqueue(req.session, { type, target: parsed.target, targetType: parsed.targetType, shown, mode });

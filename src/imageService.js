@@ -23,21 +23,46 @@ export function detectImageType(buffer) {
   return null;
 }
 
-// JPEG keeps JFIF (APP0), color profile (APP2) and Adobe color data (APP14); EXIF, XMP, IPTC and comments go.
+// JPEG keeps JFIF (APP0), the color profile (APP2 ICC) and Adobe color data (APP14); EXIF, XMP, IPTC, comments
+// and the MPF index (APP2 "MPF") go. The copy ends at the primary image's end marker: phones append further
+// complete JPEGs after it (MPF secondary images, each with its own EXIF and GPS) and motion-photo or depth data,
+// none of which belongs in the public copy. Progressive JPEGs have several scans, with tables between them, so
+// the whole file is walked segment by segment, skipping each scan's compressed data.
 const stripJpeg = (buffer) => {
+  if (buffer.length < 4 || buffer[0] !== 0xff || buffer[1] !== 0xd8) return null;
   const parts = [buffer.subarray(0, 2)];
   let offset = 2;
-  while (offset + 4 <= buffer.length) {
+  while (offset + 2 <= buffer.length) {
     if (buffer[offset] !== 0xff) return null;
     const marker = buffer[offset + 1];
-    if (marker === 0xda) {
-      parts.push(buffer.subarray(offset));
+    if (marker === 0xff) { offset += 1; continue; } // fill byte before a marker
+    if (marker === 0xd9) {
+      parts.push(buffer.subarray(offset, offset + 2));
       return Buffer.concat(parts);
     }
+    if (offset + 4 > buffer.length) return null;
     const length = buffer.readUInt16BE(offset + 2);
     const end = offset + 2 + length;
     if (length < 2 || end > buffer.length) return null;
-    const isMetadata = marker === 0xfe || (marker >= 0xe1 && marker <= 0xef && marker !== 0xe2 && marker !== 0xee);
+    if (marker === 0xda) {
+      // Compressed data runs until the next marker; inside it 0xFF is followed by 0x00 (stuffing),
+      // a restart marker (0xD0-0xD7) or another 0xFF (fill).
+      let scan = end;
+      while (scan + 1 < buffer.length) {
+        if (buffer[scan] === 0xff) {
+          const next = buffer[scan + 1];
+          if (next === 0x00 || (next >= 0xd0 && next <= 0xd7)) { scan += 2; continue; }
+          if (next !== 0xff) break;
+        }
+        scan += 1;
+      }
+      if (scan + 1 >= buffer.length) return null;
+      parts.push(buffer.subarray(offset, scan));
+      offset = scan;
+      continue;
+    }
+    const isMpf = marker === 0xe2 && buffer.subarray(offset + 4, offset + 8).toString('latin1') === 'MPF\0';
+    const isMetadata = isMpf || marker === 0xfe || (marker >= 0xe1 && marker <= 0xef && marker !== 0xe2 && marker !== 0xee);
     if (!isMetadata) parts.push(buffer.subarray(offset, end));
     offset = end;
   }

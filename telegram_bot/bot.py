@@ -228,7 +228,10 @@ def main():
                 except Exception as error:
                     code, _ = api_error_details(error)
                     logger.error('Geocoding fallido: usuario=%s codigo=%s', user_id, code)
-                    await update.effective_message.reply_text('No fue posible obtener o guardar la dirección en Geocoding. Se generará el mapa con las coordenadas indicadas.')
+                    reason = rejected_reason(error)
+                    await update.effective_message.reply_text(
+                        f'{reason} Se generará el mapa con las coordenadas indicadas.' if reason
+                        else 'No fue posible obtener o guardar la dirección en Geocoding. Se generará el mapa con las coordenadas indicadas.')
                     data = {'rows': [], 'status': 'ERROR'}
             stage = 'envio_datos_telegram'
             for row in data['rows']:

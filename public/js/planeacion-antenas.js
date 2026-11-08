@@ -73,7 +73,11 @@ export function frequencyScale(maxCount, palette = FREQUENCY_COLORS) {
   };
 }
 
-const csvCell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+// Cells starting with =, +, -, @ run as formulas in spreadsheet apps; they get a leading apostrophe, except plain
+// numbers (negative longitudes must stay numbers). Same rule as csvEscape in src/rutaService.js.
+const PLAIN_NUMBER = /^[+-]?(\d+([.,]\d*)?|[.,]\d+)([eE][+-]?\d+)?$/;
+const neutralizeFormula = (text) => (/^[=+\-@\t\r]/.test(text) && !PLAIN_NUMBER.test(text) ? `'${text}` : text);
+const csvCell = (value) => `"${neutralizeFormula(String(value ?? '')).replace(/"/g, '""')}"`;
 
 // `rowNumbers` are 1-based, as in the table. The BOM keeps accents readable in Excel.
 export function selectionCsv(headers, rows, rowNumbers) {

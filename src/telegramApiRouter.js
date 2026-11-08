@@ -117,10 +117,27 @@ export function createTelegramApiRouter(pool, config = process.env, mapRenderer 
       .catch(() => res.status(503).json({ error: 'No fue posible validar el usuario.' }));
   });
   let rendering = false;
+  // The Google Geocoding budget is one counter for the whole app (web and bot). Through the bot any linked user
+  // can spend it, so each one gets a daily allowance; administrators, who can reset the counter, are not limited.
+  const geocodingDailyLimit = Number.isInteger(Number(config.BOT_GEOCODING_DAILY_LIMIT)) && Number(config.BOT_GEOCODING_DAILY_LIMIT) > 0
+    ? Number(config.BOT_GEOCODING_DAILY_LIMIT) : 50;
+  const geocodingUse = { day: '', byUser: new Map() };
+  const takeGeocodingAllowance = (user) => {
+    if (user.isAdmin) return true;
+    const day = new Date().toLocaleDateString('en-CA', { timeZone: process.env.TZ || 'America/Hermosillo' });
+    if (geocodingUse.day !== day) Object.assign(geocodingUse, { day, byUser: new Map() });
+    const used = geocodingUse.byUser.get(user.userId) || 0;
+    if (used >= geocodingDailyLimit) return false;
+    geocodingUse.byUser.set(user.userId, used + 1);
+    return true;
+  };
   router.post('/cobertura/ubicacion', express.json({ limit: '4kb' }), async (req, res) => {
     let parameters;
     try { parameters = validateAntennaMap(req.body || {}); }
     catch (error) { return res.status(400).json({ error: error.message }); }
+    if (!takeGeocodingAllowance(req.botUser)) {
+      return res.status(429).json({ error: `Llegaste al límite de ${geocodingDailyLimit} consultas de ubicación por día. Intenta mañana.` });
+    }
     try {
       return res.json(await geocodingLookup(parameters.lat, parameters.lng));
     } catch {

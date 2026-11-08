@@ -7,6 +7,7 @@ import { listarUbicacionesParaRuta } from "./estudianteController.js";
 import { createRutaCsv, createRutaXlsx, getRutaXlsxMetadata, processRutaCsv, processRutaXlsx } from "./rutaService.js";
 import pool from "./db.js";
 import { fileGroupOf, visibleFiles } from './fileGroups.js';
+import { XlsxTooLargeError } from './xlsxSafe.js';
 
 const RUTA_MAX_FILE_SIZE = 20 * 1024 * 1024;
 const uploadStorage = multer.memoryStorage();
@@ -167,7 +168,13 @@ router.post('/ruta/importar', rutaUpload, async (req, res) => {
   }
 
   const id = crypto.randomUUID();
-  const sourceMetadata = extension === '.xlsx' ? getRutaXlsxMetadata(req.file.buffer) : null;
+  let sourceMetadata = null;
+  try {
+    if (extension === '.xlsx') sourceMetadata = getRutaXlsxMetadata(req.file.buffer);
+  } catch (error) {
+    const message = error instanceof XlsxTooLargeError ? error.message : 'No fue posible leer el archivo Excel.';
+    return res.redirect('/ruta?message=' + encodeURIComponent(message) + '&type=error');
+  }
   await cleanExpiredRutaFiles();
   await pool.execute(
     `INSERT INTO ruta_archivos
