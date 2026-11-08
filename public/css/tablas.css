@@ -1,0 +1,66 @@
+/* Tables each person arranges (public/js/tablas.js): toolbar, header controls, density and pinned columns. */
+:root {
+  --tp-fija-bg: rgba(248, 250, 252, .97);
+  --tp-fija-sombra: rgba(15, 23, 42, .12);
+  --tp-acento: #0b5ed7;
+}
+html[data-theme="dark"] {
+  --tp-fija-bg: rgba(31, 41, 55, .97);
+  --tp-fija-sombra: rgba(0, 0, 0, .35);
+  --tp-acento: #8dc5ff;
+}
+
+.tp-barra { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .5rem; margin-bottom: .5rem; }
+.tp-barra .btn { width: auto; white-space: nowrap; }
+.tp-restablecer { padding-inline: .25rem; }
+@media (max-width: 575.98px) { .tp-barra { justify-content: flex-start; gap: .4rem; } }
+
+.tp-columnas { position: relative; }
+.tp-columnas > summary { list-style: none; cursor: pointer; }
+.tp-columnas > summary::-webkit-details-marker { display: none; }
+.tp-panel {
+  position: absolute; right: 0; top: calc(100% + .35rem); z-index: 1030;
+  width: min(20rem, calc(100vw - 32px)); max-height: min(26rem, 70vh); overflow-y: auto;
+  padding: .75rem; border: 1px solid rgba(15, 23, 42, .12); border-radius: .75rem;
+  background: rgba(255, 255, 255, .97); box-shadow: 0 12px 32px rgba(15, 23, 42, .18);
+  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+}
+html[data-theme="dark"] .tp-panel { background: rgba(31, 41, 55, .98); border-color: rgba(255, 255, 255, .1); box-shadow: 0 12px 32px rgba(0, 0, 0, .45); }
+.tp-ayuda { margin: 0 0 .5rem; font-size: .8rem; opacity: .75; }
+.tp-lista { margin: 0; padding: 0; list-style: none; }
+.tp-lista li { display: flex; align-items: center; gap: .1rem; padding: .15rem 0; border-top: 1px solid rgba(127, 127, 127, .15); }
+.tp-lista li:first-child { border-top: 0; }
+.tp-nombre { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .9rem; }
+.tp-lista .btn { padding: .2rem .4rem; line-height: 1; }
+.tp-lista .btn[aria-pressed="true"] { color: var(--tp-acento); }
+
+/* Header controls. Space on the right keeps the text clear of the pin and the resize edge. */
+.table > thead > tr > th.tp-th { position: relative; padding-right: 1.6rem; word-break: normal; overflow-wrap: normal; }
+.tp-th[draggable="true"] { cursor: grab; }
+.tp-th.tp-arrastrando { opacity: .45; }
+.tp-th.tp-soltar-antes { box-shadow: inset 3px 0 0 var(--tp-acento); }
+.tp-th.tp-soltar-despues { box-shadow: inset -3px 0 0 var(--tp-acento); }
+.tp-pin {
+  position: absolute; top: 50%; right: .35rem; transform: translateY(-50%);
+  display: inline-flex; align-items: center; justify-content: center; width: 1.2rem; height: 1.4rem; padding: 0;
+  border: 0; border-radius: .35rem; background: transparent; color: inherit; font-size: .8rem; cursor: pointer;
+  opacity: 0; transition: opacity .15s ease, background-color .15s ease;
+}
+.tp-th:hover .tp-pin, .tp-pin:focus-visible, .tp-pin[aria-pressed="true"] { opacity: 1; }
+.tp-pin[aria-pressed="true"] { color: var(--tp-acento); }
+.tp-pin:hover { background: rgba(127, 127, 127, .15); }
+.tp-pin:focus-visible, .tp-resize:focus-visible { outline: 2px solid var(--tp-acento); outline-offset: 1px; }
+@media (hover: none) { .tp-pin { opacity: .6; } }
+.tp-resize { position: absolute; top: 0; right: -4px; bottom: 0; z-index: 1; width: 9px; cursor: col-resize; touch-action: none; }
+.tp-resize::after { content: ""; position: absolute; top: 25%; bottom: 25%; left: 4px; width: 1px; background: rgba(127, 127, 127, .35); transition: background-color .15s ease; }
+.tp-resize:hover::after, .tp-resize:focus-visible::after { top: 0; bottom: 0; width: 2px; left: 3.5px; background: var(--tp-acento); }
+@media (max-width: 767.98px) { .tp-resize { display: none; } }
+@media (prefers-reduced-motion: reduce) { .tp-pin, .tp-resize::after { transition: none; } }
+
+/* Density. */
+.table.tp-densidad-compacta > :not(caption) > * > * { padding-top: .2rem; padding-bottom: .2rem; font-size: .875rem; }
+.table.tp-densidad-amplia > :not(caption) > * > * { padding-top: .9rem; padding-bottom: .9rem; }
+@media (max-width: 767.98px) {
+  .table-stack.tp-densidad-compacta tr { padding-top: .25rem; padding-bottom: .25rem; margin-bottom: .4rem; }
+  .table-stack.tp-densidad-amplia tr { padding-top: .9rem; padding-bottom: .9rem; margin-bottom: 1rem; }
+}

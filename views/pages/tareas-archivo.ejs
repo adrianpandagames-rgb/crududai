@@ -38,7 +38,7 @@
         <section class="archivo-mes" aria-labelledby="mes-<%= mes.clave %>">
           <h2 id="mes-<%= mes.clave %>">Enviadas en <%= mes.nombre %> <span class="badge text-bg-secondary"><%= mes.tareas.length %></span></h2>
           <div class="table-responsive">
-            <table class="table table-sm align-middle table-stack">
+            <table data-tabla="tareas-archivo" class="table table-sm align-middle table-stack">
               <thead>
                 <tr><th>Tarea</th><th>Licenciado</th><th>Ingeniero</th><th>Llegó</th><th>Enviada</th><th><span class="visually-hidden">Acciones</span></th></tr>
               </thead>

@@ -90,7 +90,7 @@
                   <p class="text-muted mb-0">No hay ningún perfil registrado con <%= search.phone ? 'esa línea' : 'ese nombre' %>.</p>
                 <% } else { %>
                   <div class="table-responsive">
-                    <table class="table nombres-table table-stack mb-0">
+                    <table data-tabla="nombres-perfiles" class="table nombres-table table-stack mb-0">
                       <thead><tr><th>Nombre</th><th>Dirección</th><th>Alias OSINT</th><th>Línea</th></tr></thead>
                       <tbody>
                         <% search.perfiles.forEach((perfil) => { %>
@@ -130,7 +130,7 @@
                 <p class="text-muted mb-0">No aparece en OFAC ni en SAT 69-B. Que no aparezca no descarta nada: estas listas solo incluyen a sancionados y empresas fantasma.</p>
               <% } else { %>
                 <div class="table-responsive">
-                  <table class="table nombres-table table-stack mb-2">
+                  <table data-tabla="nombres-listas" class="table nombres-table table-stack mb-2">
                     <thead><tr><th>Lista</th><th>Nombre registrado</th><th>Datos</th></tr></thead>
                     <tbody>
                       <% search.results.forEach((result) => { %>
@@ -175,7 +175,7 @@
                   <p class="text-muted mb-0">No aparece como nombre ni razón social de ningún negocio registrado. DENUE solo incluye establecimientos, no personas.</p>
                 <% } else { %>
                   <div class="table-responsive">
-                    <table class="table nombres-table table-stack mb-2">
+                    <table data-tabla="nombres-denue" class="table nombres-table table-stack mb-2">
                       <thead><tr><th>Negocio</th><th>Dirección</th><th>Contacto</th></tr></thead>
                       <tbody>
                         <% search.denue.results.forEach((result) => { %>

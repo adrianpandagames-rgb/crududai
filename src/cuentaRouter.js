@@ -4,12 +4,14 @@ import {
   MAX_FOTO_BYTES, MAX_NOMBRE_LENGTH, createCuentaStore, normalizarPreferencias, paginasInicioPara, procesarFoto, temas, validarNombre,
 } from './cuentaService.js';
 import { createNotificacionesStore } from './notificacionesService.js';
+import { createTablasStore, normalizarConfigTabla, tablaValida } from './tablasService.js';
 
 // Each person's own page: name, photo, password, preferences and notifications. It only ever reads or writes
 // req.session.userId, so nobody can reach another person's account through it.
 // `cambiarContrasena(req, res, { actual, nueva })` lives in app.js, which owns the sessions it has to rotate.
 export function createCuentaRouter(pool, {
-  cuentas = createCuentaStore(pool), notificaciones = createNotificacionesStore(pool), cambiarContrasena,
+  cuentas = createCuentaStore(pool), notificaciones = createNotificacionesStore(pool), tablas = createTablasStore(pool),
+  cambiarContrasena,
 } = {}) {
   const router = express.Router();
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_FOTO_BYTES, files: 1, fields: 2 } }).single('foto');
@@ -131,6 +133,26 @@ export function createCuentaRouter(pool, {
     try {
       const { preferencias } = await cuentas.get(req.session.userId, req.session.role);
       await cuentas.setPreferencias(req.session.userId, { ...preferencias, tema });
+      return res.status(204).end();
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  // How each table looks for this person (public/js/tablas.js): every table at once, and one at a time on change.
+  router.get('/tablas', async (req, res, next) => {
+    try {
+      return res.json(await tablas.listar(req.session.userId));
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.put('/tablas', async (req, res, next) => {
+    const tabla = req.body?.tabla;
+    if (!tablaValida(tabla)) return res.status(400).json({ error: 'Tabla inválida.' });
+    try {
+      await tablas.guardar(req.session.userId, tabla, normalizarConfigTabla(req.body.config));
       return res.status(204).end();
     } catch (error) {
       return next(error);

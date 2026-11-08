@@ -121,7 +121,7 @@
             <p id="registrosCarpetasEstado" class="small text-muted mb-2" role="status">Selecciona un tipo de registro para consultar sus registros.</p>
             <div id="registrosCarpetasContenido" hidden>
               <div class="table-responsive">
-                <table class="table table-sm table-hover align-middle registros-carpetas-tabla">
+                <table data-tabla="metricas-registros" class="table table-sm table-hover align-middle registros-carpetas-tabla">
                   <thead><tr><th scope="col">Folio</th><th scope="col">NUC</th><th scope="col">Envío</th><th scope="col">Agencia</th><th scope="col">Ciudad</th><% if (currentUser.canEditRecords) { %><th scope="col">Acciones</th><% } %></tr></thead>
                   <tbody id="registrosCarpetasFilas" data-can-edit="<%= currentUser.canEditRecords ? 'true' : 'false' %>"></tbody>
                 </table>

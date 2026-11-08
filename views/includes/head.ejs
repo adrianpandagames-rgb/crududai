@@ -20,6 +20,12 @@
 <link rel="stylesheet" href="/public/css/home.css" />
 <link rel="stylesheet" href="/public/css/pages.css" />
 <link rel="stylesheet" href="/public/css/confirm-toast.css" />
+<link rel="stylesheet" href="/public/css/tablas.css" />
+<% if (typeof currentUser !== 'undefined' && currentUser && currentUser.id) { %>
+<%# Tables with data-tabla keep each person's column order, widths, pins and density (tablas.js). %>
+<meta name="usuario-id" content="<%= currentUser.id %>" />
+<script src="/public/js/tablas.js" defer></script>
+<% } %>
 <script src="/public/js/confirm-toast.js" defer></script>
 <script src="/public/js/flash-messages.js" defer></script>
 

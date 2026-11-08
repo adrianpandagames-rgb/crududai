@@ -178,7 +178,7 @@
           <%# UECS registers profiles and adds photos, but cannot edit or delete either. %>
           <% const puedeModificar = !(typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'uecs'); %>
           <div class="table-responsive">
-            <table class="table w-100 table-stack perfiles-table">
+            <table data-tabla="perfiles" class="table w-100 table-stack perfiles-table">
               <caption class="visually-hidden">Perfiles registrados<%= totalPages > 1 ? `, página ${currentPage} de ${totalPages}` : '' %></caption>
               <colgroup>
                 <col style="width: 30%" /><col style="width: 21%" /><col style="width: 14%" /><col style="width: 12%" /><col style="width: 14%" /><% if (puedeModificar) { %><col style="width: 9%" /><% } %>
