@@ -12,7 +12,7 @@ html[data-theme="dark"] {
 
 .tp-barra { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .5rem; margin-bottom: .5rem; }
 .tp-barra .btn { width: auto; white-space: nowrap; }
-.tp-restablecer { padding-inline: .25rem; }
+.tp-restablecer { padding-inline: .55rem; }
 @media (max-width: 575.98px) { .tp-barra { justify-content: flex-start; gap: .4rem; } }
 
 .tp-columnas { position: relative; }

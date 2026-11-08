@@ -301,7 +301,10 @@
 
     const children = [details, density];
     if (configs[state.key]) {
-      const reset = el('button', { type: 'button', class: 'btn btn-sm btn-link tp-restablecer', 'data-tp-accion': 'restablecer', text: 'Restablecer' });
+      const reset = el('button', {
+        type: 'button', class: 'btn btn-sm btn-outline-secondary tp-restablecer', 'data-tp-accion': 'restablecer',
+        title: 'Restablecer la tabla', 'aria-label': 'Restablecer la tabla',
+      }, [icon('bi-arrow-counterclockwise')]);
       reset.addEventListener('click', () => update(state, (next) => {
         next.orden = []; next.anchos = {}; next.fijas = []; next.densidad = 'normal';
       }));
