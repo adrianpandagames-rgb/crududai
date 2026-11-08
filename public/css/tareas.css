@@ -1,0 +1,185 @@
+/* Task board (views/pages/tareas.ejs) and task details (partials/tarea-detalle.ejs, in a window or a page). */
+:root {
+  --tarea-card-bg: #fff;
+  --tarea-card-borde: rgba(0, 0, 0, .1);
+  --tarea-columna-bg: rgba(127, 127, 127, .1);
+  --tarea-acento: #0d6efd;
+  --tarea-modal-bg: rgba(255, 255, 255, .98);
+}
+html[data-theme="dark"] {
+  --tarea-card-bg: var(--dark-panel);
+  --tarea-card-borde: var(--dark-border);
+  --tarea-acento: #8dc5ff;
+  --tarea-modal-bg: rgba(31, 41, 55, .98);
+}
+
+/* Leave room below the board for the fixed theme toggle. */
+.tareas-page { padding-bottom: 5rem; }
+.tareas-barra { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-bottom: .75rem; }
+.tareas-barra label { margin: 0; }
+.tareas-barra select { flex: 0 1 280px; min-width: 0; }
+.tareas-buscar { position: relative; flex: 0 1 280px; min-width: 180px; }
+.tareas-buscar .bi { position: absolute; left: .7rem; top: 50%; transform: translateY(-50%); opacity: .6; pointer-events: none; }
+.tareas-buscar input { padding-left: 2rem; }
+.tareas-filtro-etiquetas { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin-bottom: .75rem; }
+.tareas-filtro-etiqueta { border: 0; cursor: pointer; opacity: .55; transition: opacity .15s ease, box-shadow .15s ease; }
+.tareas-filtro-etiqueta:hover { opacity: .85; }
+.tareas-filtro-etiqueta[aria-pressed="true"] { opacity: 1; box-shadow: 0 0 0 2px var(--tarea-acento); }
+.tareas-nueva { margin-bottom: 1rem; }
+.tareas-nueva summary { display: inline-flex; align-items: center; gap: .4rem; min-height: 40px; cursor: pointer; font-weight: 600; color: #0d6efd; }
+html[data-theme="dark"] .tareas-nueva summary { color: #8dc5ff; }
+
+/* Columns side by side, scrolling sideways like a Trello board; on a phone each column takes most of the screen
+   and snaps into place. */
+.tareas-tablero { display: flex; gap: .85rem; align-items: flex-start; overflow-x: auto; padding-bottom: .75rem;
+  scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
+.tareas-columna { flex: 1 0 250px; display: flex; flex-direction: column; max-width: 340px; border-radius: 12px;
+  background: var(--tarea-columna-bg); padding: .65rem; scroll-snap-align: start; }
+@media (max-width: 575.98px) { .tareas-columna { flex-basis: 85vw; max-width: 85vw; } }
+.tareas-columna h2 { display: flex; align-items: center; justify-content: space-between; font-size: .95rem; font-weight: 700; margin: .1rem .25rem .6rem; }
+.tareas-contador { font-variant-numeric: tabular-nums; font-weight: 600; font-size: .85rem; opacity: .75; }
+/* The empty list keeps a drop target. */
+.tareas-lista { display: flex; flex-direction: column; gap: .5rem; min-height: 48px; border-radius: 8px; transition: background-color .15s ease-out; }
+.tareas-lista.is-destino { background: rgba(13, 110, 253, .1); }
+.tareas-vacia { margin: auto; font-size: .85rem; opacity: .6; }
+.tareas-lista:has(.tarea-card:not([hidden])) .tareas-vacia { display: none; }
+
+/* Cards: only what helps to scan the board; the whole card opens the task. */
+.tarea-card { position: relative; padding: .6rem .7rem; border-radius: 8px; background: var(--tarea-card-bg); border: 1px solid var(--tarea-card-borde);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .08); scroll-margin-top: 96px; transition: box-shadow .15s ease, transform .15s ease; }
+.tarea-card:hover { box-shadow: 0 3px 10px rgba(0, 0, 0, .12); }
+.tarea-card:has(.tarea-abrir:focus-visible) { outline: 2px solid var(--tarea-acento); outline-offset: 2px; }
+.tarea-card[draggable="true"] { cursor: grab; }
+.tarea-card.is-arrastrando { opacity: .4; }
+.tarea-card:target { outline: 2px solid var(--tarea-acento); outline-offset: 2px; }
+.tarea-titulo { font-weight: 600; font-size: .92rem; margin: 0 0 .35rem; word-break: break-word; }
+/* The title is a link only so the card works without JavaScript; it keeps the text color, also in dark mode. */
+/* !important outweighs the dark theme's rule for links, which chains several :not() selectors. */
+.tarea-abrir { color: inherit !important; text-decoration: none; }
+.tarea-abrir:focus-visible { outline: none; }
+.tarea-abrir::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+.tarea-card-etiquetas { display: flex; flex-wrap: wrap; gap: .25rem; margin-bottom: .35rem; }
+.tarea-card-etiquetas .tarea-etiqueta { font-size: .68rem; padding: .05rem .4rem; }
+.tarea-meta { display: flex; flex-wrap: wrap; gap: .3rem; font-size: .78rem; margin-bottom: .4rem; }
+.tarea-chip { display: inline-flex; align-items: center; gap: .25rem; padding: .1rem .45rem; border-radius: 999px; background: rgba(127, 127, 127, .15); }
+.tarea-chip.is-sin-asignar { font-style: italic; opacity: .75; }
+.tarea-chip.is-listo { background: rgba(25, 135, 84, .18); }
+.tarea-chip.is-listo .bi { color: #198754; }
+.tarea-chip-puesto { font-weight: 700; }
+.tarea-insignias { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .7rem; font-size: .76rem; opacity: .85; }
+.tarea-insignias > span { display: inline-flex; align-items: center; gap: .25rem; font-variant-numeric: tabular-nums; }
+.tarea-insignia-checklist.is-completo { padding: 0 .35rem; border-radius: 4px; background: #198754; color: #fff; opacity: 1; }
+.tarea-dias { font-weight: 700; font-variant-numeric: tabular-nums; }
+/* Age frame: yellow from 2 to 3 days since arrival, red after 3. The shadow thickens the 1px border without moving the layout.
+   Finished and sent tasks are left plain; keyed on the column, so a card dragged there updates without a reload. */
+.tareas-lista:not([data-estado="terminada"], [data-estado="enviada"]) .tarea-card.is-amarilla { border-color: #ffc107; box-shadow: 0 0 0 2px #ffc107; }
+.tareas-lista:not([data-estado="terminada"], [data-estado="enviada"]) .tarea-card.is-roja { border-color: #dc3545; box-shadow: 0 0 0 2px #dc3545; }
+.tareas-lista:not([data-estado="terminada"], [data-estado="enviada"]) .tarea-card.is-roja .tarea-dias { color: #b02a37; }
+html[data-theme="dark"] .tareas-lista:not([data-estado="terminada"], [data-estado="enviada"]) .tarea-card.is-roja .tarea-dias { color: #f1aeb5; }
+
+/* Quick add at the foot of each column. */
+.tarea-rapida { margin-top: .5rem; }
+.tarea-rapida > summary { display: flex; align-items: center; gap: .4rem; padding: .4rem .5rem; border-radius: 8px; cursor: pointer; list-style: none;
+  font-size: .88rem; font-weight: 600; opacity: .75; }
+.tarea-rapida > summary::-webkit-details-marker { display: none; }
+.tarea-rapida > summary:hover { opacity: 1; background: rgba(127, 127, 127, .15); }
+.tarea-rapida[open] > summary { display: none; }
+.tarea-rapida form { display: flex; flex-direction: column; gap: .4rem; }
+.tarea-rapida textarea { resize: none; box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }
+.tarea-rapida-fecha { display: flex; align-items: center; gap: .4rem; font-size: .8rem; }
+.tarea-rapida-fecha input { width: auto; flex: 1; }
+.tarea-rapida-acciones { display: flex; align-items: center; gap: .25rem; }
+
+/* Labels. */
+.tarea-etiqueta { display: inline-flex; align-items: center; max-width: 100%; padding: .1rem .5rem; border-radius: 4px; font-size: .75rem; font-weight: 600;
+  line-height: 1.4; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.etiqueta-verde { background: #1f8a4c; }
+.etiqueta-amarillo { background: #e2b203; color: #2b2300; }
+.etiqueta-naranja { background: #e56910; }
+.etiqueta-rojo { background: #c9372c; }
+.etiqueta-morado { background: #8f5ce0; }
+.etiqueta-azul { background: #0c66e4; }
+.etiqueta-cian { background: #1d8fa8; }
+.etiqueta-gris { background: #6b7280; }
+
+/* The window a card opens in. */
+.tarea-modal { width: min(760px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); padding: 0; border: 1px solid var(--tarea-card-borde); border-radius: 14px;
+  background: var(--tarea-modal-bg); color: inherit; box-shadow: 0 24px 64px rgba(15, 23, 42, .3); overflow: auto; }
+.tarea-modal::backdrop { background: rgba(15, 23, 42, .5); }
+.tarea-modal[open] { animation: tarea-modal-entra .16s ease-out; }
+@keyframes tarea-modal-entra { from { opacity: 0; transform: translateY(8px) scale(.99); } }
+@media (prefers-reduced-motion: reduce) { .tarea-modal[open] { animation: none; } .tarea-card { transition: none; } }
+.tarea-modal-contenido { padding: 1.25rem 1.5rem 1.5rem; }
+@media (max-width: 575.98px) { .tarea-modal-contenido { padding: 1rem; } }
+.tarea-modal-cargando { display: flex; align-items: center; justify-content: center; gap: .5rem; min-height: 200px; opacity: .7; }
+
+/* Task details. */
+.tarea-detalle-cabecera { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: .75rem; }
+.tarea-detalle-ubicacion { margin: 0; font-size: .85rem; opacity: .8; }
+html[data-theme="dark"] .tarea-detalle-cerrar { filter: invert(1); }
+.tarea-seccion { margin-bottom: 1.25rem; }
+.tarea-seccion-titulo { display: flex; align-items: center; gap: .45rem; font-size: 1rem; font-weight: 700; margin: 0 0 .6rem; }
+.tarea-detalle-titulo { font-size: 1.15rem; font-weight: 600; }
+/* The label menu opens under the whole row, from its left edge, so it never runs past the window on a phone. */
+.tarea-etiquetas-fila { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
+.tarea-menu { position: static; }
+.tarea-menu > summary { list-style: none; }
+.tarea-menu > summary::-webkit-details-marker { display: none; }
+.tarea-menu-panel { position: absolute; z-index: 5; top: calc(100% + .35rem); left: 0; width: min(18rem, 100%); padding: .75rem;
+  border: 1px solid var(--tarea-card-borde); border-radius: 10px; background: var(--tarea-modal-bg); box-shadow: 0 12px 32px rgba(15, 23, 42, .2); }
+.tarea-etiquetas-lista { list-style: none; margin: 0 0 .75rem; padding: 0; display: flex; flex-direction: column; gap: .25rem; max-height: 14rem; overflow-y: auto; }
+.tarea-etiquetas-lista li { display: flex; align-items: center; gap: .25rem; }
+.tarea-etiquetas-lista form:first-child { flex: 1; min-width: 0; }
+.tarea-etiqueta-opcion { display: flex; align-items: center; gap: .4rem; width: 100%; padding: .15rem; border: 0; border-radius: 6px; background: transparent; color: inherit; }
+.tarea-etiqueta-opcion:hover { background: rgba(127, 127, 127, .15); }
+.tarea-etiqueta-opcion .tarea-etiqueta { flex: 1; min-height: 1.75rem; font-size: .82rem; }
+.tarea-etiqueta-opcion .bi { width: 1rem; color: var(--tarea-acento); }
+.tarea-etiqueta-nueva { display: flex; flex-direction: column; gap: .4rem; border-top: 1px solid var(--tarea-card-borde); padding-top: .6rem; }
+.tarea-colores { display: flex; flex-wrap: wrap; gap: .35rem; margin: 0; padding: 0; border: 0; }
+.tarea-color { width: 1.9rem; height: 1.5rem; border-radius: 5px; cursor: pointer; position: relative; }
+.tarea-color input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
+.tarea-color:has(input:checked) { box-shadow: 0 0 0 2px var(--tarea-modal-bg), 0 0 0 4px var(--tarea-acento); }
+.tarea-color:has(input:focus-visible) { outline: 2px solid var(--tarea-acento); outline-offset: 3px; }
+.tarea-mi-parte { display: flex; flex-wrap: wrap; gap: .5rem; }
+.tarea-listo { margin: 0; }
+
+/* Checklist. */
+.tarea-checklist-cuenta { margin-left: auto; font-size: .85rem; font-weight: 600; opacity: .75; font-variant-numeric: tabular-nums; }
+.tarea-progreso { height: 6px; border-radius: 3px; background: rgba(127, 127, 127, .2); overflow: hidden; margin-bottom: .5rem; }
+.tarea-progreso span { display: block; height: 100%; background: #198754; transition: width .2s ease; }
+.tarea-checklist { list-style: none; margin: 0 0 .5rem; padding: 0; }
+.tarea-checklist li { display: flex; align-items: center; gap: .35rem; padding: .1rem 0; border-radius: 6px; }
+.tarea-checklist li:hover { background: rgba(127, 127, 127, .08); }
+.tarea-checklist form { margin: 0; }
+.tarea-check { display: inline-flex; padding: .3rem; border: 0; background: transparent; color: inherit; font-size: 1.05rem; line-height: 1; }
+.tarea-check:focus-visible { outline: 2px solid var(--tarea-acento); border-radius: 4px; }
+.tarea-checklist li.is-hecho .tarea-check { color: #198754; }
+.tarea-checklist-texto { flex: 1; min-width: 0; word-break: break-word; font-size: .92rem; }
+.tarea-checklist li.is-hecho .tarea-checklist-texto { text-decoration: line-through; opacity: .6; }
+.tarea-checklist-quitar { opacity: 0; color: inherit; }
+.tarea-checklist li:hover .tarea-checklist-quitar, .tarea-checklist-quitar:focus-visible { opacity: .7; }
+@media (hover: none) { .tarea-checklist-quitar { opacity: .6; } }
+.tarea-checklist-nuevo { display: flex; flex-wrap: wrap; gap: .4rem; }
+.tarea-checklist-nuevo input { flex: 1; min-width: 0; }
+
+/* Comments and history. */
+.tarea-comentar { margin-bottom: 1rem; }
+.tarea-mencionar { position: relative; }
+.tarea-sugerencias { position: absolute; z-index: 6; left: 0; top: 100%; margin: .2rem 0 0; padding: .25rem; list-style: none; min-width: 16rem; max-width: 100%;
+  max-height: 12rem; overflow-y: auto; border: 1px solid var(--tarea-card-borde); border-radius: 8px; background: var(--tarea-modal-bg);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, .2); }
+.tarea-sugerencias li { padding: .3rem .5rem; border-radius: 5px; cursor: pointer; font-size: .88rem; }
+.tarea-sugerencias li small { opacity: .65; margin-left: .35rem; }
+.tarea-sugerencias li[aria-selected="true"] { background: var(--tarea-acento); color: #fff; }
+.tarea-mencion { font-weight: 600; color: var(--tarea-acento); }
+.tarea-historial { list-style: none; padding: 0; margin: 0 0 1rem; display: flex; flex-direction: column; gap: .5rem; }
+#historial, #checklist, #etiquetas { scroll-margin-top: 96px; }
+/* Comments stand out; recorded changes stay as quiet one-liners between them. */
+.tarea-comentario { padding: .6rem .75rem; border-radius: 8px; background: rgba(13, 110, 253, .08); border: 1px solid rgba(13, 110, 253, .18); }
+.tarea-historial-autor { font-size: .8rem; margin: 0 0 .25rem; word-break: break-word; }
+.tarea-historial-autor span, .tarea-cambio-fecha { opacity: .7; font-variant-numeric: tabular-nums; }
+.tarea-comentario-texto { margin: 0; white-space: pre-line; word-break: break-word; }
+.tarea-cambio { display: flex; gap: .4rem; font-size: .8rem; opacity: .85; word-break: break-word; padding: 0 .25rem; }
+.tarea-detalle-pie { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; padding-top: .75rem;
+  border-top: 1px solid var(--tarea-card-borde); }
+.tarea-detalle-pie form { margin: 0; }

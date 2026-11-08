@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
 import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
 import {
   ESTADOS, ESTADO_LABELS, antiguedadOf, createTareasStore, diasDesde, haceDias, hoyLocal, puedeEliminar, validarLlegada, validarTarea,
 } from '../src/tareasService.js';
@@ -128,7 +129,8 @@ test('columns list the oldest arrival first and editing never writes the arrival
   assert.match(calls.at(-1).sql, /^INSERT INTO tareas_historial \(tarea_id, tipo, texto, user_id\)/);
   assert.deepEqual(calls.at(-1).values, [4, 'comentario', 'Falta la firma', 5]);
   assert.equal(await store.remove(4, { isAdmin: true }), 'eliminada');
-  assert.deepEqual(calls.slice(-2).map((call) => call.sql), ['DELETE FROM tareas WHERE id = ?', 'DELETE FROM tareas_historial WHERE tarea_id = ?']);
+  assert.deepEqual(calls.slice(-4).map((call) => call.sql), ['DELETE FROM tareas WHERE id = ?', 'DELETE FROM tareas_historial WHERE tarea_id = ?',
+    'DELETE FROM tareas_checklist WHERE tarea_id = ?', 'DELETE FROM tareas_etiquetas_tarea WHERE tarea_id = ?']);
 });
 
 test('the board is closed to UECS and moves cards by drag or by arrow', async (t) => {
@@ -176,6 +178,9 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
     registrar: async (tareaId, tipo, texto, userId) => { historia.push({ tareaId: Number(tareaId), tipo, texto, userId }); },
     historial: async (tareaId) => historia.filter((entrada) => entrada.tareaId === Number(tareaId))
       .map((entrada) => ({ ...entrada, autor: 'ana@udai.mx', fecha: '02/11/2026 11:00' })),
+    usuarios: async () => users.map(({ id, email }) => ({ id, email })),
+    etiquetas: async () => [],
+    checklist: async () => [],
   };
   const app = express();
   app.set('views', fileURLToPath(new URL('../views', import.meta.url)));
@@ -212,8 +217,14 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
   assert.ok(page.includes('Llegó 20/10/2026') && page.includes('<span class="tarea-dias">hace 4 días</span>'));
   // The new-task form starts on today and cannot pick a later day.
   assert.match(page, new RegExp(`id="fechaLlegada" name="fechaLlegada"[^>]*required max="${hoyLocal()}"[^>]*value="${hoyLocal()}"`));
-  // Task 2 was created by someone else, so this user sees no delete button for it.
-  assert.ok(page.includes('/tareas/eliminar/1') && !page.includes('/tareas/eliminar/2'));
+  // Cards are links to their details and carry no action buttons; deleting is done from the details, and only by
+  // whoever may: task 2 was created by someone else.
+  assert.ok(page.includes('class="tarea-abrir" href="/tareas/1/editar"') && !page.includes('/tareas/eliminar/'));
+  assert.ok((await (await fetch(`${base}/1/editar`, as('usuario'))).text()).includes('/tareas/eliminar/1'));
+  assert.ok(!(await (await fetch(`${base}/2/editar`, as('usuario'))).text()).includes('/tareas/eliminar/2'));
+  // Each column has its quick add, posting to the same route with the column and today's date.
+  assert.match(page, /<details class="tarea-rapida" data-estado="falta_oficio">[\s\S]*?name="estado" value="falta_oficio"/);
+  assert.ok(page.includes('<dialog class="tarea-modal"'));
   assert.ok(page.includes('<span class="tarea-chip-puesto">Lic.</span> ana') && page.includes('<span class="tarea-chip-puesto">Ing.</span> beto'));
   // Each select offers only the people with that job title.
   const select = (html, name) => html.match(new RegExp(`<select id="${name}"[\\s\\S]*?</select>`))[0];
@@ -234,13 +245,13 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
   assert.match(ok.headers.get('location'), /responsable=5.*#tarea-3$/);
   assert.deepEqual([created[0].licenciadoId, created[0].ingenieroId, created[0].fechaLlegada], [5, 8, '2026-10-01']);
   // The engineer is told; the user who created it filled the licenciado slot themselves, so they are not.
-  assert.deepEqual(toasts, [[8, { title: 'Nueva tarea asignada', message: 'Se te asignó “Revisar” como ingeniero.', url: '/tareas#tarea-3' }]]);
+  assert.deepEqual(toasts, [[8, { title: 'Nueva tarea asignada', message: 'Se te asignó “Revisar” como ingeniero.', url: '/tareas?tarea=3' }]]);
   assert.deepEqual(historia, [{ tareaId: 3, tipo: 'cambio', texto: 'Creó la tarea en Pendiente.', userId: 5 }]);
 
   // Ana stops being a licenciada: the task she already has keeps her when it is edited, new tasks no longer offer her.
   users[0].puesto = 'ingeniero';
   const editPage = await (await fetch(`${base}/1/editar`, as('usuario'))).text();
-  assert.match(select(editPage, 'licenciado'), /<option value="5" selected>ana@udai.mx/);
+  assert.match(select(editPage, 'detalle-licenciado'), /<option value="5" selected>ana@udai.mx/);
   // The arrival date shows read-only, with no field the form would send.
   assert.match(editPage, /id="llegada" class="form-control" readonly[^>]*value="20\/10\/2026 · hace 4 días"/);
   assert.ok(!editPage.includes('name="fechaLlegada"'));
@@ -299,13 +310,15 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
     [2, 'Movió la tarea de En proceso a Terminada.'], [1, 'Movió la tarea de Pendiente a En proceso.'], [1, 'Movió la tarea de En proceso a Pendiente.']]);
   historia.length = 0;
   // In Terminada and Enviada the frame is dropped by the column's style, so a card dragged there needs no redraw.
-  assert.ok(page.includes('.tareas-lista:not([data-estado="terminada"], [data-estado="enviada"]) .tarea-card.is-roja'));
+  const css = readFileSync(new URL('../public/css/tareas.css', import.meta.url), 'utf8');
+  assert.ok(css.includes('.tareas-lista:not([data-estado="terminada"], [data-estado="enviada"]) .tarea-card.is-roja'));
 
-  // Ana (user 5) is the licenciada of task 1: she sees the button for her part only, and her mark names her.
+  // Ana (user 5) is the licenciada of task 1: her task's details show the button for her part only, and her mark names her.
   const conBoton = await (await fetch(base, as('usuario'))).text();
   const card = (html, id) => html.match(new RegExp(`id="tarea-${id}"[\\s\\S]*?</article>`))[0];
-  assert.ok(card(conBoton, 1).includes('Mi parte está lista (Lic.)') && !card(conBoton, 1).includes('(Ing.)'));
-  assert.ok(!card(conBoton, 2).includes('/listo'));
+  const detalle1 = await (await fetch(`${base}/1/editar`, as('usuario'))).text();
+  assert.ok(detalle1.includes('Mi parte está lista (Lic.)') && !detalle1.includes('(Ing.)'));
+  assert.ok(!(await (await fetch(`${base}/2/editar`, as('usuario'))).text()).includes('/listo'));
   const notMine = await fetch(`${base}/1/listo`, as('usuario', form({ puesto: 'ingeniero', listo: '1' })));
   assert.match(message(notMine), /Solo el ingeniero asignado/);
   toasts.length = 0;
@@ -315,7 +328,8 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
     [[8, 'ana@udai.mx terminó su parte de “Contestar oficio” como licenciado.']]);
   const marcada = card(await (await fetch(base, as('usuario'))).text(), 1);
   assert.match(marcada, /class="tarea-chip is-listo"[\s\S]*Lic\.<\/span> ana · listo/);
-  assert.ok(marcada.includes('Desmarcar mi parte') && marcada.includes('name="listo" value="0"'));
+  const desmarcar = await (await fetch(`${base}/1/editar`, as('usuario'))).text();
+  assert.ok(desmarcar.includes('Desmarcar mi parte') && desmarcar.includes('name="listo" value="0"'));
   assert.match(await (await fetch(`${base}/1/editar`, as('usuario'))).text(), /Licenciado: ana@udai.mx terminó su parte el 02\/11\/2026 10:30/);
   assert.match(message(await fetch(`${base}/1/listo`, as('usuario', form({ puesto: 'licenciado', listo: '0' })))), /pendiente/);
   assert.equal(tasks[0].licenciadoListo, null);
@@ -327,7 +341,7 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
   assert.equal(comentado.headers.get('location'), '/tareas/1/editar?volver=5#historial');
   assert.deepEqual(historia.at(-1), { tareaId: 1, tipo: 'comentario', texto: 'Falta la firma\ndel jefe', userId: 5 });
   assert.deepEqual(toasts, [[8, {
-    title: 'Nuevo comentario', message: 'ana@udai.mx comentó en “Contestar oficio”: Falta la firma\ndel jefe', url: '/tareas/1/editar#historial',
+    title: 'Nuevo comentario', message: 'ana@udai.mx comentó en “Contestar oficio”: Falta la firma\ndel jefe', url: '/tareas?tarea=1',
   }]]);
   const conHistorial = await (await fetch(`${base}/1/editar`, as('usuario'))).text();
   assert.match(conHistorial, /tarea-comentario-texto">Falta la firma\ndel jefe</);

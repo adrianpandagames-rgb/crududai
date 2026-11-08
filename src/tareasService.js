@@ -5,7 +5,36 @@ export const ESTADOS = ['pendiente', 'en_proceso', 'falta_oficio', 'terminada', 
 export const ESTADO_LABELS = {
   pendiente: 'Pendiente', en_proceso: 'En proceso', falta_oficio: 'Falta oficio', terminada: 'Terminada', enviada: 'Enviada',
 };
-export const MAX_LENGTHS = { titulo: 200, descripcion: 2000, comentario: 1000 };
+export const MAX_LENGTHS = { titulo: 200, descripcion: 2000, comentario: 1000, checklist: 300, etiqueta: 30 };
+
+// Label colors, in the order the picker offers them.
+export const COLORES_ETIQUETA = {
+  verde: 'Verde', amarillo: 'Amarillo', naranja: 'Naranja', rojo: 'Rojo', morado: 'Morado', azul: 'Azul', cian: 'Cian', gris: 'Gris',
+};
+
+export function validarEtiqueta({ nombre, color } = {}) {
+  const limpio = String(nombre ?? '').replace(/\s+/g, ' ').trim();
+  if (!limpio) return { error: 'Escriba el nombre de la etiqueta.' };
+  if (limpio.length > MAX_LENGTHS.etiqueta) return { error: `El nombre de la etiqueta admite hasta ${MAX_LENGTHS.etiqueta} caracteres.` };
+  if (!Object.hasOwn(COLORES_ETIQUETA, color)) return { error: 'Elija un color para la etiqueta.' };
+  return { etiqueta: { nombre: limpio, color } };
+}
+
+export function validarItem(value) {
+  const texto = String(value ?? '').replace(/\s+/g, ' ').trim();
+  if (!texto) return { error: 'Escriba el elemento del checklist.' };
+  if (texto.length > MAX_LENGTHS.checklist) return { error: 'El elemento del checklist es demasiado largo.' };
+  return { texto };
+}
+
+// The @names in a comment, lowercased: "@ana.lopez" mentions whoever's e-mail starts with "ana.lopez@".
+// A trailing period ends the sentence, not the name.
+export const menciones = (texto) => [...new Set([...String(texto ?? '').matchAll(/(^|[^\w@.])@([a-z0-9._-]+)/gi)]
+  .map((match) => match[2].replace(/[._-]+$/, '').toLowerCase()).filter(Boolean))];
+export const usuarioDe = (email) => String(email || '').split('@')[0].toLowerCase();
+
+// Only administrators and semiadministrators delete labels, which other people's tasks may carry.
+export const puedeBorrarEtiquetas = (session) => session?.isAdmin === true || session?.role === 'semiadmin';
 
 // Whole days since a task arrived before its card is framed in yellow (2 to 3 days) and then in red (more than 3).
 export const DIAS_AMARILLO = 2;
@@ -131,8 +160,37 @@ export function createTareasStore(pool) {
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         INDEX tareas_historial_tarea (tarea_id, id)
       )`);
+      // Colored labels shared by the whole board, and which tasks carry each one.
+      await pool.query(`CREATE TABLE IF NOT EXISTS tareas_etiquetas (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        nombre VARCHAR(${MAX_LENGTHS.etiqueta}) NOT NULL,
+        color VARCHAR(20) NOT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`);
+      await pool.query(`CREATE TABLE IF NOT EXISTS tareas_etiquetas_tarea (
+        tarea_id BIGINT UNSIGNED NOT NULL,
+        etiqueta_id BIGINT UNSIGNED NOT NULL,
+        PRIMARY KEY (tarea_id, etiqueta_id),
+        INDEX tareas_etiquetas_tarea_etiqueta (etiqueta_id)
+      )`);
+      // Each task's checklist, in the order the items were added.
+      await pool.query(`CREATE TABLE IF NOT EXISTS tareas_checklist (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        tarea_id BIGINT UNSIGNED NOT NULL,
+        texto VARCHAR(${MAX_LENGTHS.checklist}) NOT NULL,
+        hecho TINYINT(1) NOT NULL DEFAULT 0,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX tareas_checklist_tarea (tarea_id, id)
+      )`);
     }).catch((error) => { storage = null; throw error; });
     return storage;
+  };
+
+  // Everyone who can open the board, the people a comment can mention.
+  const usuarios = async () => {
+    await initialize();
+    const [rows] = await pool.execute("SELECT id, email FROM users WHERE is_active = 1 AND (role IS NULL OR role <> 'uecs') ORDER BY email");
+    return rows.map((row) => ({ id: Number(row.id), email: row.email }));
   };
 
   // Active users who can open the board and have a job title, the people a task can be assigned to.
@@ -148,12 +206,22 @@ export function createTareasStore(pool) {
     DATE_FORMAT(t.licenciado_listo_at, '%d/%m/%Y %H:%i') AS licenciadoListo, DATE_FORMAT(t.ingeniero_listo_at, '%d/%m/%Y %H:%i') AS ingenieroListo,
     DATE_FORMAT(t.fecha_llegada, '%Y-%m-%d') AS fechaLlegada, DATE_FORMAT(t.enviada_el, '%Y-%m-%d') AS enviadaEl, t.user_id AS creadorId, c.email AS creador,
     DATE_FORMAT(t.updated_at, '%Y-%m-%d %H:%i') AS actualizada, DATE_FORMAT(t.updated_at, '%Y-%m-%d %H:%i:%s') AS version,
-    (SELECT COUNT(*) FROM tareas_historial h WHERE h.tarea_id = t.id AND h.tipo = 'comentario') AS comentarios
+    (SELECT COUNT(*) FROM tareas_historial h WHERE h.tarea_id = t.id AND h.tipo = 'comentario') AS comentarios,
+    (SELECT COUNT(*) FROM tareas_checklist k WHERE k.tarea_id = t.id) AS checklistTotal,
+    (SELECT COUNT(*) FROM tareas_checklist k WHERE k.tarea_id = t.id AND k.hecho = 1) AS checklistHechos,
+    (SELECT GROUP_CONCAT(CONCAT(e.id, ':', e.color, ':', e.nombre) ORDER BY e.nombre SEPARATOR '\\n')
+      FROM tareas_etiquetas_tarea et JOIN tareas_etiquetas e ON e.id = et.etiqueta_id WHERE et.tarea_id = t.id) AS etiquetasTexto
     FROM tareas t LEFT JOIN users l ON l.id = t.licenciado_id LEFT JOIN users i ON i.id = t.ingeniero_id LEFT JOIN users c ON c.id = t.user_id`;
   const numberOrNull = (value) => (value == null ? null : Number(value));
-  const normalize = (row) => ({
+  // A task's labels arrive as "id:color:nombre" lines; the name may itself contain colons.
+  const etiquetasDe = (texto) => String(texto || '').split('\n').filter(Boolean).map((linea) => {
+    const [id, color, ...nombre] = linea.split(':');
+    return { id: Number(id), color, nombre: nombre.join(':') };
+  });
+  const normalize = ({ etiquetasTexto, ...row }) => ({
     ...row, id: Number(row.id), licenciadoId: numberOrNull(row.licenciadoId), ingenieroId: numberOrNull(row.ingenieroId),
     creadorId: numberOrNull(row.creadorId), comentarios: Number(row.comentarios ?? 0),
+    checklistTotal: Number(row.checklistTotal ?? 0), checklistHechos: Number(row.checklistHechos ?? 0), etiquetas: etiquetasDe(etiquetasTexto),
     llegada: row.fechaLlegada ? row.fechaLlegada.split('-').reverse().join('/') : '', dias: diasDesde(row.fechaLlegada),
     enviada: row.enviadaEl ? row.enviadaEl.split('-').reverse().join('/') : '',
   });
@@ -246,7 +314,62 @@ export function createTareasStore(pool) {
     if (!puedeEliminar(current, session)) return 'sin-permiso';
     await pool.execute('DELETE FROM tareas WHERE id = ?', [id]);
     await pool.execute('DELETE FROM tareas_historial WHERE tarea_id = ?', [id]);
+    await pool.execute('DELETE FROM tareas_checklist WHERE tarea_id = ?', [id]);
+    await pool.execute('DELETE FROM tareas_etiquetas_tarea WHERE tarea_id = ?', [id]);
     return 'eliminada';
+  };
+
+  // ---- Labels ----
+  const etiquetas = async () => {
+    await initialize();
+    const [rows] = await pool.execute('SELECT id, nombre, color FROM tareas_etiquetas ORDER BY nombre, id');
+    return rows.map((row) => ({ ...row, id: Number(row.id) }));
+  };
+  // A label with the same name (ignoring case) is reused instead of duplicated.
+  const crearEtiqueta = async ({ nombre, color }) => {
+    await initialize();
+    const [existing] = await pool.execute('SELECT id FROM tareas_etiquetas WHERE LOWER(nombre) = LOWER(?) LIMIT 1', [nombre]);
+    if (existing[0]) return Number(existing[0].id);
+    const [result] = await pool.execute('INSERT INTO tareas_etiquetas (nombre, color) VALUES (?, ?)', [nombre, color]);
+    return Number(result.insertId);
+  };
+  const eliminarEtiqueta = async (id) => {
+    await initialize();
+    const [result] = await pool.execute('DELETE FROM tareas_etiquetas WHERE id = ?', [id]);
+    await pool.execute('DELETE FROM tareas_etiquetas_tarea WHERE etiqueta_id = ?', [id]);
+    return result.affectedRows === 1;
+  };
+  // Puts the label on the task or takes it off; true only when something changed.
+  const ponerEtiqueta = async (tareaId, etiquetaId, puesta) => {
+    await initialize();
+    const [result] = puesta
+      ? await pool.execute('INSERT IGNORE INTO tareas_etiquetas_tarea (tarea_id, etiqueta_id) SELECT ?, id FROM tareas_etiquetas WHERE id = ?', [tareaId, etiquetaId])
+      : await pool.execute('DELETE FROM tareas_etiquetas_tarea WHERE tarea_id = ? AND etiqueta_id = ?', [tareaId, etiquetaId]);
+    return result.affectedRows === 1;
+  };
+
+  // ---- Checklist ----
+  const checklist = async (tareaId) => {
+    await initialize();
+    const [rows] = await pool.execute('SELECT id, texto, hecho FROM tareas_checklist WHERE tarea_id = ? ORDER BY id', [tareaId]);
+    return rows.map((row) => ({ id: Number(row.id), texto: row.texto, hecho: Number(row.hecho) === 1 }));
+  };
+  const agregarItem = async (tareaId, texto) => {
+    await initialize();
+    const [result] = await pool.execute('INSERT INTO tareas_checklist (tarea_id, texto) VALUES (?, ?)', [tareaId, texto]);
+    return Number(result.insertId);
+  };
+  // Items are always looked up with their task, so a request cannot reach another task's checklist.
+  const item = async (tareaId, itemId) => (await checklist(tareaId)).find((entry) => entry.id === Number(itemId)) || null;
+  const marcarItem = async (tareaId, itemId, hecho) => {
+    await initialize();
+    const [result] = await pool.execute('UPDATE tareas_checklist SET hecho = ? WHERE id = ? AND tarea_id = ?', [hecho ? 1 : 0, itemId, tareaId]);
+    return result.affectedRows === 1;
+  };
+  const eliminarItem = async (tareaId, itemId) => {
+    await initialize();
+    const [result] = await pool.execute('DELETE FROM tareas_checklist WHERE id = ? AND tarea_id = ?', [itemId, tareaId]);
+    return result.affectedRows === 1;
   };
 
   // Adds a line to a task's history: tipo is 'comentario' for what someone wrote, 'cambio' for a change the board recorded.
@@ -264,5 +387,8 @@ export function createTareasStore(pool) {
     return rows.map((row) => ({ ...row, id: Number(row.id) }));
   };
 
-  return { initialize, responsables, board, archivo, get, create, move, update, marcarListo, remove, registrar, historial };
+  return {
+    initialize, responsables, usuarios, board, archivo, get, create, move, update, marcarListo, remove, registrar, historial,
+    etiquetas, crearEtiqueta, eliminarEtiqueta, ponerEtiqueta, checklist, agregarItem, item, marcarItem, eliminarItem,
+  };
 }

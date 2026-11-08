@@ -2,102 +2,23 @@
 <html lang="es">
   <head>
     <%- include('../includes/head') %>
-    <style>
-      .tarea-historial { list-style: none; padding: 0; margin: 0 0 1rem; display: flex; flex-direction: column; gap: .5rem; }
-      #historial { scroll-margin-top: 96px; }
-      /* Comments stand out; recorded changes stay as quiet one-liners between them. */
-      .tarea-comentario { padding: .6rem .75rem; border-radius: 8px; background: rgba(13, 110, 253, .08); border: 1px solid rgba(13, 110, 253, .18); }
-      .tarea-historial-autor { font-size: .8rem; margin: 0 0 .25rem; word-break: break-word; }
-      .tarea-historial-autor span, .tarea-cambio-fecha { opacity: .7; font-variant-numeric: tabular-nums; }
-      .tarea-comentario-texto { margin: 0; white-space: pre-line; word-break: break-word; }
-      .tarea-cambio { display: flex; gap: .4rem; font-size: .8rem; opacity: .85; word-break: break-word; padding: 0 .25rem; }
-    </style>
+    <link rel="stylesheet" href="/public/css/tareas.css" />
   </head>
   <body>
     <%- include('../includes/header') %>
+    <%# The same details the board opens in a window, as a page of their own for links and for browsers without JavaScript. %>
     <main class="container page-offset">
       <div class="row justify-content-md-center">
-        <div class="col-md-6 mt-5">
+        <div class="col-lg-8 mt-5 mb-5">
           <div class="card p-4">
             <h1 class="text-center title">Editar tarea</h1>
-            <p class="small text-muted mb-3"><span class="text-danger" aria-hidden="true">*</span> Campo obligatorio</p>
-            <% if (error) { %><div class="alert alert-danger" role="alert"><%= error %></div><% } %>
-            <form action="/tareas/<%= tarea.id %>/editar" method="POST" autocomplete="off">
-              <input type="hidden" name="volver" value="<%= locals.volver || '' %>" />
-              <%# When the task was last saved; a save is refused if it changed since, so nobody overwrites another's edit unknowingly. %>
-              <input type="hidden" name="version" value="<%= tarea.version || '' %>" />
-              <div class="mb-3">
-                <label for="titulo" class="form-label">Título <span class="text-danger" aria-hidden="true">*</span></label>
-                <input type="text" id="titulo" name="titulo" class="form-control" maxlength="200" required value="<%= tarea.titulo || '' %>" />
-              </div>
-              <div class="mb-3">
-                <label for="descripcion" class="form-label">Descripción</label>
-                <textarea id="descripcion" name="descripcion" class="form-control" rows="4" maxlength="2000"><%= tarea.descripcion || '' %></textarea>
-              </div>
-              <div class="row">
-                <%- include('../partials/tarea-asignacion', { form: tarea, opciones, puestoLabels, columnClass: 'col-sm-6 mb-3' }) %>
-              </div>
-              <%# Each person marks their own part from the board; here it is only shown. Giving the slot to someone else clears it. %>
-              <% Object.keys(puestoLabels).filter((puesto) => tarea[`${puesto}Listo`]).forEach((puesto) => { %>
-                <% const quien = (opciones[puesto] || []).find((user) => user.id === tarea[`${puesto}Id`])?.email || ''; %>
-                <p class="small text-success mb-2"><i class="bi bi-check-circle-fill" aria-hidden="true"></i>
-                  <%= puestoLabels[puesto] %>: <%= quien %> terminó su parte el <%= tarea[`${puesto}Listo`] %></p>
-              <% }) %>
-              <div class="row">
-                <div class="col-sm-6 mb-3">
-                  <%# Typed when the task was registered; shown for reference only, the form never sends it. %>
-                  <label for="llegada" class="form-label">Fecha de llegada</label>
-                  <input type="text" id="llegada" class="form-control" readonly aria-describedby="llegadaAyuda"
-                    value="<%= tarea.llegada ? `${tarea.llegada} · ${haceDias(tarea.dias)}` : '' %>" />
-                  <div id="llegadaAyuda" class="form-text">Se captura al crear la tarea y no se puede cambiar.</div>
-                </div>
-                <div class="col-sm-6 mb-3">
-                  <label for="estado" class="form-label">Columna</label>
-                  <select id="estado" name="estado" class="form-select">
-                    <% ESTADOS.forEach((estado) => { %>
-                      <option value="<%= estado %>"<%= tarea.estado === estado ? ' selected' : '' %>><%= ESTADO_LABELS[estado] %></option>
-                    <% }) %>
-                  </select>
-                </div>
-              </div>
-              <% if (tarea.creador) { %><p class="small text-muted">Creada por <%= tarea.creador %><%= tarea.actualizada ? ` · última modificación ${tarea.actualizada}` : '' %></p><% } %>
-              <div class="d-flex gap-2">
-                <a class="btn btn-secondary flex-fill" href="/tareas<%= locals.volver ? `?responsable=${locals.volver}` : '' %>#tarea-<%= tarea.id %>">Cancelar</a>
-                <button class="btn btn-primary flex-fill" type="submit">Guardar cambios</button>
-              </div>
-            </form>
+            <%- include('../partials/tarea-detalle') %>
           </div>
-          <%# Comments and the changes the board recorded, in the order they happened. %>
-          <section class="card p-4 mt-3 mb-5" id="historial" aria-labelledby="historial-titulo">
-            <h2 class="h5 mb-3" id="historial-titulo">Comentarios e historial</h2>
-            <% if (!historial.length) { %><p class="small text-muted">Esta tarea todavía no tiene comentarios ni cambios registrados.</p><% } %>
-            <ol class="tarea-historial">
-              <% historial.forEach((entrada) => { %>
-                <% if (entrada.tipo === 'comentario') { %>
-                  <li class="tarea-comentario">
-                    <p class="tarea-historial-autor"><i class="bi bi-chat-left-text" aria-hidden="true"></i>
-                      <strong><%= entrada.autor || 'Usuario eliminado' %></strong> <span><%= entrada.fecha %></span></p>
-                    <p class="tarea-comentario-texto"><%= entrada.texto %></p>
-                  </li>
-                <% } else { %>
-                  <li class="tarea-cambio"><i class="bi bi-clock-history" aria-hidden="true"></i>
-                    <span><%= entrada.autor || 'Usuario eliminado' %>: <%= entrada.texto %> <span class="tarea-cambio-fecha"><%= entrada.fecha %></span></span></li>
-                <% } %>
-              <% }) %>
-            </ol>
-            <form action="/tareas/<%= tarea.id %>/comentar" method="POST" autocomplete="off">
-              <input type="hidden" name="volver" value="<%= locals.volver || '' %>" />
-              <label for="comentario" class="form-label">Agregar comentario</label>
-              <textarea id="comentario" name="comentario" class="form-control<%= comentario.error ? ' is-invalid' : '' %>" rows="3"
-                maxlength="<%= maxComentario %>" required<%= comentario.error ? ' aria-describedby=comentarioError' : '' %>><%= comentario.texto %></textarea>
-              <% if (comentario.error) { %><div id="comentarioError" class="invalid-feedback"><%= comentario.error %></div><% } %>
-              <button class="btn btn-primary mt-2" type="submit">Comentar</button>
-            </form>
-          </section>
         </div>
       </div>
     </main>
     <%- include('../includes/scripts') %>
+    <script src="/public/js/tareas.js" defer></script>
     <%- include('../includes/footer') %>
   </body>
 </html>

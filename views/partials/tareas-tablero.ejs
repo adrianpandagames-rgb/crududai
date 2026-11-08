@@ -1,6 +1,8 @@
-<%# The board's columns; also served alone by /tareas/tablero so open pages refresh when someone changes a task. %>
+<%# The board's columns; also served alone by /tareas/tablero so open pages refresh when someone changes a task.
+    A card shows only what helps to scan the board; clicking it opens its details (tarea-detalle) in a window. %>
 <% const corto = (email) => String(email || '').split('@')[0]; %>
 <% const abreviatura = { licenciado: 'Lic.', ingeniero: 'Ing.' }; %>
+<% const editar = (id) => `/tareas/${id}/editar${filtro ? `?volver=${filtro}` : ''}`; %>
 <% ESTADOS.forEach((estado) => { %>
   <section class="tareas-columna" aria-labelledby="columna-<%= estado %>">
     <h2 id="columna-<%= estado %>"><%= ESTADO_LABELS[estado] %> <span class="tareas-contador" data-contador><%= columnas[estado].length %></span></h2>
@@ -8,10 +10,16 @@
       <p class="tareas-vacia">Sin tareas</p>
       <% columnas[estado].forEach((tarea) => { %>
         <% const antiguedad = antiguedadOf(tarea.dias); %>
+        <% const etiquetas = tarea.etiquetas || []; %>
+        <% const buscar = [tarea.titulo, tarea.descripcion, tarea.licenciado, tarea.ingeniero, ...etiquetas.map((e) => e.nombre)].filter(Boolean).join(' ').toLowerCase(); %>
         <article class="tarea-card<%= antiguedad ? ` is-${antiguedad}` : '' %>" id="tarea-<%= tarea.id %>" data-id="<%= tarea.id %>"
-          data-llegada="<%= tarea.fechaLlegada %>">
-          <h3 class="tarea-titulo h6"><%= tarea.titulo %></h3>
-          <% if (tarea.descripcion) { %><p class="tarea-descripcion"><%= tarea.descripcion %></p><% } %>
+          data-llegada="<%= tarea.fechaLlegada %>" data-buscar="<%= buscar %>" data-etiquetas="<%= etiquetas.map((e) => e.id).join(',') %>">
+          <% if (etiquetas.length) { %>
+            <div class="tarea-card-etiquetas">
+              <% etiquetas.forEach((etiqueta) => { %><span class="tarea-etiqueta etiqueta-<%= etiqueta.color %>"><%= etiqueta.nombre %></span><% }) %>
+            </div>
+          <% } %>
+          <h3 class="tarea-titulo h6"><a class="tarea-abrir" href="<%= editar(tarea.id) %>" draggable="false"><%= tarea.titulo %></a></h3>
           <div class="tarea-meta">
             <% userPuestos.forEach((puesto) => { if (!tarea[puesto]) return; const listo = tarea[`${puesto}Listo`]; %>
               <span class="tarea-chip<%= listo ? ' is-listo' : '' %>"
@@ -24,48 +32,40 @@
               <span class="tarea-chip is-sin-asignar">Sin asignar</span>
             <% } %>
           </div>
-          <p class="tarea-llegada" title="Fecha de llegada">
-            <i class="bi bi-inbox" aria-hidden="true"></i> Llegó <%= tarea.llegada %>
-            · <span class="tarea-dias"><%= haceDias(tarea.dias) %></span>
-          </p>
-          <%# Only the person in a slot sees the button for it, so a done mark always names who finished. %>
-          <% userPuestos.filter((puesto) => tarea[`${puesto}Id`] === usuarioId).forEach((puesto) => { const listo = tarea[`${puesto}Listo`]; %>
-            <form class="tarea-listo" action="/tareas/<%= tarea.id %>/listo" method="POST">
-              <input type="hidden" name="volver" value="<%= filtro %>" />
-              <input type="hidden" name="puesto" value="<%= puesto %>" />
-              <input type="hidden" name="listo" value="<%= listo ? '0' : '1' %>" />
-              <button class="btn btn-sm <%= listo ? 'btn-outline-secondary' : 'btn-outline-success' %> w-100" type="submit">
-                <%= listo ? 'Desmarcar mi parte' : `Mi parte está lista (${abreviatura[puesto]})` %>
-              </button>
-            </form>
-          <% }) %>
-          <div class="tarea-acciones">
-            <form action="/tareas/<%= tarea.id %>/mover" method="POST" data-direccion="izquierda">
-              <input type="hidden" name="volver" value="<%= filtro %>" />
-              <button class="btn btn-sm btn-outline-secondary" type="submit" name="direccion" value="izquierda"
-                title="Mover a la columna anterior" aria-label="Mover a la columna anterior"><i class="bi bi-arrow-left"></i></button>
-            </form>
-            <form action="/tareas/<%= tarea.id %>/mover" method="POST" data-direccion="derecha">
-              <input type="hidden" name="volver" value="<%= filtro %>" />
-              <button class="btn btn-sm btn-outline-secondary" type="submit" name="direccion" value="derecha"
-                title="Mover a la columna siguiente" aria-label="Mover a la columna siguiente"><i class="bi bi-arrow-right"></i></button>
-            </form>
-            <% const comentariosTexto = tarea.comentarios === 1 ? '1 comentario' : `${tarea.comentarios || 0} comentarios`; %>
-            <a class="btn btn-sm btn-outline-secondary ms-auto tarea-comentarios" href="/tareas/<%= tarea.id %>/editar<%= filtro ? `?volver=${filtro}` : '' %>#historial"
-              title="Comentarios e historial" aria-label="<%= comentariosTexto %> e historial de <%= tarea.titulo %>">
-              <i class="bi bi-chat-left-text" aria-hidden="true"></i><% if (tarea.comentarios) { %> <%= tarea.comentarios %><% } %></a>
-            <a class="btn btn-sm btn-outline-primary" href="/tareas/<%= tarea.id %>/editar<%= filtro ? `?volver=${filtro}` : '' %>"
-              title="Editar" aria-label="Editar <%= tarea.titulo %>"><i class="bi bi-pencil"></i></a>
-            <% if (puedeEliminar(tarea)) { %>
-              <form action="/tareas/eliminar/<%= tarea.id %>" method="POST"
-                data-confirm="¿Desea eliminar la tarea &quot;<%= tarea.titulo %>&quot;?" data-confirm-action="Eliminar tarea">
-                <input type="hidden" name="volver" value="<%= filtro %>" />
-                <button class="btn btn-sm btn-outline-danger" type="submit" title="Eliminar" aria-label="Eliminar <%= tarea.titulo %>"><i class="bi bi-trash"></i></button>
-              </form>
+          <div class="tarea-insignias">
+            <span class="tarea-llegada" title="Fecha de llegada"><i class="bi bi-inbox" aria-hidden="true"></i> Llegó <%= tarea.llegada %>
+              · <span class="tarea-dias"><%= haceDias(tarea.dias) %></span></span>
+            <% if (tarea.descripcion) { %><span title="Tiene descripción"><i class="bi bi-text-left" aria-hidden="true"></i><span class="visually-hidden">Tiene descripción</span></span><% } %>
+            <% if (tarea.comentarios) { %>
+              <span title="<%= tarea.comentarios === 1 ? '1 comentario' : `${tarea.comentarios} comentarios` %>"><i class="bi bi-chat-left-text" aria-hidden="true"></i> <%= tarea.comentarios %><span class="visually-hidden"> comentarios</span></span>
+            <% } %>
+            <% if (tarea.checklistTotal) { %>
+              <span class="tarea-insignia-checklist<%= tarea.checklistHechos === tarea.checklistTotal ? ' is-completo' : '' %>" title="Checklist">
+                <i class="bi bi-check2-square" aria-hidden="true"></i> <%= tarea.checklistHechos %>/<%= tarea.checklistTotal %><span class="visually-hidden"> del checklist</span></span>
             <% } %>
           </div>
         </article>
       <% }) %>
     </div>
+    <%# Typing a title and pressing Enter adds a card to this column. Without JavaScript it posts like the full form. %>
+    <details class="tarea-rapida" data-estado="<%= estado %>">
+      <summary><i class="bi bi-plus-lg" aria-hidden="true"></i> Añadir tarjeta</summary>
+      <form action="/tareas" method="POST" autocomplete="off">
+        <input type="hidden" name="estado" value="<%= estado %>" />
+        <input type="hidden" name="volver" value="<%= filtro %>" />
+        <label class="visually-hidden" for="rapida-titulo-<%= estado %>">Título de la tarjeta</label>
+        <textarea id="rapida-titulo-<%= estado %>" name="titulo" class="form-control form-control-sm" rows="2" maxlength="200" required
+          placeholder="Título de la tarjeta"></textarea>
+        <div class="tarea-rapida-fecha">
+          <label for="rapida-llegada-<%= estado %>">Llegó</label>
+          <input type="date" id="rapida-llegada-<%= estado %>" name="fechaLlegada" class="form-control form-control-sm" required value="<%= hoy %>" max="<%= hoy %>" />
+        </div>
+        <div class="tarea-rapida-acciones">
+          <button type="submit" class="btn btn-sm btn-primary">Añadir</button>
+          <button type="button" class="btn btn-sm btn-link text-secondary" data-cerrar-rapida aria-label="Cancelar"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+        </div>
+        <p class="tarea-rapida-error small text-danger mb-0" role="alert" hidden></p>
+      </form>
+    </details>
   </section>
 <% }) %>

@@ -2,64 +2,11 @@
 <html lang="es">
   <head>
     <%- include('../includes/head') %>
-    <style>
-      /* Leave room below the board for the fixed theme toggle. */
-      .tareas-page { padding-bottom: 5rem; }
-      .tareas-barra { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-bottom: 1rem; }
-      .tareas-barra label { margin: 0; }
-      .tareas-barra select { flex: 0 1 280px; min-width: 0; }
-      .tareas-nueva { margin-bottom: 1rem; }
-      .tareas-nueva summary { display: inline-flex; align-items: center; gap: .4rem; min-height: 40px; cursor: pointer; font-weight: 600; color: #0d6efd; }
-      html[data-theme="dark"] .tareas-nueva summary { color: #8dc5ff; }
-      .tareas-tablero { display: grid; grid-template-columns: repeat(<%= ESTADOS.length %>, minmax(220px, 1fr)); gap: 1rem; align-items: start; overflow-x: auto; }
-      @media (max-width: 991.98px) { .tareas-tablero { grid-template-columns: minmax(0, 1fr); } }
-      .tareas-columna { border-radius: 10px; background: rgba(127, 127, 127, .1); padding: .75rem; }
-      .tareas-columna h2 { display: flex; align-items: center; justify-content: space-between; font-size: 1rem; font-weight: 700; margin: 0 0 .75rem; }
-      .tareas-contador { font-variant-numeric: tabular-nums; font-weight: 600; font-size: .85rem; opacity: .75; }
-      /* The empty list keeps a drop target. */
-      .tareas-lista { display: flex; flex-direction: column; gap: .5rem; min-height: 64px; border-radius: 8px; transition: background-color .15s ease-out; }
-      .tareas-lista.is-destino { background: rgba(13, 110, 253, .1); }
-      .tareas-vacia { margin: auto; font-size: .85rem; opacity: .6; }
-      .tareas-lista:has(.tarea-card) .tareas-vacia { display: none; }
-      .tarea-card { padding: .75rem; border-radius: 8px; background: #fff; border: 1px solid rgba(0, 0, 0, .1); box-shadow: 0 1px 2px rgba(0, 0, 0, .06); scroll-margin-top: 96px; }
-      html[data-theme="dark"] .tarea-card { background: var(--dark-panel); border-color: var(--dark-border); }
-      .tarea-card[draggable="true"] { cursor: grab; }
-      .tarea-card.is-arrastrando { opacity: .4; }
-      .tarea-card:target { outline: 2px solid #0d6efd; outline-offset: 2px; }
-      .tarea-titulo { font-weight: 600; margin: 0 0 .25rem; word-break: break-word; }
-      .tarea-descripcion { font-size: .875rem; margin: 0 0 .5rem; white-space: pre-line; word-break: break-word;
-        display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-      .tarea-meta { display: flex; flex-wrap: wrap; gap: .35rem; font-size: .8rem; margin-bottom: .5rem; }
-      .tarea-chip { display: inline-flex; align-items: center; gap: .25rem; padding: .1rem .45rem; border-radius: 999px; background: rgba(127, 127, 127, .15); }
-      .tarea-chip.is-sin-asignar { font-style: italic; opacity: .75; }
-      .tarea-chip.is-listo { background: rgba(25, 135, 84, .18); }
-      .tarea-chip.is-listo .bi { color: #198754; }
-      .tarea-listo { margin: 0 0 .5rem; }
-      .tarea-chip-puesto { font-weight: 700; }
-      .tarea-llegada { font-size: .8rem; margin: 0 0 .5rem; opacity: .85; }
-      .tarea-dias { font-weight: 700; font-variant-numeric: tabular-nums; }
-      /* Age frame: yellow from 2 to 3 days since arrival, red after 3. The shadow thickens the 1px border without moving the layout.
-         Finished and sent tasks are left plain; keyed on the column, so a card dragged there updates without a reload. */
-      .tareas-lista:not([data-estado="terminada"], [data-estado="enviada"]) .tarea-card.is-amarilla { border-color: #ffc107; box-shadow: 0 0 0 2px #ffc107; }
-      .tareas-lista:not([data-estado="terminada"], [data-estado="enviada"]) .tarea-card.is-roja { border-color: #dc3545; box-shadow: 0 0 0 2px #dc3545; }
-      .tareas-lista:not([data-estado="terminada"], [data-estado="enviada"]) .tarea-card.is-roja .tarea-dias { color: #b02a37; }
-      html[data-theme="dark"] .tareas-lista:not([data-estado="terminada"], [data-estado="enviada"]) .tarea-card.is-roja .tarea-dias { color: #f1aeb5; }
-      /* The arrows likewise follow the card's column: no left arrow in the first, no right arrow in the last. */
-      .tareas-lista[data-estado="<%= ESTADOS[0] %>"] [data-direccion="izquierda"],
-      .tareas-lista[data-estado="<%= ESTADOS.at(-1) %>"] [data-direccion="derecha"] { display: none; }
-      .tarea-acciones { display: flex; align-items: center; gap: .35rem; }
-      .tarea-acciones form { margin: 0; }
-      .tarea-acciones .ms-auto { margin-left: auto; }
-      .tarea-comentarios { font-variant-numeric: tabular-nums; }
-      /* btn-sm is ~32px tall; stretch the hit area toward 40px without reaching the neighbour. */
-      .tarea-acciones .btn { position: relative; }
-      .tarea-acciones .btn::after { content: ""; position: absolute; inset: -4px -2px; }
-    </style>
+    <link rel="stylesheet" href="/public/css/tareas.css" />
   </head>
   <body>
     <%- include('../includes/header') %>
     <% const yo = typeof currentUser !== 'undefined' && currentUser ? String(currentUser.id) : ''; %>
-
     <main class="container-fluid px-3 px-xl-4 page-offset tareas-page">
       <div class="row justify-content-md-center mb-4">
         <div class="col-md-12 mt-5">
@@ -127,13 +74,33 @@
           <% }) %>
         </select>
         <noscript><button class="btn btn-outline-secondary" type="submit">Filtrar</button></noscript>
+        <%# Search and label filters act on the cards already on screen, as you type or click (tareas.js). %>
+        <div class="tareas-buscar" hidden data-solo-js>
+          <i class="bi bi-search" aria-hidden="true"></i>
+          <label for="tareasBuscar" class="visually-hidden">Buscar tarjetas</label>
+          <input type="search" id="tareasBuscar" class="form-control" placeholder="Buscar tarjetas" autocomplete="off" />
+        </div>
         <a class="btn btn-outline-secondary ms-auto" href="/tareas/archivo"><i class="bi bi-archive" aria-hidden="true"></i> Archivo</a>
       </form>
+      <% if (etiquetas.length) { %>
+        <div class="tareas-filtro-etiquetas" role="group" aria-label="Filtrar por etiqueta" hidden data-solo-js>
+          <span class="small fw-semibold">Etiquetas:</span>
+          <% etiquetas.forEach((etiqueta) => { %>
+            <button type="button" class="tarea-etiqueta etiqueta-<%= etiqueta.color %> tareas-filtro-etiqueta" data-etiqueta="<%= etiqueta.id %>" aria-pressed="false"><%= etiqueta.nombre %></button>
+          <% }) %>
+        </div>
+      <% } %>
+      <p class="tareas-sin-resultados small text-muted" role="status" hidden>Ninguna tarjeta coincide con la búsqueda.</p>
 
-      <div class="tareas-tablero" data-filtro="<%= filtro %>">
+      <div class="tareas-tablero" data-filtro="<%= filtro %>" data-abrir="<%= abrir %>">
         <%- include('../partials/tareas-tablero') %>
       </div>
     </main>
+    <%# The window a card opens in; tareas.js fills it with the task's details. %>
+    <dialog class="tarea-modal" aria-labelledby="tareaModalTitulo">
+      <h2 id="tareaModalTitulo" class="visually-hidden">Detalle de la tarea</h2>
+      <div class="tarea-modal-contenido"></div>
+    </dialog>
     <%- include('../includes/scripts') %>
     <script src="/public/js/tareas.js" defer></script>
     <%- include('../includes/footer') %>

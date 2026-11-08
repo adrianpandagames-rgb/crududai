@@ -1,0 +1,217 @@
+<%# A task's details: labels, the edit form, each person's done mark, checklist, comments and history.
+    The board shows it in a window over the columns (modal = true); the edit page wraps it in a page.
+    Every form works as a plain post; inside the window, tareas.js sends them without leaving the board. %>
+<% const volverCampo = `<input type="hidden" name="volver" value="${volver || ''}" />`; %>
+<% const etiquetasPuestas = new Set((tarea.etiquetas || []).map((etiqueta) => etiqueta.id)); %>
+<% const hechos = checklist.filter((entry) => entry.hecho).length; %>
+<% const abreviatura = { licenciado: 'Lic.', ingeniero: 'Ing.' }; %>
+<div class="tarea-detalle" data-tarea-detalle="<%= tarea.id %>">
+  <div class="tarea-detalle-cabecera">
+    <p class="tarea-detalle-ubicacion">
+      <i class="bi bi-kanban" aria-hidden="true"></i> En <strong><%= ESTADO_LABELS[tarea.estado] || tarea.estado %></strong>
+      <% if (tarea.llegada) { %>· llegó <%= tarea.llegada %>, <%= haceDias(tarea.dias) %><% } %>
+    </p>
+    <% if (modal) { %>
+      <button type="button" class="btn-close tarea-detalle-cerrar" data-cerrar aria-label="Cerrar"></button>
+    <% } %>
+  </div>
+  <% if (aviso) { %><div class="alert alert-success py-2" role="status"><%= aviso %></div><% } %>
+  <% if (error) { %><div class="alert alert-danger" role="alert"><%= error %></div><% } %>
+
+  <section class="tarea-seccion" id="etiquetas" aria-labelledby="etiquetas-titulo">
+    <h2 class="tarea-seccion-titulo" id="etiquetas-titulo"><i class="bi bi-tags" aria-hidden="true"></i> Etiquetas</h2>
+    <div class="tarea-etiquetas-fila">
+      <% (tarea.etiquetas || []).forEach((etiqueta) => { %>
+        <span class="tarea-etiqueta etiqueta-<%= etiqueta.color %>"><%= etiqueta.nombre %></span>
+      <% }) %>
+      <details class="tarea-menu"<%= etiquetaError ? ' open' : '' %>>
+        <summary class="btn btn-sm btn-outline-secondary"><i class="bi bi-plus-lg" aria-hidden="true"></i> <%= etiquetasPuestas.size ? 'Cambiar' : 'Agregar' %></summary>
+        <div class="tarea-menu-panel">
+          <% if (etiquetaError) { %><div class="alert alert-danger py-1 px-2 small" role="alert"><%= etiquetaError %></div><% } %>
+          <% if (etiquetas.length) { %>
+            <ul class="tarea-etiquetas-lista">
+              <% etiquetas.forEach((etiqueta) => { const puesta = etiquetasPuestas.has(etiqueta.id); %>
+                <li>
+                  <form action="/tareas/<%= tarea.id %>/etiquetas" method="POST">
+                    <%- volverCampo %>
+                    <input type="hidden" name="etiqueta" value="<%= etiqueta.id %>" />
+                    <input type="hidden" name="puesta" value="<%= puesta ? '0' : '1' %>" />
+                    <button type="submit" class="tarea-etiqueta-opcion" aria-pressed="<%= puesta %>">
+                      <span class="tarea-etiqueta etiqueta-<%= etiqueta.color %>"><%= etiqueta.nombre %></span>
+                      <i class="bi <%= puesta ? 'bi-check-lg' : '' %>" aria-hidden="true"></i>
+                      <span class="visually-hidden"><%= puesta ? 'Quitar' : 'Poner' %></span>
+                    </button>
+                  </form>
+                  <% if (puedeBorrarEtiquetas) { %>
+                    <form action="/tareas/<%= tarea.id %>/etiquetas/<%= etiqueta.id %>/eliminar" method="POST"
+                      data-confirm="¿Eliminar la etiqueta &quot;<%= etiqueta.nombre %>&quot;? Se quitará de todas las tareas." data-confirm-action="Eliminar etiqueta">
+                      <%- volverCampo %>
+                      <button type="submit" class="btn btn-sm btn-link text-danger p-1" title="Eliminar etiqueta" aria-label="Eliminar la etiqueta <%= etiqueta.nombre %>"><i class="bi bi-trash"></i></button>
+                    </form>
+                  <% } %>
+                </li>
+              <% }) %>
+            </ul>
+          <% } else { %>
+            <p class="small text-muted mb-2">Todavía no hay etiquetas. Crea la primera:</p>
+          <% } %>
+          <form action="/tareas/<%= tarea.id %>/etiquetas/nueva" method="POST" class="tarea-etiqueta-nueva" autocomplete="off">
+            <%- volverCampo %>
+            <label for="etiquetaNombre" class="form-label small mb-1">Nueva etiqueta</label>
+            <input type="text" id="etiquetaNombre" name="nombre" class="form-control form-control-sm" maxlength="<%= maxEtiqueta %>" required placeholder="Ej. Urgente" />
+            <fieldset class="tarea-colores">
+              <legend class="visually-hidden">Color</legend>
+              <% Object.entries(colores).forEach(([color, nombre], index) => { %>
+                <label class="tarea-color etiqueta-<%= color %>" title="<%= nombre %>">
+                  <input type="radio" name="color" value="<%= color %>"<%= index === 0 ? ' checked' : '' %> /><span class="visually-hidden"><%= nombre %></span>
+                </label>
+              <% }) %>
+            </fieldset>
+            <button type="submit" class="btn btn-sm btn-primary">Crear y poner</button>
+          </form>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <form action="/tareas/<%= tarea.id %>/editar" method="POST" autocomplete="off" class="tarea-seccion tarea-detalle-form">
+    <%- volverCampo %>
+    <%# When the task was last saved; a save is refused if it changed since, so nobody overwrites another's edit unknowingly. %>
+    <input type="hidden" name="version" value="<%= tarea.version || '' %>" />
+    <div class="mb-3">
+      <label for="detalle-titulo" class="form-label">Título <span class="text-danger" aria-hidden="true">*</span></label>
+      <input type="text" id="detalle-titulo" name="titulo" class="form-control tarea-detalle-titulo" maxlength="200" required value="<%= tarea.titulo || '' %>" />
+    </div>
+    <div class="mb-3">
+      <label for="detalle-descripcion" class="form-label">Descripción</label>
+      <textarea id="detalle-descripcion" name="descripcion" class="form-control" rows="4" maxlength="2000"><%= tarea.descripcion || '' %></textarea>
+    </div>
+    <div class="row">
+      <%- include('tarea-asignacion', { form: tarea, opciones, puestoLabels, columnClass: 'col-sm-6 mb-3', idPrefix: 'detalle-' }) %>
+    </div>
+    <% Object.keys(puestoLabels).filter((puesto) => tarea[`${puesto}Listo`]).forEach((puesto) => { %>
+      <% const quien = (opciones[puesto] || []).find((user) => user.id === tarea[`${puesto}Id`])?.email || ''; %>
+      <p class="small text-success mb-2"><i class="bi bi-check-circle-fill" aria-hidden="true"></i>
+        <%= puestoLabels[puesto] %>: <%= quien %> terminó su parte el <%= tarea[`${puesto}Listo`] %></p>
+    <% }) %>
+    <div class="row">
+      <div class="col-sm-6 mb-3">
+        <%# Typed when the task was registered; shown for reference only, the form never sends it. %>
+        <label for="llegada" class="form-label">Fecha de llegada</label>
+        <input type="text" id="llegada" class="form-control" readonly aria-describedby="llegadaAyuda"
+          value="<%= tarea.llegada ? `${tarea.llegada} · ${haceDias(tarea.dias)}` : '' %>" />
+        <div id="llegadaAyuda" class="form-text">Se captura al crear la tarea y no se puede cambiar.</div>
+      </div>
+      <div class="col-sm-6 mb-3">
+        <label for="detalle-estado" class="form-label">Columna</label>
+        <select id="detalle-estado" name="estado" class="form-select">
+          <% ESTADOS.forEach((estado) => { %>
+            <option value="<%= estado %>"<%= tarea.estado === estado ? ' selected' : '' %>><%= ESTADO_LABELS[estado] %></option>
+          <% }) %>
+        </select>
+      </div>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      <button class="btn btn-primary" type="submit">Guardar cambios</button>
+      <% if (!modal) { %>
+        <a class="btn btn-secondary" href="/tareas<%= volver ? `?responsable=${volver}` : '' %>#tarea-<%= tarea.id %>">Volver al tablero</a>
+      <% } %>
+    </div>
+  </form>
+
+  <%# Only the person in a slot sees the button for it, so a done mark always names who finished. %>
+  <% const misPuestos = Object.keys(puestoLabels).filter((puesto) => tarea[`${puesto}Id`] === usuarioId); %>
+  <% if (misPuestos.length) { %>
+    <div class="tarea-seccion tarea-mi-parte">
+      <% misPuestos.forEach((puesto) => { const listo = tarea[`${puesto}Listo`]; %>
+        <form class="tarea-listo" action="/tareas/<%= tarea.id %>/listo" method="POST">
+          <%- volverCampo %>
+          <input type="hidden" name="puesto" value="<%= puesto %>" />
+          <input type="hidden" name="listo" value="<%= listo ? '0' : '1' %>" />
+          <button class="btn btn-sm <%= listo ? 'btn-outline-secondary' : 'btn-outline-success' %>" type="submit">
+            <i class="bi <%= listo ? 'bi-arrow-counterclockwise' : 'bi-check2-circle' %>" aria-hidden="true"></i>
+            <%= listo ? 'Desmarcar mi parte' : `Mi parte está lista (${abreviatura[puesto]})` %>
+          </button>
+        </form>
+      <% }) %>
+    </div>
+  <% } %>
+
+  <section class="tarea-seccion" id="checklist" aria-labelledby="checklist-titulo">
+    <h2 class="tarea-seccion-titulo" id="checklist-titulo"><i class="bi bi-check2-square" aria-hidden="true"></i> Checklist
+      <% if (checklist.length) { %><span class="tarea-checklist-cuenta"><%= hechos %>/<%= checklist.length %></span><% } %></h2>
+    <% if (checklist.length) { %>
+      <div class="tarea-progreso" role="progressbar" aria-label="Avance del checklist" aria-valuemin="0" aria-valuemax="<%= checklist.length %>" aria-valuenow="<%= hechos %>">
+        <span style="width: <%= Math.round((hechos / checklist.length) * 100) %>%"></span>
+      </div>
+      <ul class="tarea-checklist">
+        <% checklist.forEach((entry) => { %>
+          <li class="<%= entry.hecho ? 'is-hecho' : '' %>">
+            <form action="/tareas/<%= tarea.id %>/checklist/<%= entry.id %>" method="POST">
+              <%- volverCampo %>
+              <button type="submit" name="accion" value="<%= entry.hecho ? 'desmarcar' : 'marcar' %>" class="tarea-check" role="checkbox" aria-checked="<%= entry.hecho %>"
+                aria-label="<%= entry.texto %>"><i class="bi <%= entry.hecho ? 'bi-check-square-fill' : 'bi-square' %>" aria-hidden="true"></i></button>
+            </form>
+            <span class="tarea-checklist-texto"><%= entry.texto %></span>
+            <form action="/tareas/<%= tarea.id %>/checklist/<%= entry.id %>" method="POST">
+              <%- volverCampo %>
+              <button type="submit" name="accion" value="eliminar" class="btn btn-sm btn-link p-1 tarea-checklist-quitar" title="Quitar" aria-label="Quitar «<%= entry.texto %>»"><i class="bi bi-x-lg"></i></button>
+            </form>
+          </li>
+        <% }) %>
+      </ul>
+    <% } %>
+    <form action="/tareas/<%= tarea.id %>/checklist" method="POST" class="tarea-checklist-nuevo" autocomplete="off">
+      <%- volverCampo %>
+      <label for="checklistTexto" class="visually-hidden">Nuevo elemento del checklist</label>
+      <input type="text" id="checklistTexto" name="texto" class="form-control form-control-sm<%= itemError ? ' is-invalid' : '' %>" maxlength="<%= maxItem %>" required
+        placeholder="Agregar un elemento"<%- itemError ? ' aria-describedby="checklistError"' : '' %> />
+      <button type="submit" class="btn btn-sm btn-outline-primary">Agregar</button>
+      <% if (itemError) { %><div id="checklistError" class="invalid-feedback d-block"><%= itemError %></div><% } %>
+    </form>
+  </section>
+
+  <%# Comments and the changes the board recorded, in the order they happened. %>
+  <section class="tarea-seccion" id="historial" aria-labelledby="historial-titulo">
+    <h2 class="tarea-seccion-titulo" id="historial-titulo"><i class="bi bi-chat-left-text" aria-hidden="true"></i> Comentarios e historial</h2>
+    <form action="/tareas/<%= tarea.id %>/comentar" method="POST" autocomplete="off" class="tarea-comentar">
+      <%- volverCampo %>
+      <label for="comentario" class="form-label">Agregar comentario</label>
+      <div class="tarea-mencionar">
+        <textarea id="comentario" name="comentario" class="form-control<%= comentario.error ? ' is-invalid' : '' %>" rows="3"
+          maxlength="<%= maxComentario %>" required data-usuarios="<%= JSON.stringify(usuarios) %>"
+          aria-describedby="comentarioAyuda<%= comentario.error ? ' comentarioError' : '' %>"><%= comentario.texto %></textarea>
+      </div>
+      <div id="comentarioAyuda" class="form-text">Escribe @ y el usuario para avisarle, por ejemplo @<%= usuarios[0]?.h || 'usuario' %>.</div>
+      <% if (comentario.error) { %><div id="comentarioError" class="invalid-feedback d-block"><%= comentario.error %></div><% } %>
+      <button class="btn btn-primary btn-sm mt-2" type="submit">Comentar</button>
+    </form>
+    <% if (!historial.length) { %><p class="small text-muted">Esta tarea todavía no tiene comentarios ni cambios registrados.</p><% } %>
+    <%# Newest first, as in a feed; the comment box sits on top. %>
+    <ol class="tarea-historial">
+      <% historial.slice().reverse().forEach((entrada) => { %>
+        <% if (entrada.tipo === 'comentario') { %>
+          <li class="tarea-comentario">
+            <p class="tarea-historial-autor"><i class="bi bi-chat-left-text" aria-hidden="true"></i>
+              <strong><%= entrada.autor || 'Usuario eliminado' %></strong> <span><%= entrada.fecha %></span></p>
+            <p class="tarea-comentario-texto"><%- comentarioHtml(entrada.texto) %></p>
+          </li>
+        <% } else { %>
+          <li class="tarea-cambio"><i class="bi bi-clock-history" aria-hidden="true"></i>
+            <span><%= entrada.autor || 'Usuario eliminado' %>: <%= entrada.texto %> <span class="tarea-cambio-fecha"><%= entrada.fecha %></span></span></li>
+        <% } %>
+      <% }) %>
+    </ol>
+  </section>
+
+  <div class="tarea-detalle-pie">
+    <% if (tarea.creador) { %><p class="small text-muted mb-0">Creada por <%= tarea.creador %><%= tarea.actualizada ? ` · última modificación ${tarea.actualizada}` : '' %></p><% } %>
+    <% if (puedeEliminar) { %>
+      <form action="/tareas/eliminar/<%= tarea.id %>" method="POST"
+        data-confirm="¿Desea eliminar la tarea &quot;<%= tarea.titulo %>&quot;?" data-confirm-action="Eliminar tarea">
+        <%- volverCampo %>
+        <button class="btn btn-sm btn-outline-danger" type="submit"><i class="bi bi-trash" aria-hidden="true"></i> Eliminar tarea</button>
+      </form>
+    <% } %>
+  </div>
+</div>
