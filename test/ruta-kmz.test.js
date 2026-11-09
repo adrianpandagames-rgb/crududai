@@ -82,12 +82,40 @@ test('a busy antenna keeps its balloon small enough for Google Earth, and no rec
   const antenna = balloons.find((html) => html.includes('<b>Antena 1</b>'));
   assert.equal(rowsIn(antenna), BALLOON_ROWS);
   assert.ok(antenna.includes(`Se muestran los primeros ${BALLOON_ROWS} de ${total} registros`));
-  assert.ok(antenna.includes('<b>Registros por día</b><br>13/10/2026: 154<br>14/10/2026: 153'));
+  assert.ok(antenna.includes('>13/10/2026 (154)</a>') && antenna.includes('>14/10/2026 (153)</a>'));
 
   // Every located record is still its own point, and every one without a position is listed once.
   assert.equal((kml.match(/<styleUrl>#registro<\/styleUrl>/g) || []).length, total);
   assert.match(kml, new RegExp(`<Folder><name>Sin ubicación \\(${BALLOON_ROWS + 5}\\)</name>`));
   for (let i = 0; i < BALLOON_ROWS + 5; i += 1) assert.ok(kml.includes(`77${String(i).padStart(8, '0')}`));
+});
+
+test('day buttons open each day of an antenna, long days split into pages, every link lands somewhere', () => {
+  const lines = ['fecha,hora,numero b,latitud,longitud'];
+  const busy = BALLOON_ROWS * 2 + 10; // 13/10 needs three pages
+  for (let i = 0; i < busy; i += 1) lines.push(`13/10/2026,10:${String(Math.floor(i / 60)).padStart(2, '0')}:${String(i % 60).padStart(2, '0')},55${String(i).padStart(8, '0')},29.072967,-110.955919`);
+  lines.push('14/10/2026,09:00:00,6620000001,29.072967,-110.955919');
+  lines.push('14/10/2026,09:30:00,6620000002,29.100000,-110.900000'); // a second antenna with one short day
+  const kml = createRutaKml(createRutaCsv(processRutaCsv(lines.join('\n'), [])));
+
+  const ids = [...kml.matchAll(/<Placemark id="([^"]+)"/g)].map((match) => match[1]);
+  assert.equal(new Set(ids).size, ids.length, 'ids are unique');
+  const targets = [...kml.matchAll(/href="#([^";]+);balloon"/g)].map((match) => match[1]);
+  assert.ok(targets.length > 0);
+  for (const target of targets) assert.ok(ids.includes(target), `the button to ${target} has a table to open`);
+
+  // Antenna 1: summary + 13/10 in three pages + 14/10 in one. Antenna 2 shows everything in its own balloon.
+  assert.deepEqual(ids, ['a1', 'a2', 'a1-d1-p1', 'a1-d1-p2', 'a1-d1-p3', 'a1-d2-p1']);
+  const balloonOf = (id) => kml.match(new RegExp(`<Placemark id="${id}">[\\s\\S]*?<description><!\\[CDATA\\[([\\s\\S]*?)\\]\\]>`))[1];
+  assert.ok(balloonOf('a1').includes(`href="#a1-d1-p1;balloon"`) && balloonOf('a1').includes(`>13/10/2026 (${busy})</a>`));
+  assert.ok(!balloonOf('a2').includes(';balloon'), 'a short single-day antenna needs no buttons');
+  const page2 = balloonOf('a1-d1-p2');
+  assert.ok(page2.includes('<b>Página 2 de 3</b>') && page2.includes('href="#a1-d1-p1;balloon"') && page2.includes('href="#a1-d1-p3;balloon"'));
+  assert.ok(page2.includes('href="#a1;balloon"'), 'every day table leads back to the summary');
+
+  // Each record of 13/10 is in exactly one of its pages.
+  const dayPages = ['a1-d1-p1', 'a1-d1-p2', 'a1-d1-p3'].map(balloonOf).join('');
+  for (let i = 0; i < busy; i += 1) assert.equal(dayPages.split(`55${String(i).padStart(8, '0')}`).length - 1, 1);
 });
 
 test('cell text never becomes markup in the balloons', () => {
