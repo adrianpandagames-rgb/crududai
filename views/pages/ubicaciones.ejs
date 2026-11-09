@@ -8,7 +8,7 @@
 
     <script src="/public/js/clipboard-utils.js"></script>
 
-    <% if (typeof currentUser !== 'undefined' && currentUser.isAdmin === true) { %>
+    <% if (typeof currentUser !== 'undefined' && currentUser.canEditRecords === true) { %>
     <dialog id="editLocationModal" class="ruta-delete-modal" aria-labelledby="editLocationTitle">
       <h3 id="editLocationTitle" class="h5">Modificar ubicación</h3>
       <form id="editLocationForm" method="POST">

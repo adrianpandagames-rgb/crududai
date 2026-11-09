@@ -92,8 +92,9 @@ router.get("/ubicaciones", async (req, res, next) => {
 });
 
 router.post('/ubicaciones/:id/modificar', async (req, res) => {
-  if (req.session?.isAdmin !== true) {
-    return res.status(403).json({ error: 'Solo los administradores pueden modificar ubicaciones.' });
+  // Administrators and semi-administrators, the same people who may edit Líneas and IMEI records.
+  if (req.session?.isAdmin !== true && req.session?.role !== 'semiadmin') {
+    return res.status(403).json({ error: 'Solo administradores y semiadministradores pueden modificar ubicaciones.' });
   }
   const id = Number(req.params.id);
   const coordinates = parseCoordinatesInput(req.body.coordinates);
