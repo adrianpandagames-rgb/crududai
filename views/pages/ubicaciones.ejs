@@ -78,7 +78,7 @@
                 <label for="estadoBusqueda" class="form-label">Estado de México</label>
                 <div class="position-relative">
                   <input type="text" id="estadoBusqueda" class="form-select" placeholder="Buscar y seleccionar estado" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="estadoOpciones" autocomplete="off" required disabled />
-                  <div id="estadoOpciones" role="listbox" aria-label="Estados" class="position-absolute w-100 bg-white border rounded shadow-sm" style="max-height: 240px; overflow-y: auto; z-index: 1000" hidden></div>
+                  <div id="estadoOpciones" role="listbox" aria-label="Estados" class="combo-opciones position-absolute w-100 bg-white border rounded shadow-sm" style="max-height: 240px; overflow-y: auto; z-index: 1000" hidden></div>
                 </div>
                 <input type="hidden" id="estado" name="estado" />
               </div>
@@ -86,7 +86,7 @@
                 <label for="localidadBusqueda" class="form-label">Ciudad o localidad</label>
                 <div class="position-relative" id="localidadCombobox">
                   <input type="text" id="localidadBusqueda" class="form-select" placeholder="Buscar y seleccionar localidad" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="localidadOpciones" aria-describedby="localidadEstado" autocomplete="off" required disabled />
-                  <div id="localidadOpciones" role="listbox" aria-label="Localidades" class="position-absolute w-100 bg-white border rounded shadow-sm" style="max-height: 240px; overflow-y: auto; z-index: 1000" hidden></div>
+                  <div id="localidadOpciones" role="listbox" aria-label="Localidades" class="combo-opciones position-absolute w-100 bg-white border rounded shadow-sm" style="max-height: 240px; overflow-y: auto; z-index: 1000" hidden></div>
                 </div>
                 <select id="lugar" name="lugar" hidden disabled>
                   <option value="" disabled selected>Selecciona primero un estado</option>
@@ -126,6 +126,14 @@
               };
 
               const normalizeText = (value) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+              // Highlights the option the person is on (arrows or mouse) so it can be seen in both themes.
+              const marcarActiva = (lista, input, index, { scroll = true } = {}) => {
+                const options = [...lista.querySelectorAll('[role="option"]')];
+                options.forEach((option, i) => option.classList.toggle('is-activa', i === index));
+                if (!options[index]) { input.removeAttribute('aria-activedescendant'); return; }
+                input.setAttribute('aria-activedescendant', options[index].id);
+                if (scroll) options[index].scrollIntoView({ block: 'nearest' });
+              };
               const cerrarEstados = () => {
                 estadoOpciones.hidden = true;
                 estadoBusqueda.setAttribute('aria-expanded', 'false');
@@ -142,7 +150,10 @@
                 estadoActiveIndex = -1;
                 estadoBusqueda.removeAttribute('aria-activedescendant');
                 estadoOpciones.replaceChildren();
-                const matches = estados.filter(value => normalizeText(value).includes(normalizeText(estadoBusqueda.value)));
+                // With a state already chosen, reopening shows the whole list with that one marked, not just itself.
+                const elegido = estadoSelect.value && estadoBusqueda.value === estadoSelect.value;
+                const filtro = elegido ? '' : estadoBusqueda.value;
+                const matches = estados.filter(value => normalizeText(value).includes(normalizeText(filtro)));
                 matches.forEach((value, index) => {
                   const option = document.createElement('div');
                   option.id = `estado-opcion-${index}`;
@@ -152,6 +163,7 @@
                   option.style.cursor = 'pointer';
                   option.textContent = value;
                   option.addEventListener('mousedown', event => event.preventDefault());
+                  option.addEventListener('mouseenter', () => { estadoActiveIndex = index; marcarActiva(estadoOpciones, estadoBusqueda, index, { scroll: false }); });
                   option.addEventListener('click', () => seleccionarEstado(value));
                   estadoOpciones.appendChild(option);
                 });
@@ -163,6 +175,10 @@
                 }
                 estadoOpciones.hidden = false;
                 estadoBusqueda.setAttribute('aria-expanded', 'true');
+                if (elegido) {
+                  estadoActiveIndex = matches.indexOf(estadoSelect.value);
+                  marcarActiva(estadoOpciones, estadoBusqueda, estadoActiveIndex);
+                }
               };
               estadoBusqueda.addEventListener('input', () => {
                 estadoSelect.value = '';
@@ -181,9 +197,7 @@
                   const options = [...estadoOpciones.querySelectorAll('[role="option"]')];
                   if (!options.length) return;
                   estadoActiveIndex = Math.max(0, Math.min(options.length - 1, estadoActiveIndex + (event.key === 'ArrowDown' ? 1 : -1)));
-                  options.forEach((option, index) => option.classList.toggle('bg-light', index === estadoActiveIndex));
-                  estadoBusqueda.setAttribute('aria-activedescendant', options[estadoActiveIndex].id);
-                  options[estadoActiveIndex].scrollIntoView({ block: 'nearest' });
+                  marcarActiva(estadoOpciones, estadoBusqueda, estadoActiveIndex);
                 } else if (event.key === 'Enter' && !estadoOpciones.hidden) {
                   event.preventDefault();
                   const option = estadoOpciones.querySelectorAll('[role="option"]')[estadoActiveIndex];
@@ -192,7 +206,10 @@
               });
 
               const filtrarLocalidades = () => {
-                const matches = localidades.filter(value => normalizeText(value).includes(normalizeText(localidadBusqueda.value)));
+                // Same as states: with one chosen, reopening shows the full list with it marked.
+                const elegida = selectedLocalidad && localidadBusqueda.value === capitalizarLocalidad(selectedLocalidad);
+                const filtro = elegida ? '' : localidadBusqueda.value;
+                const matches = localidades.filter(value => normalizeText(value).includes(normalizeText(filtro)));
                 activeIndex = -1;
                 localidadBusqueda.removeAttribute('aria-activedescendant');
                 localidadOpciones.replaceChildren();
@@ -207,6 +224,7 @@
                   option.textContent = value;
                   option.addEventListener('mousedown', event => event.preventDefault());
                   option.textContent = capitalizarLocalidad(value);
+                  option.addEventListener('mouseenter', () => { activeIndex = index; marcarActiva(localidadOpciones, localidadBusqueda, index, { scroll: false }); });
                   option.addEventListener('click', () => seleccionarLocalidad(value));
                   localidadOpciones.appendChild(option);
                 });
@@ -219,6 +237,11 @@
                 localidadOpciones.hidden = false;
                 localidadBusqueda.setAttribute('aria-expanded', 'true');
                 localidadEstado.textContent = matches.length ? 'Selecciona una opción de la lista para registrarla.' : 'No hay localidades que coincidan con la búsqueda.';
+                if (elegida) {
+                  activeIndex = matches.indexOf(selectedLocalidad);
+                  marcarActiva(localidadOpciones, localidadBusqueda, activeIndex);
+                  localidadEstado.textContent = `Seleccionada: ${capitalizarLocalidad(selectedLocalidad)}. Elige otra o pulsa Esc.`;
+                }
               };
               const capitalizarLocalidad = value => String(value).toLocaleLowerCase('es-MX')
                 .replace(/(^|\s)(\p{L})/gu, (_, space, letter) => space + letter.toLocaleUpperCase('es-MX'));
@@ -247,9 +270,7 @@
                   const options = [...localidadOpciones.querySelectorAll('[role="option"]')];
                   if (!options.length) return;
                   activeIndex = Math.max(0, Math.min(options.length - 1, activeIndex + (event.key === 'ArrowDown' ? 1 : -1)));
-                  options.forEach((option, index) => option.classList.toggle('bg-light', index === activeIndex));
-                  localidadBusqueda.setAttribute('aria-activedescendant', options[activeIndex].id);
-                  options[activeIndex].scrollIntoView({ block: 'nearest' });
+                  marcarActiva(localidadOpciones, localidadBusqueda, activeIndex);
                 } else if (event.key === 'Enter' && !localidadOpciones.hidden) {
                   event.preventDefault();
                   const option = localidadOpciones.querySelectorAll('[role="option"]')[activeIndex];

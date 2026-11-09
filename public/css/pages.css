@@ -101,3 +101,13 @@
   text-align: center;
   font-size: 0.9rem;
 }
+
+/* Search lists (Ubicaciones: estado, localidad): the option you are on and the one already chosen are visible
+   in both themes. .bg-light used to mark it, but it is near white on white and the dark theme paints it the same
+   as the list itself. */
+.combo-opciones [role="option"] { position: relative; padding-right: 2.25rem !important; border-left: 3px solid transparent; }
+.combo-opciones [role="option"]:is(:hover, .is-activa) { background: rgba(13, 110, 253, .12); border-left-color: #0d6efd; }
+.combo-opciones [role="option"][aria-selected="true"] { font-weight: 600; color: #0b5ed7; }
+.combo-opciones [role="option"][aria-selected="true"]::after { content: "\2713"; position: absolute; right: .9rem; top: 50%; transform: translateY(-50%); }
+html[data-theme="dark"] .combo-opciones [role="option"]:is(:hover, .is-activa) { background: rgba(110, 168, 254, .2); border-left-color: #6ea8fe; }
+html[data-theme="dark"] .combo-opciones [role="option"][aria-selected="true"] { color: #9ec5fe; }
