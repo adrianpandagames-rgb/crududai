@@ -16,11 +16,14 @@
       // A finished session redirects to the login page; leave the page as it is.
       if (!response.ok || response.redirected) return;
       const next = new DOMParser().parseFromString(await response.text(), 'text/html');
+      // Read the marker before the swap: replaceChildren moves the nodes out of `next`, and the marker usually
+      // sits inside a region, so looking for it afterwards always came back empty and polling stopped after one round.
+      const nextMarker = next.querySelector('[data-live-refresh]');
       for (const region of document.querySelectorAll('[data-live-region]')) {
         const fresh = next.getElementById(region.id);
         if (fresh) region.replaceChildren(...fresh.childNodes);
       }
-      marker = next.querySelector('[data-live-refresh]');
+      marker = nextMarker;
       if (marker) schedule();
     } catch {
       schedule(); // A dropped connection retries on the next round.
