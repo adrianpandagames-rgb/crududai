@@ -249,7 +249,7 @@ const requireNonUecs = (req, res, next) => {
   return next();
 };
 
-app.use(['/metricas', '/Crud', '/imei', '/lineas', '/ubicaciones', '/api/ubicaciones', '/estudiantes', '/georeferenciacion', '/ruta', '/inicio', '/telefono', '/api/telefono', '/api/localidades', '/cambiar-contrasena'], requireAuth);
+app.use(['/metricas', '/Crud', '/imei', '/lineas', '/ubicaciones', '/api/ubicaciones', '/estudiantes', '/georeferenciacion', '/ruta', '/limpieza', '/inicio', '/telefono', '/api/telefono', '/api/localidades', '/cambiar-contrasena'], requireAuth);
 app.use('/metricas', requireNonUecs);
 // The web tabs and the Telegram bot share one Maigret queue and one SpiderFoot queue.
 const maigretSearches = createMaigretSearches(pool);

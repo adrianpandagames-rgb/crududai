@@ -9,6 +9,7 @@ export const auditResources = {
   TELEFONO: 'Teléfono', RED: 'Red telefónica', AUDITORIA: 'Auditoría', METRICAS: 'Métricas',
   MAIGRET: 'Maigret', SPIDERFOOT: 'SpiderFoot', IMAGEN: 'Búsqueda por imagen', NOMBRE: 'RastroX',
   COINCIDENCIA: 'Coincidencias de antenas', PERFIL: 'Perfil', TAREA: 'Tarea', CUENTA: 'Mi cuenta',
+  LIMPIEZA: 'Limpieza de sábana',
 };
 
 const metricTypes = {
@@ -57,6 +58,7 @@ export const auditResourceSql = `CASE
   WHEN LOWER(request_path) REGEXP '^/auditoria(/|$)' THEN 'AUDITORIA'
   WHEN LOWER(request_path) REGEXP '^/ubicaciones(/|$)' THEN 'UBICACION'
   WHEN LOWER(request_path) REGEXP '^/ruta(/|$)' THEN 'RUTA'
+  WHEN LOWER(request_path) REGEXP '^/limpieza(/|$)' THEN 'LIMPIEZA'
   WHEN LOWER(request_path) REGEXP '^/crud(/|$)' OR LOWER(request_path) = '/metricas/datos-conservados' THEN 'DATOS'
   WHEN LOWER(request_path) REGEXP '^/imei(/|$)' THEN 'IMEI'
   WHEN LOWER(request_path) REGEXP '^/lineas(/|$)' THEN 'LINEA'
@@ -90,6 +92,8 @@ const specificActions = [
   [/^\/(crud\/import-csv|importar)\/?$/i, 'Importó CSV'],
   [/^\/subir\/?$/i, 'Subió archivo'],
   [/^\/ruta\/eliminar\//i, 'Eliminó ruta'],
+  [/^\/limpieza\/subir\/?$/i, 'Limpió sábana'],
+  [/^\/limpieza\/eliminar\//i, 'Eliminó sábana limpia'],
   [/^\/georeferenciacion\/importar\/?$/i, 'Importó georreferenciación'],
   [/^\/georeferenciacion\/eliminar\//i, 'Eliminó georreferenciación'],
   [/^\/imagenes\/subir\/?$/i, 'Subió imagen'],

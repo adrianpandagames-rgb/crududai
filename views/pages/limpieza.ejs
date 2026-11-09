@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <%- include('../includes/head') %>
+  </head>
+  <body>
+    <%- include('../includes/header') %>
+
+    <main class="container page-offset">
+      <div class="row justify-content-md-center mb-5">
+        <div class="col-md-12 mt-5">
+          <h2 class="text-center title">LIMPIEZA <hr /></h2>
+        </div>
+      </div>
+
+      <% if (message) { %>
+        <div class="alert <%= messageType === 'error' ? 'alert-danger' : 'alert-success' %>"><%= message %></div>
+      <% } %>
+
+      <div class="row justify-content-md-center mb-4">
+        <div class="col-md-5 mb-4">
+          <div class="card p-4">
+            <h3 class="text-center mb-4">Subir sábana</h3>
+            <form action="/limpieza/subir" method="POST" enctype="multipart/form-data">
+              <div class="mb-3">
+                <label for="archivo" class="form-label">Sábana en CSV o Excel (.xlsx)</label>
+                <%# Same ids as Ruta so ruta-upload.js handles the drop zone. %>
+                <div id="rutaDropZone" class="csv-drop-zone">
+                  <p id="rutaDropHint" class="small text-muted mb-2">Arrastra y suelta la sábana aquí o selecciónala.</p>
+                  <input type="file" id="archivo" name="archivo" class="form-control" accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-describedby="rutaDropHint rutaDropStatus limpiezaAyuda" required />
+                  <p id="rutaDropStatus" class="small mb-0 mt-2" role="status" aria-live="polite"></p>
+                </div>
+                <div id="limpiezaAyuda" class="form-text">
+                  Se quitan las llamadas espejo (VOZ TRANSITO duplicadas de una llamada real). Sube el Excel original de la
+                  compañía: si se guardó como CSV desde Excel, los IMEI ya perdieron dígitos. Los archivos se conservan 2 días.
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary w-100">Limpiar sábana</button>
+            </form>
+          </div>
+        </div>
+
+        <div id="limpiezaArchivos" class="col-md-7 py-3 custom_table">
+          <h3 class="text-center">Sábanas limpias</h3>
+          <hr />
+          <div class="table-responsive">
+            <table data-tabla="limpieza-archivos" class="table w-100 table-stack">
+              <thead>
+                <tr>
+                  <th>Archivo</th>
+                  <th>Línea</th>
+                  <th>Registros</th>
+                  <th>Descargar</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% if (!files || files.length === 0) { %>
+                  <tr><td colspan="4" class="text-center">No hay sábanas limpias</td></tr>
+                <% } else { %>
+                  <% files.forEach((file) => { const r = file.resumen || {}; %>
+                    <tr id="limpieza-file-<%= file.id %>">
+                      <td data-label="Archivo"><%= file.name %></td>
+                      <td data-label="Línea"><%= file.lineNumber %></td>
+                      <td data-label="Registros" class="small">
+                        <%= r.registrosReales %> reales de <%= r.registrosOriginales %><br />
+                        <span class="text-muted"><%= r.espejos %> espejos quitados · <%= r.registrosGeo %> con IMEI y ubicación</span>
+                      </td>
+                      <td data-label="Descargar">
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                          <a class="btn btn-sm btn-outline-primary" href="/limpieza/descargar/<%= file.id %>/sabana"
+                            title="Sábana sin llamadas espejo, con hoja de resumen">Sábana</a>
+                          <a class="btn btn-sm btn-outline-primary" href="/limpieza/descargar/<%= file.id %>/geo"
+                            title="Solo registros con IMEI, latitud y longitud, para subir a Ruta">Geoposicionamiento</a>
+                          <form action="/limpieza/eliminar/<%= file.id %>" method="POST" class="m-0 flex-shrink-0"
+                            data-confirm="¿Desea eliminar la sábana &quot;<%= file.name %>&quot;?">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" aria-label="Eliminar archivo" title="Eliminar archivo">
+                              <i class="bi bi-trash3" aria-hidden="true"></i>
+                            </button>
+                          </form>
+                        </div>
+                      </td>
+                    </tr>
+                  <% }); %>
+                <% } %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script src="/public/js/ruta-upload.js"></script>
+
+    <% if (highlightId) { %>
+      <script>
+        (() => {
+          const row = document.getElementById('limpieza-file-<%= String(highlightId).replace(/[^a-zA-Z0-9-]/g, '') %>');
+          if (!row) return;
+          row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          row.style.outline = '2px solid rgba(25, 135, 84, 0.75)';
+          setTimeout(() => { row.style.outline = ''; }, 2500);
+        })();
+      </script>
+    <% } %>
+    <%- include('../includes/footer') %>
+  </body>
+</html>

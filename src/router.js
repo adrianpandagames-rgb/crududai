@@ -6,6 +6,7 @@ import imeiRoutes from './imeiRoutes.js';
 import ubicacionesRoutes from './ubicacionesRoutes.js';
 import metricasRoutes from './metricasRoutes.js';
 import rutaRoutes from './rutaRoutes.js';
+import limpiezaRoutes from './limpiezaRoutes.js';
 import telefonoRoutes from './telefonoRoutes.js';
 import pool from "./db.js";
 
@@ -17,6 +18,7 @@ router.use(imeiRoutes);
 router.use(ubicacionesRoutes);
 router.use(metricasRoutes);
 router.use(rutaRoutes);
+router.use(limpiezaRoutes);
 router.use(telefonoRoutes);
 router.use('/georeferenciacion', createGeoreferenciacionRouter(pool));
 
