@@ -6,9 +6,10 @@ import {
 import { parsePlanningTimestamp } from './planeacionService.js';
 
 // A Ruta result as a KMZ for Google Earth (and, the Antenas layer, Google My Maps). Every record of the file is in it:
-//  1. Antenas (shown): one numbered point per antenna, coloured by how many records it has; its balloon lists all of them.
-//  2. Recorrido por día (hidden): one line per day joining the antennas in time order.
-//  3. Registros (hidden): one point per record with its date and time, so Google Earth's time slider plays the route.
+//  1. Antenas (shown): one numbered point per antenna, coloured by how many records it has; its balloon has
+//     a summary, the records per day and the first ones in time order.
+//  2. Por día (hidden): a folder per day; ticking it shows that day's route and marks its antennas. Inside, one entry
+//     per record ("10:00:05 · Antena 3"): clicking it in the side panel flies to that antenna and opens the record.
 // Records without a position cannot go on the map; they are listed in a folder of their own.
 // Times in the files are local wall-clock times; Sonora keeps UTC-7 all year.
 const UTC_OFFSET = /^[+-]\d{2}:\d{2}$/.test(process.env.RUTA_KMZ_UTC_OFFSET || '') ? process.env.RUTA_KMZ_UTC_OFFSET : '-07:00';
@@ -46,8 +47,8 @@ const recordCard = (headers, record) => TABLE
   + headers.map((header, index) => `<tr><th align="left">${xml(header)}</th><td>${xml(record.cells[index])}</td></tr>`).join('')
   + '</table>';
 
-// Google Earth draws balloons with an embedded browser that freezes on huge tables (a busy antenna had 1,500 rows
-// x 22 columns, ~900 KB). A balloon shows at most this many rows; every record stays whole in the Registros layer.
+// Google Earth draws balloons with an embedded browser that froze on one table of 1,500 rows x 22 columns (~900 KB).
+// No table in a balloon is longer than this; longer lists are split into collapsible groups.
 export const BALLOON_ROWS = 100;
 
 const point = (lat, lng) => `<Point><coordinates>${lng},${lat},0</coordinates></Point>`;
@@ -124,86 +125,11 @@ export const createRutaKml = (csvText, { lineNumber = '' } = {}) => {
     out.push(`<Style id="${level.id}"><IconStyle><color>${level.color}</color><scale>${level.scale}</scale><Icon><href>${ICON}</href></Icon></IconStyle>`
       + '<LabelStyle><scale>0.9</scale></LabelStyle><BalloonStyle><text>$[description]</text></BalloonStyle></Style>');
   }
-  out.push(`<Style id="registro"><IconStyle><color>ffff9933</color><scale>0.6</scale><Icon><href>${ICON}</href></Icon></IconStyle>`
+  out.push(`<Style id="registro"><IconStyle><color>ffff00ff</color><scale>1.1</scale><Icon><href>${ICON}</href></Icon></IconStyle>`
     + '<LabelStyle><scale>0</scale></LabelStyle><BalloonStyle><text>$[description]</text></BalloonStyle></Style>');
-  out.push('<Style id="tabla"><IconStyle><scale>0</scale><Icon></Icon></IconStyle><LabelStyle><scale>0</scale></LabelStyle>'
-    + '<BalloonStyle><text>$[description]</text></BalloonStyle></Style>');
   out.push('<Style id="recorrido"><LineStyle><color>ffff6600</color><width>3</width></LineStyle></Style>');
 
-  // 1. Antenas, and for each one its records by day ("Tablas por día").
-  // Day buttons are KML feature links (#id;balloon): they open that day's table in the same spot. Google Earth Pro
-  // follows them; where a viewer does not, the same tables are in the side panel under "Tablas por día".
-  const BUTTON = 'display:inline-block;margin:2px;padding:2px 8px;border:1px solid #0d6efd;border-radius:4px;color:#0d6efd;text-decoration:none';
-  const CURRENT = 'display:inline-block;margin:2px;padding:2px 8px;border:1px solid #0d6efd;border-radius:4px;background:#0d6efd;color:#fff';
-  const button = (id, label, current = false) => (current
-    ? `<span style="${CURRENT}">${label}</span>`
-    : `<a href="#${id};balloon" style="${BUTTON}">${label}</a>`);
-  const dayDetail = [];
-  out.push(`<Folder><name>Antenas (${antennas.size})</name><open>1</open>`);
-  let antennaIndex = 0;
-  for (const antenna of antennas.values()) {
-    antennaIndex += 1;
-    const antennaId = `a${antennaIndex}`;
-    const list = [...antenna.records].sort(byTime);
-    const first = list.find((record) => record.time !== null);
-    const last = [...list].reverse().find((record) => record.time !== null);
-    const sample = list.find((record) => record.ubicacion || record.lugar) || list[0];
-    const level = levelOf(list.length);
-    const heading = `<b>Antena ${xml(antenna.number)}</b> — ${list.length} registro${list.length === 1 ? '' : 's'}<br>`;
-    const summary = heading
-      + (sample.ubicacion ? `${xml(sample.ubicacion)}<br>` : '')
-      + (sample.lugar ? `${xml(sample.lugar)}<br>` : '')
-      + `${antenna.lat.toFixed(6)}, ${antenna.lng.toFixed(6)}<br>`
-      + (first ? `Primer registro: ${dayOf(first.time)} ${clockOf(first.time)}<br>Último registro: ${dayOf(last.time)} ${clockOf(last.time)}<br>` : '');
-
-    const byDay = new Map();
-    for (const record of list) {
-      const day = record.time === null ? 'Sin fecha' : dayOf(record.time);
-      if (!byDay.has(day)) byDay.set(day, []);
-      byDay.get(day).push(record);
-    }
-    // One antenna with a single short day already shows everything in its own balloon.
-    const withDays = byDay.size > 1 || list.length > BALLOON_ROWS;
-    const dayEntries = [...byDay].map(([day, dayRecords], dayIndex) => ({
-      day, records: dayRecords, id: (page) => `${antennaId}-d${dayIndex + 1}-p${page}`,
-      pages: Math.ceil(dayRecords.length / BALLOON_ROWS),
-    }));
-    const dayBar = (currentDay = null) => `<b>Ver por día:</b><br>${button(antennaId, 'Resumen', currentDay === null)}`
-      + dayEntries.map((entry) => button(entry.id(1), `${xml(entry.day)} (${entry.records.length})`, entry === currentDay)).join('');
-
-    const shown = list.slice(0, BALLOON_ROWS);
-    const more = list.length > shown.length
-      ? `<br><i>Se muestran los primeros ${shown.length} de ${list.length} registros. Usa los botones por día, la carpeta "Tablas por día" o la capa "Registros".</i>`
-      : '';
-    out.push(`<Placemark id="${antennaId}"><name>${xml(antenna.number)}</name><styleUrl>#${level.id}</styleUrl>`
-      + `<description>${cdata(`${summary}${withDays ? `<br>${dayBar()}<br>` : ''}<br>${recordsTable(headers, shown)}${more}`)}</description>`
-      + `${point(antenna.lat, antenna.lng)}</Placemark>`);
-
-    if (!withDays) continue;
-    dayDetail.push(`<Folder><name>Antena ${xml(antenna.number)} (${list.length})</name>`);
-    for (const entry of dayEntries) {
-      for (let page = 1; page <= entry.pages; page += 1) {
-        const part = entry.records.slice((page - 1) * BALLOON_ROWS, page * BALLOON_ROWS);
-        const pager = entry.pages === 1 ? '' : `<br><b>Página ${page} de ${entry.pages}</b><br>`
-          + (page > 1 ? button(entry.id(page - 1), '« Anterior') : '')
-          + (page < entry.pages ? button(entry.id(page + 1), 'Siguiente »') : '') + '<br>';
-        const name = `${xml(entry.day)} (${entry.records.length})${entry.pages === 1 ? '' : ` ${page}/${entry.pages}`}`;
-        dayDetail.push(`<Placemark id="${entry.id(page)}"><name>${name}</name><styleUrl>#tabla</styleUrl>`
-          + `<description>${cdata(`${heading}<b>${xml(entry.day)}</b>: ${entry.records.length} registro${entry.records.length === 1 ? '' : 's'}<br><br>`
-            + `${dayBar(entry)}<br>${pager}<br>${recordsTable(headers, part)}`)}</description>`
-          + `${point(antenna.lat, antenna.lng)}</Placemark>`);
-      }
-    }
-    dayDetail.push('</Folder>');
-  }
-  out.push('</Folder>');
-  if (dayDetail.length) {
-    // Visible so its balloons can open, but drawn without an icon: on the map only the antenna shows.
-    out.push('<Folder><name>Tablas por día</name><description>Los registros de cada antena separados por día. '
-      + 'También se abren con los botones del globo de cada antena.</description>', ...dayDetail, '</Folder>');
-  }
-
-  // 2. and 3. by day
+  // Records by day, used by the antenna balloons and the "Por día" layer.
   const days = new Map();
   for (const record of located) {
     const day = record.time === null ? 'Sin fecha' : dayOf(record.time);
@@ -211,28 +137,60 @@ export const createRutaKml = (csvText, { lineNumber = '' } = {}) => {
     days.get(day).push(record);
   }
   const number = (record) => xml(antennas.get(record.antennaKey).number);
+  const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
 
-  out.push('<Folder><name>Recorrido por día</name><visibility>0</visibility>');
-  for (const [day, list] of days) {
-    if (day === 'Sin fecha') continue;
-    // Consecutive records at the same antenna are one stop on the line.
-    const stops = list.filter((record, index) => index === 0 || record.antennaKey !== list[index - 1].antennaKey);
-    if (stops.length < 2) continue;
-    const order = stops.map((record) => `${clockOf(record.time)} — antena ${number(record)}`).join('<br>');
-    out.push(`<Placemark><name>${xml(day)} (${list.length} registros)</name><visibility>0</visibility><styleUrl>#recorrido</styleUrl>`
-      + `<description>${cdata(`<b>Recorrido del ${xml(day)}</b><br>${order}`)}</description>`
-      + `<LineString><tessellate>1</tessellate><coordinates>${stops.map((record) => `${record.lng},${record.lat},0`).join(' ')}</coordinates></LineString></Placemark>`);
+  // 1. Antenas. The balloon stays light (Google Earth froze on long balloons, even with the rows folded away):
+  // summary, records per day and the first BALLOON_ROWS records. Whole days are in the "Por día" layer.
+  out.push(`<Folder><name>Antenas (${antennas.size})</name><open>1</open>`);
+  for (const antenna of antennas.values()) {
+    const list = [...antenna.records].sort(byTime);
+    const first = list.find((record) => record.time !== null);
+    const last = [...list].reverse().find((record) => record.time !== null);
+    const sample = list.find((record) => record.ubicacion || record.lugar) || list[0];
+    const level = levelOf(list.length);
+    const perDay = new Map();
+    for (const record of list) {
+      const day = record.time === null ? 'Sin fecha' : dayOf(record.time);
+      perDay.set(day, (perDay.get(day) || 0) + 1);
+    }
+    const summary = `<b>Antena ${xml(antenna.number)}</b> — ${plural(list.length, 'registro')}<br>`
+      + (sample.ubicacion ? `${xml(sample.ubicacion)}<br>` : '')
+      + (sample.lugar ? `${xml(sample.lugar)}<br>` : '')
+      + `${antenna.lat.toFixed(6)}, ${antenna.lng.toFixed(6)}<br>`
+      + (first ? `Primer registro: ${dayOf(first.time)} ${clockOf(first.time)}<br>Último registro: ${dayOf(last.time)} ${clockOf(last.time)}<br>` : '')
+      + `<br><b>Registros por día</b><br>${[...perDay].map(([day, count]) => `${xml(day)}: ${count}`).join('<br>')}<br>`;
+    const shown = list.slice(0, BALLOON_ROWS);
+    const more = list.length > shown.length
+      ? `<br><i>Se muestran los primeros ${shown.length} de ${list.length} registros. Para ver un día completo, en el panel abre "Por día" y la fecha.</i>`
+      : '';
+    out.push(`<Placemark><name>${xml(antenna.number)}</name><styleUrl>#${level.id}</styleUrl>`
+      + `<description>${cdata(`${summary}<br>${recordsTable(headers, shown)}${more}`)}</description>`
+      + `${point(antenna.lat, antenna.lng)}</Placemark>`);
   }
   out.push('</Folder>');
 
-  out.push(`<Folder><name>Registros (${located.length})</name><visibility>0</visibility>`);
+  // 2. Por día (hidden). Ticking a day shows that day on the map: its route and a mark on each antenna it used.
+  // Inside, one entry per record named by its time and antenna; clicking it in the panel flies to that antenna and
+  // opens the record. The side panel does this in Google Earth web and Pro alike. TimeStamps drive Pro's slider.
+  out.push('<Folder><name>Por día</name><visibility>0</visibility>'
+    + `<description>${cdata('Marca un día para verlo en el mapa. Abre el día y haz clic en una hora para ir a su antena.')}</description>`);
   for (const [day, list] of days) {
-    out.push(`<Folder><name>${xml(day)} (${list.length})</name><visibility>0</visibility>`);
+    const used = new Set(list.map((record) => record.antennaKey));
+    out.push(`<Folder><name>${xml(day)} — ${plural(list.length, 'registro')} · ${plural(used.size, 'antena')}</name><visibility>0</visibility>`);
+    // Consecutive records at the same antenna are one stop on the line.
+    const stops = day === 'Sin fecha' ? [] : list.filter((record, index) => index === 0 || record.antennaKey !== list[index - 1].antennaKey);
+    if (stops.length >= 2) {
+      const order = stops.slice(0, BALLOON_ROWS * 3).map((record) => `${clockOf(record.time)} — antena ${number(record)}`).join('<br>');
+      const cut = stops.length > BALLOON_ROWS * 3 ? `<br><i>… y ${stops.length - BALLOON_ROWS * 3} paradas más.</i>` : '';
+      out.push(`<Placemark><name>Recorrido del día (${plural(stops.length, 'parada')})</name><visibility>0</visibility><styleUrl>#recorrido</styleUrl>`
+        + `<description>${cdata(`<b>Recorrido del ${xml(day)}</b><br>${order}${cut}`)}</description>`
+        + `<LineString><tessellate>1</tessellate><coordinates>${stops.map((record) => `${record.lng},${record.lat},0`).join(' ')}</coordinates></LineString></Placemark>`);
+    }
     for (const record of list) {
-      const name = record.time === null ? `Fila ${record.row}` : clockOf(record.time);
+      const name = `${record.time === null ? `Fila ${record.row}` : clockOf(record.time)} · Antena ${number(record)}`;
       out.push(`<Placemark><name>${name}</name><visibility>0</visibility><styleUrl>#registro</styleUrl>`
         + (record.time === null ? '' : `<TimeStamp><when>${whenOf(record.time)}</when></TimeStamp>`)
-        + `<description>${cdata(`<b>Fila ${record.row} — antena ${number(record)}</b><br>${recordCard(headers, record)}`)}</description>`
+        + `<description>${cdata(`<b>${xml(day)} ${record.time === null ? '' : clockOf(record.time)} — Antena ${number(record)}</b> (fila ${record.row})<br>${recordCard(headers, record)}`)}</description>`
         + `${point(record.lat, record.lng)}</Placemark>`);
     }
     out.push('</Folder>');
