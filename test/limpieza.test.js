@@ -26,6 +26,7 @@ const DATA = [
   [T, 'VOZ SALIENTE', T, '6390000004', '17/09/2026', '06:28:29', 0, IMEI, LAT, LNG, 130], // not completed
   [T, 'MENSAJES 2 VIAS SAL', T, '6621112233', '18/09/2026', '09:00:00', 0, IMEI, LAT, LNG, 130],
   [T, 'DATOS', T, 'ims', '18/09/2026', '09:05:00', 0, '3.5029E+13', LAT, LNG, 130], // IMEI ruined by Excel
+  [T, 'VOZ TRANSFER', '6620000002', '5500000009', '18/09/2026', '19:43:23', 3, IMEI, LAT, LNG, 210], // to voicemail
 ];
 
 const xlsxOf = (rows) => {
@@ -64,11 +65,12 @@ test('mirrors are the transit copies of a call: same second or one hour apart, s
 test('the summary counts the real records only', () => {
   const { resumen } = limpiarSabana(readSabanaSheets(telcel(), '.xlsx'));
   assert.equal(resumen.linea, T);
-  assert.equal(resumen.registrosOriginales, 14);
-  assert.equal(resumen.registrosReales, 9);
+  assert.equal(resumen.registrosOriginales, 15);
+  assert.equal(resumen.registrosReales, 10);
   // Salientes 1025, 57, 13, 6 s, the unmatched transit 301 s and the entrante 301 s; one saliente of 0 s.
   assert.equal(resumen.llamadasCompletadas, 6);
   assert.equal(resumen.llamadasNoCompletadas, 1);
+  assert.equal(resumen.transferencias, 1, 'transfers are not completed calls');
   assert.equal(resumen.mensajes, 1);
   assert.equal(resumen.datos, 1);
   assert.equal(resumen.imeiValidos, 1);
@@ -80,10 +82,18 @@ test('the summary counts the real records only', () => {
 test('the clean sábana has the summary and the removed mirrors; the Ruta file only IMEI and coordinates', () => {
   const { sabana, geo, resumen } = procesarSabana(telcel(), '.xlsx', 'sabana.xlsx');
   const book = sheetsOf(sabana);
-  assert.deepEqual(Object.keys(book), ['Sábana', 'Resumen', 'Espejos quitados']);
+  assert.deepEqual(Object.keys(book), ['Sábana', 'Resumen', 'Llamadas completadas', 'Mensajes', 'Datos', 'Transferencias', 'Espejos quitados']);
   assert.equal(book['Sábana'][0][0], 'Linea: 6620000001 con periodo de busqueda del 13/09/2026 al 18/09/2026');
   assert.deepEqual(book['Sábana'][2], HEADER);
-  assert.equal(book['Sábana'].length, 3 + 9);
+  assert.equal(book['Sábana'].length, 3 + 10);
+  // One sheet per kind of real record, each with the table header.
+  const tipos = (name) => book[name].slice(1).map((row) => `${row[1]} ${row[5]}`);
+  assert.deepEqual(tipos('Llamadas completadas'), ['VOZ SALIENTE 11:36:10', 'VOZ SALIENTE 08:03:57', 'VOZ SALIENTE 14:09:26',
+    'VOZ SALIENTE 00:30:31', 'VOZ TRANSITO 19:21:29', 'VOZ ENTRANTE 20:21:29']);
+  assert.deepEqual(tipos('Mensajes'), ['MENSAJES 2 VIAS SAL 09:00:00']);
+  assert.deepEqual(tipos('Datos'), ['DATOS 09:05:00']);
+  assert.deepEqual(tipos('Transferencias'), ['VOZ TRANSFER 19:43:23']);
+  assert.deepEqual(book.Transferencias[0], HEADER);
   assert.ok(!book['Sábana'].slice(3).some((row) => row[1] === 'VOZ TRANSITO' && row[3] !== '6620000008'));
   assert.equal(book['Sábana'][3][7], '35290011223344', 'IMEI written as text, not 3.5029E+13');
   const resumenSheet = Object.fromEntries(book.Resumen.filter((row) => row.length >= 2).map((row) => [row[0], row[1]]));
@@ -93,11 +103,11 @@ test('the clean sábana has the summary and the removed mirrors; the Ruta file o
   assert.equal(resumenSheet['IMEI válidos'], 1);
   assert.equal(book['Espejos quitados'].length, 6);
 
-  // Records with IMEI and position: the salientes of 13/09, 14/09, 17/09 (two), the entrante and the message.
-  assert.equal(resumen.registrosGeo, 6);
+  // Records with IMEI and position: the salientes of 13/09, 14/09, 17/09 (two), the entrante, the message and the transfer.
+  assert.equal(resumen.registrosGeo, 7);
   const rutaRows = readRutaXlsxRows(geo);
   assert.deepEqual(rutaRows[0], HEADER);
-  assert.equal(rutaRows.length, 7);
+  assert.equal(rutaRows.length, 8);
   assert.ok(rutaRows.slice(1).every((row) => row[7] === '35290011223344' && row[8] && row[9]));
 });
 

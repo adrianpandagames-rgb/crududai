@@ -143,6 +143,8 @@ export const recordKind = (tipo) => {
   return 'otro';
 };
 const isTransit = (tipo) => /transito/.test(fold(tipo));
+// "VOZ TRANSFER": the call was passed on (to voicemail or another line); it is not a call the target held.
+const isTransfer = (tipo) => /transfer/.test(fold(tipo));
 
 const hasCoordinates = (record, columns) => {
   if (columns.latitud < 0 || columns.longitud < 0) return false;
@@ -243,10 +245,9 @@ export function limpiarSabana(sheets) {
   const porTipo = new Map();
   const imeis = new Map();
   const conDuracion = columns.duracion >= 0;
-  let completadas = 0;
+  // The records of each detail sheet: completed calls (no transfers), messages, data and transfers.
+  const hojas = { completadas: [], mensajes: [], datos: [], transferencias: [] };
   let noCompletadas = 0;
-  let mensajes = 0;
-  let datos = 0;
   let otros = 0;
   let imeiInvalidos = 0;
   let imeiCientifico = 0;
@@ -260,11 +261,14 @@ export function limpiarSabana(sheets) {
     if (!porTipo.has(tipo)) porTipo.set(tipo, { tipo, registros: 0, completadas: 0, noCompletadas: 0, voz: kind === 'voz' });
     const entry = porTipo.get(tipo);
     entry.registros += 1;
-    if (kind === 'voz') {
-      if (conDuracion && record.duration !== null && record.duration > 0) { completadas += 1; entry.completadas += 1; }
+    if (kind === 'voz' && isTransfer(record.tipo)) {
+      entry.voz = false;
+      hojas.transferencias.push(record);
+    } else if (kind === 'voz') {
+      if (conDuracion && record.duration !== null && record.duration > 0) { hojas.completadas.push(record); entry.completadas += 1; }
       else if (conDuracion) { noCompletadas += 1; entry.noCompletadas += 1; }
-    } else if (kind === 'mensaje') mensajes += 1;
-    else if (kind === 'datos') datos += 1;
+    } else if (kind === 'mensaje') hojas.mensajes.push(record);
+    else if (kind === 'datos') hojas.datos.push(record);
     else otros += 1;
 
     if (record.time !== null) {
@@ -299,6 +303,7 @@ export function limpiarSabana(sheets) {
     reales,
     espejos,
     geo,
+    hojas,
     resumen: {
       linea,
       registrosOriginales: records.length,
@@ -306,10 +311,11 @@ export function limpiarSabana(sheets) {
       espejosBDistinto: espejos.filter((mirror) => !mirror.sameB).length,
       registrosReales: reales.length,
       conDuracion,
-      llamadasCompletadas: completadas,
+      llamadasCompletadas: hojas.completadas.length,
       llamadasNoCompletadas: noCompletadas,
-      mensajes,
-      datos,
+      transferencias: hojas.transferencias.length,
+      mensajes: hojas.mensajes.length,
+      datos: hojas.datos.length,
       otros,
       imeiValidos: imeis.size,
       imeiInvalidos,
@@ -369,6 +375,7 @@ export function resumenRows(resumen, nombreArchivo) {
     [],
     ['Llamadas completadas', count(resumen.llamadasCompletadas)],
     ['Llamadas no completadas', count(resumen.llamadasNoCompletadas)],
+    ['Transferencias (VOZ TRANSFER)', resumen.transferencias ?? 0],
     ['Mensajes', resumen.mensajes],
     ['Datos', resumen.datos],
     ...(resumen.otros ? [['Otros registros', resumen.otros]] : []),
@@ -387,7 +394,8 @@ export function resumenRows(resumen, nombreArchivo) {
     [],
     ['Criterios'],
     ['Llamada espejo: registro VOZ TRANSITO de la misma línea A que coincide con otro registro a la misma hora o con exactamente 1 hora de diferencia (±2 s) y la misma duración (±3 s). Se conserva el registro original, que es el que trae la ubicación. La hoja "Espejos quitados" lista cada uno con su fila original.'],
-    ['Llamada completada: registro de voz con duración mayor a 0 segundos. No completada: duración 0 o vacía.'],
+    ['Llamada completada: registro de voz con duración mayor a 0 segundos, sin contar VOZ TRANSFER. No completada: duración 0 o vacía.'],
+    ['Transferencia: registro VOZ TRANSFER (la llamada se pasó al buzón o a otra línea). Ninguna es espejo: los espejos solo son VOZ TRANSITO.'],
     ['IMEI válido: 14 a 16 dígitos que no sean un mismo dígito repetido; se muestra con su dígito verificador (15 dígitos). Se cuentan IMEI distintos.'],
     ['Las horas se dejan como las entregó la compañía; los espejos indican que la compañía mezcla dos zonas horarias.'],
   );
@@ -431,6 +439,10 @@ export function createSabanaLimpiaXlsx(result, nombreArchivo) {
   const numeric = result.columns.duracion >= 0 ? [result.columns.duracion] : [];
   XLSX.utils.book_append_sheet(workbook, sheetOf([...result.preamble, ...tableRows(result, result.reales)], numeric), 'Sábana');
   XLSX.utils.book_append_sheet(workbook, sheetOf(resumenRows(result.resumen, nombreArchivo)), 'Resumen');
+  XLSX.utils.book_append_sheet(workbook, sheetOf(tableRows(result, result.hojas.completadas), numeric), 'Llamadas completadas');
+  XLSX.utils.book_append_sheet(workbook, sheetOf(tableRows(result, result.hojas.mensajes), numeric), 'Mensajes');
+  XLSX.utils.book_append_sheet(workbook, sheetOf(tableRows(result, result.hojas.datos), numeric), 'Datos');
+  XLSX.utils.book_append_sheet(workbook, sheetOf(tableRows(result, result.hojas.transferencias), numeric), 'Transferencias');
   XLSX.utils.book_append_sheet(workbook, sheetOf(espejosRows(result)), 'Espejos quitados');
   return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
 }
