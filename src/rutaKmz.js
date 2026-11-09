@@ -46,6 +46,10 @@ const recordCard = (headers, record) => TABLE
   + headers.map((header, index) => `<tr><th align="left">${xml(header)}</th><td>${xml(record.cells[index])}</td></tr>`).join('')
   + '</table>';
 
+// Google Earth draws balloons with an embedded browser that freezes on huge tables (a busy antenna had 1,500 rows
+// x 22 columns, ~900 KB). A balloon shows at most this many rows; every record stays whole in the Registros layer.
+export const BALLOON_ROWS = 100;
+
 const point = (lat, lng) => `<Point><coordinates>${lng},${lat},0</coordinates></Point>`;
 
 export const readRutaRecords = (csvText) => {
@@ -136,10 +140,21 @@ export const createRutaKml = (csvText, { lineNumber = '' } = {}) => {
       + (sample.ubicacion ? `${xml(sample.ubicacion)}<br>` : '')
       + (sample.lugar ? `${xml(sample.lugar)}<br>` : '')
       + `${antenna.lat.toFixed(6)}, ${antenna.lng.toFixed(6)}<br>`
-      + (first ? `Primer registro: ${dayOf(first.time)} ${clockOf(first.time)}<br>Último registro: ${dayOf(last.time)} ${clockOf(last.time)}<br>` : '')
-      + '<br>';
+      + (first ? `Primer registro: ${dayOf(first.time)} ${clockOf(first.time)}<br>Último registro: ${dayOf(last.time)} ${clockOf(last.time)}<br>` : '');
+    const perDay = new Map();
+    for (const record of list) {
+      const day = record.time === null ? 'Sin fecha' : dayOf(record.time);
+      perDay.set(day, (perDay.get(day) || 0) + 1);
+    }
+    const dayCounts = perDay.size > 1
+      ? `<br><b>Registros por día</b><br>${[...perDay].map(([day, count]) => `${xml(day)}: ${count}`).join('<br>')}<br>`
+      : '';
+    const shown = list.slice(0, BALLOON_ROWS);
+    const more = list.length > shown.length
+      ? `<br><i>Se muestran los primeros ${shown.length} de ${list.length} registros. Todos están completos en la capa "Registros", por día.</i>`
+      : '';
     out.push(`<Placemark><name>${xml(antenna.number)}</name><styleUrl>#${level.id}</styleUrl>`
-      + `<description>${cdata(summary + recordsTable(headers, list))}</description>${point(antenna.lat, antenna.lng)}</Placemark>`);
+      + `<description>${cdata(`${summary}${dayCounts}<br>${recordsTable(headers, shown)}${more}`)}</description>${point(antenna.lat, antenna.lng)}</Placemark>`);
   }
   out.push('</Folder>');
 
@@ -179,9 +194,16 @@ export const createRutaKml = (csvText, { lineNumber = '' } = {}) => {
   }
   out.push('</Folder>');
 
+  // Without coordinates they cannot go on the map; listed in folders of BALLOON_ROWS so no description gets huge.
   if (unlocated.length) {
     out.push(`<Folder><name>Sin ubicación (${unlocated.length})</name>`
-      + `<description>${cdata(`<b>Registros sin coordenadas</b> (no se pueden poner en el mapa)<br>${recordsTable(headers, unlocated)}`)}</description></Folder>`);
+      + `<description>${cdata('<b>Registros sin coordenadas</b>: no se pueden poner en el mapa; se listan aquí por filas.')}</description>`);
+    for (let start = 0; start < unlocated.length; start += BALLOON_ROWS) {
+      const part = unlocated.slice(start, start + BALLOON_ROWS);
+      out.push(`<Folder><name>Filas ${part[0].row}–${part.at(-1).row}</name>`
+        + `<description>${cdata(recordsTable(headers, part))}</description></Folder>`);
+    }
+    out.push('</Folder>');
   }
   out.push('</Document></kml>');
   return out.join('\n');

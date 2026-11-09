@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import zlib from 'node:zlib';
 import { createRutaCsv, processRutaCsv } from '../src/rutaService.js';
-import { createRutaKml, createRutaKmz, readRutaRecords } from '../src/rutaKmz.js';
+import { BALLOON_ROWS, createRutaKml, createRutaKmz, readRutaRecords } from '../src/rutaKmz.js';
 
 // Reads back the single entry of the ZIP the way any unzip tool would: local header, then the deflated data.
 const unzipSingle = (buffer) => {
@@ -63,6 +63,31 @@ test('every record is in the file: by antenna, by day, and the ones without a po
   // The record without coordinates is not lost.
   assert.match(kml, /<Folder><name>Sin ubicación \(1\)<\/name>/);
   assert.ok(kml.includes('6620000000'));
+});
+
+test('a busy antenna keeps its balloon small enough for Google Earth, and no record is dropped', () => {
+  const total = BALLOON_ROWS * 3 + 7;
+  const lines = ['fecha,hora,numero b,latitud,longitud'];
+  for (let i = 0; i < total; i += 1) {
+    const day = i < total / 2 ? '13' : '14';
+    lines.push(`${day}/10/2026,10:${String(Math.floor(i / 60) % 60).padStart(2, '0')}:${String(i % 60).padStart(2, '0')},66${String(i).padStart(8, '0')},29.072967,-110.955919`);
+  }
+  for (let i = 0; i < BALLOON_ROWS + 5; i += 1) lines.push(`15/10/2026,11:00:00,77${String(i).padStart(8, '0')},,`);
+  const kml = createRutaKml(createRutaCsv(processRutaCsv(lines.join('\n'), [])));
+
+  const balloons = [...kml.matchAll(/<description><!\[CDATA\[([\s\S]*?)\]\]><\/description>/g)].map((match) => match[1]);
+  const rowsIn = (html) => (html.match(/<tr><td>/g) || []).length;
+  assert.ok(balloons.every((html) => rowsIn(html) <= BALLOON_ROWS), 'no balloon lists more than the cap');
+
+  const antenna = balloons.find((html) => html.includes('<b>Antena 1</b>'));
+  assert.equal(rowsIn(antenna), BALLOON_ROWS);
+  assert.ok(antenna.includes(`Se muestran los primeros ${BALLOON_ROWS} de ${total} registros`));
+  assert.ok(antenna.includes('<b>Registros por día</b><br>13/10/2026: 154<br>14/10/2026: 153'));
+
+  // Every located record is still its own point, and every one without a position is listed once.
+  assert.equal((kml.match(/<styleUrl>#registro<\/styleUrl>/g) || []).length, total);
+  assert.match(kml, new RegExp(`<Folder><name>Sin ubicación \\(${BALLOON_ROWS + 5}\\)</name>`));
+  for (let i = 0; i < BALLOON_ROWS + 5; i += 1) assert.ok(kml.includes(`77${String(i).padStart(8, '0')}`));
 });
 
 test('cell text never becomes markup in the balloons', () => {
