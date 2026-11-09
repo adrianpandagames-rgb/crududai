@@ -8,6 +8,7 @@ import { createRutaCsv, createRutaXlsx, getRutaXlsxMetadata, processRutaCsv, pro
 import pool from "./db.js";
 import { fileGroupOf, visibleFiles } from './fileGroups.js';
 import { XlsxTooLargeError } from './xlsxSafe.js';
+import { createRutaKmz } from './rutaKmz.js';
 
 const RUTA_MAX_FILE_SIZE = 20 * 1024 * 1024;
 const uploadStorage = multer.memoryStorage();
@@ -256,6 +257,30 @@ router.get('/ruta/exportar-xlsx/:id', async (req, res) => {
     return res.send(xlsx);
   } catch (error) {
     return res.status(500).send('No fue posible exportar el archivo Excel.');
+  }
+});
+
+// Google Earth / My Maps: every record on the map, grouped by antenna (see rutaKmz.js).
+router.get('/ruta/exportar-kmz/:id', async (req, res) => {
+  try {
+    await cleanExpiredRutaFiles();
+    const scope = visibleFiles(req.session, 'r');
+    const [files] = await pool.execute(
+      `SELECT r.line_number, r.status, r.result_csv
+       FROM ruta_archivos r
+       WHERE r.file_uuid = ? AND ${scope.where} AND r.expires_at > NOW()
+       LIMIT 1`,
+      [req.params.id, ...scope.values],
+    );
+    const file = files[0];
+    if (!file || file.status !== 'listo' || !file.result_csv) return res.status(404).send('El archivo todavía no está listo.');
+    const lineNumber = String(file.line_number).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const kmz = createRutaKmz(file.result_csv, { lineNumber: file.line_number });
+    res.setHeader('Content-Type', 'application/vnd.google-earth.kmz');
+    res.setHeader('Content-Disposition', `attachment; filename="Geoposicionamiento-${lineNumber}.kmz"`);
+    return res.send(kmz);
+  } catch (error) {
+    return res.status(500).send('No fue posible exportar el archivo KMZ.');
   }
 });
 

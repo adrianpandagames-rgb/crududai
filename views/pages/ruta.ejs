@@ -75,8 +75,11 @@
                         <div class="d-flex align-items-center gap-2 flex-nowrap">
                         <% if (file.status === 'listo') { %>
                           <a class="btn btn-sm btn-outline-primary" href="/ruta/exportar-xlsx/<%= file.id %>">Exportar XLSX</a>
+                          <a class="btn btn-sm btn-outline-primary" href="/ruta/exportar-kmz/<%= file.id %>"
+                            title="Mapa para Google Earth o Google My Maps">KMZ</a>
                         <% } else { %>
                           <button type="button" class="btn btn-sm btn-secondary" disabled>Exportar XLSX</button>
+                          <button type="button" class="btn btn-sm btn-secondary" disabled>KMZ</button>
                         <% } %>
                         <form action="/ruta/eliminar/<%= file.id %>" method="POST" class="m-0 flex-shrink-0"
                           data-confirm="¿Desea eliminar ruta de línea &quot;<%= file.lineNumber %>&quot;?">
