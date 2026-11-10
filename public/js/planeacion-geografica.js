@@ -1,10 +1,11 @@
 import { coverageSector, adjustSaturation } from './planeacion-geometry.js?v=7';
 import { COVERAGE_PALETTES, DEFAULT_PALETTE, paletteById } from './planeacion-paletas.js?v=1';
 import {
-  summarizeAntennas, antennaClipboardText, antennaClipboardHtml, rowMatches, frequencyScale, selectionCsv, antennaNumbers,
+  summarizeAntennas, antennaClipboardText, antennaClipboardHtml, rowMatches, frequencyScale, selectionCsv, antennaNumbers, antennaColumns,
 } from './planeacion-antenas.js?v=10';
 import { findOvernightLocations } from './planeacion-pernocta.js?v=3';
 import { summarizeContacts, contactCells, contactsCsv, formatContactTime } from './planeacion-contactos.js?v=1';
+import { findLastCommunications, COMMUNICATION_KINDS } from './planeacion-ultima.js?v=1';
 
 const byId = (id) => document.getElementById(id);
 const status = byId('planningStatus');
@@ -297,11 +298,11 @@ if (!window.L) {
     mapElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
-  // Pernocta, Frecuencia de antenas and Contactos frecuentes each have a switch that turns the whole module on or off.
+  // Pernocta, Frecuencia de antenas, Contactos frecuentes and Última comunicación each have a switch that turns the whole module on or off.
   // Off, the module is hidden and its pins leave the map. The choice is remembered in this browser only.
   const MODULES_KEY = 'planeacion-geografica-modulos';
-  const MODULE_PREFIX = { overnight: 'pernocta:', antennas: 'antena:', contacts: 'contacto:' };
-  const modules = { overnight: true, antennas: true, contacts: true };
+  const MODULE_PREFIX = { overnight: 'pernocta:', antennas: 'antena:', contacts: 'contacto:', last: 'ultima:' };
+  const modules = { overnight: true, antennas: true, contacts: true, last: true };
   try {
     const saved = JSON.parse(localStorage.getItem(MODULES_KEY) || '{}');
     for (const name of Object.keys(modules)) if (typeof saved[name] === 'boolean') modules[name] = saved[name];
@@ -325,6 +326,7 @@ if (!window.L) {
       draw({ fit: true });
     }
     if (name === 'overnight') overnightSummary();
+    if (name === 'last') lastSummary();
     if (coverageMode.value === 'modules') draw({ fit: true });
   }
   for (const name of Object.keys(modules)) {
@@ -610,6 +612,82 @@ if (!window.L) {
     byId('planningContacts').replaceChildren(fragment);
     markOption();
   }
+  // Última comunicación: the latest completed call, data session and SMS of the period, each one a single record.
+  let lastCommunications = [];
+  function showLast(entry) {
+    const point = pointsByRow.get(entry.row);
+    selectOption({
+      id: `ultima:${entry.kind}`, label: `Última ${entry.label.toLowerCase()}`, rows: [entry.row],
+      popup: point ? { lat: point.lat, lng: point.lng, text: `Última ${entry.label.toLowerCase()} · ${formatContactTime(entry.time)} · registro ${entry.row}` } : null,
+    });
+  }
+  function lastSummary() {
+    lastCommunications = [];
+    const list = byId('planningLast');
+    const note = (text) => {
+      const paragraph = document.createElement('p');
+      paragraph.className = 'small mb-0';
+      paragraph.textContent = text;
+      list.replaceChildren(paragraph);
+    };
+    if (!data) return;
+    if (!data.hasTimes) return note('El archivo no tiene fecha y hora; no es posible saber cuál fue la última comunicación.');
+    const result = findLastCommunications(data, inPeriod);
+    const { antenna, location, place } = antennaColumns(data.headers);
+    const cell = (row, column) => (column >= 0 ? String(data.rows[row - 1]?.[column] ?? '').trim() : '');
+    const period = timeFilterActive() ? ' en el periodo elegido' : '';
+    const fragment = document.createDocumentFragment();
+    if (!result.hasType) {
+      const warning = document.createElement('p');
+      warning.className = 'small text-muted mb-0';
+      warning.textContent = 'El archivo no tiene una columna de tipo de comunicación (Tipo, Servicio…); solo se reconocen sesiones de datos por un Número B sin línea.';
+      fragment.append(warning);
+    }
+    for (const { kind, label, short } of COMMUNICATION_KINDS) {
+      const found = result[kind];
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'planning-antenna';
+      const title = document.createElement('strong');
+      if (!found.row) {
+        button.disabled = true;
+        title.textContent = `${label}: sin registros${period}`;
+        button.append(title);
+        if (found.count) {
+          const detail = document.createElement('span');
+          detail.textContent = `${found.count} registros sin fecha y hora legibles.`;
+          button.append(detail);
+        }
+        fragment.append(button);
+        continue;
+      }
+      const entry = { kind, label, short, row: found.row, time: found.time };
+      lastCommunications.push(entry);
+      const point = pointsByRow.get(found.row);
+      const number = point ? numbers.get(coordinateKey(point)) : '';
+      const name = cell(found.row, antenna);
+      title.textContent = `${label} · ${formatContactTime(found.time)}`;
+      const antennaLine = document.createElement('span');
+      antennaLine.textContent = point
+        ? `Antena ${number}${name && name !== number ? ` · ${name}` : ''} · Ubicación: ${cell(found.row, location) || 'Sin información'} · Lugar: ${cell(found.row, place) || 'Sin información'}`
+        : 'Sin coordenadas válidas para mostrarla en el mapa.';
+      const detail = document.createElement('span');
+      const { a, b } = result.columns;
+      const parties = a >= 0 && b >= 0 ? ` · A: ${cell(found.row, a) || '—'} · B: ${cell(found.row, b) || '—'}` : '';
+      detail.textContent = `Registro ${found.row} · ${found.count} en total${period}${parties}`;
+      button.append(title, antennaLine, detail);
+      if (point) {
+        const coordinates = document.createElement('span');
+        coordinates.textContent = coordinateKey(point).replace(',', ', ');
+        button.append(coordinates);
+      }
+      button.dataset.option = `ultima:${kind}`;
+      button.addEventListener('click', () => showLast(entry));
+      fragment.append(button);
+    }
+    list.replaceChildren(fragment);
+    markOption();
+  }
   function showCoordinateRecords(point) {
     coordinateFilter = coordinateKey(point);
     page = 1;
@@ -722,10 +800,28 @@ if (!window.L) {
   // contact is picked, because a contact has no single location.
   function drawModules() {
     const placed = new Set();
-    if (!modules.antennas) return placed;
-    for (const group of antennaGroups) {
-      placed.add(coordinateKey(group.points[0]));
-      routePin(group.points[0], usage(group), `${group.name} · ${group.rows.length} registros (${usage(group)} del archivo)`, () => showAntenna(group));
+    if (modules.antennas) {
+      for (const group of antennaGroups) {
+        placed.add(coordinateKey(group.points[0]));
+        routePin(group.points[0], usage(group), `${group.name} · ${group.rows.length} registros (${usage(group)} del archivo)`, () => showAntenna(group));
+      }
+    }
+    // Última comunicación: one pin per antenna, naming every kind whose latest record was there.
+    if (modules.last) {
+      const byAntenna = new Map();
+      for (const entry of lastCommunications) {
+        const point = pointsByRow.get(entry.row);
+        if (!point) continue;
+        const key = coordinateKey(point);
+        if (!byAntenna.has(key)) byAntenna.set(key, { point, entries: [] });
+        byAntenna.get(key).entries.push(entry);
+      }
+      for (const [key, { point, entries }] of byAntenna) {
+        placed.add(key);
+        routePin(point, `Última: ${entries.map((entry) => entry.short).join(' · ')}`,
+          entries.map((entry) => `Última ${entry.label.toLowerCase()} · ${formatContactTime(entry.time)}`).join(' / '),
+          () => showLast(entries[0]));
+      }
     }
     return placed;
   }
@@ -736,11 +832,12 @@ if (!window.L) {
     if (coverageMode.value === 'modules' && !selectionActive) {
       const shown = [
         modules.overnight && data.hasTimes ? 'Pernocta' : '',
-        modules.antennas ? `Frecuencia de antenas (${seen.size} antenas, % de uso sobre ${data.rows.length} registros del archivo)` : '',
+        modules.antennas ? `Frecuencia de antenas (${antennaGroups.length} antenas, % de uso sobre ${data.rows.length} registros del archivo)` : '',
+        modules.last && lastCommunications.length ? 'Última comunicación' : '',
       ].filter(Boolean);
       message(shown.length
-        ? `Solo módulos: ${shown.join(' y ')}. Pulsa una opción de un módulo para ver sus registros.`
-        : 'Solo módulos: activa Pernocta o Frecuencia de antenas para mostrar sus antenas, o pulsa un contacto.');
+        ? `Solo módulos: ${shown.join(', ')}. Pulsa una opción de un módulo para ver sus registros.`
+        : 'Solo módulos: activa Pernocta, Frecuencia de antenas o Última comunicación para mostrar sus antenas, o pulsa un contacto.');
     } else if (coverageMode.value === 'route' || coverageMode.value === 'modules') {
       message(selectionActive
         ? `${selectedRows.size} registros seleccionados en ${seen.size} antenas. Pulsa un pin para ver sus registros.`
@@ -867,6 +964,7 @@ if (!window.L) {
     antennaSummary();
     overnightSummary();
     contactSummary();
+    lastSummary();
     const tr = document.createElement('tr');
     const selectionHeader = document.createElement('th');
     selectionHeader.scope = 'col';
@@ -949,6 +1047,7 @@ if (!window.L) {
     }
     page = 1;
     contactSummary();
+    lastSummary();
     table();
     draw();
     overnightSummary();
