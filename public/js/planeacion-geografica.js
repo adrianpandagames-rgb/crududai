@@ -245,26 +245,18 @@ if (!window.L) {
     return Boolean(time) && (!from.value || time >= from.value) && (!to.value || time <= to.value);
   }
 
-  // Every option in Frecuencia de antenas, Pernocta and Contactos frecuentes has its own switch. The map and the table
-  // show the records of all the options switched on together; with none on, everything is shown.
-  const options = new Map();
-  const optionRows = () => {
-    const rows = new Set();
-    for (const entry of options.values()) for (const row of entry.rows) rows.add(row);
-    return rows;
-  };
-  let shownRows = null;
+  // An option picked in Frecuencia de antenas, Pernocta or Contactos frecuentes replaces whatever was shown before:
+  // the map and the table keep only its records. Picking the same option again shows everything.
+  let option = null;
   function markOption() {
-    for (const button of document.querySelectorAll('button[data-option]')) {
-      const active = options.has(button.dataset.option);
+    for (const button of document.querySelectorAll('[data-option]')) {
+      const active = button.dataset.option === option?.id;
       button.classList.toggle('is-selected', active);
       button.setAttribute('aria-pressed', String(active));
     }
-    for (const toggle of document.querySelectorAll('input[data-option]')) toggle.checked = options.has(toggle.dataset.option);
   }
   function clearSelection() {
-    options.clear();
-    shownRows = null;
+    option = null;
     selectedRows.clear();
     selectionActive = false;
     coordinateFilter = null;
@@ -272,28 +264,23 @@ if (!window.L) {
     map.closePopup();
     markOption();
   }
-  function optionsLabel() {
-    const labels = [...options.values()].map((entry) => entry.label);
-    return labels.length <= 3 ? labels.join(' + ') : `${labels.length} opciones activas`;
-  }
-  // Switches the option on or off, keeping the others as they are.
   function selectOption({ id, label, rows, popup = null }) {
     if (!radius.reportValidity()) return;
-    const turningOn = !options.has(id);
-    if (turningOn) options.set(id, { label, rows });
-    else options.delete(id);
-    selectedRows.clear();
-    coordinateFilter = null;
-    map.closePopup();
+    const again = option?.id === id;
+    clearSelection();
     page = 1;
-    shownRows = options.size ? optionRows() : null;
-    selectionActive = Boolean(shownRows);
-    if (shownRows) for (const row of shownRows) if (pointsByRow.has(row)) selectedRows.add(row);
+    if (again) {
+      table();
+      draw({ fit: true });
+      return;
+    }
+    option = { id, label, rows: new Set(rows) };
+    rows.filter((row) => pointsByRow.has(row)).forEach((row) => selectedRows.add(row));
+    selectionActive = true;
     markOption();
     table();
     draw({ fit: true });
-    if (!turningOn) return;
-    if (!rows.some((row) => pointsByRow.has(row))) {
+    if (!selectedRows.size) {
       message(`${label}: sus registros no tienen coordenadas válidas para mostrar en el mapa; se listan en la tabla.`, true);
       byId('planningData').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       return;
@@ -305,22 +292,38 @@ if (!window.L) {
     }
     mapElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
-  // The switch at the start of each option; the option's button does the same when clicked.
-  let switchCount = 0;
-  function optionSwitch(id, label, select) {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'form-check form-switch planning-option-switch';
-    const toggle = document.createElement('input');
-    toggle.type = 'checkbox';
-    toggle.className = 'form-check-input';
-    toggle.setAttribute('role', 'switch');
-    toggle.id = `planningOption${++switchCount}`;
-    toggle.dataset.option = id;
-    toggle.checked = options.has(id);
-    toggle.setAttribute('aria-label', `Mostrar ${label} en el mapa`);
-    toggle.addEventListener('change', select);
-    wrapper.append(toggle);
-    return wrapper;
+
+  // Pernocta, Frecuencia de antenas and Contactos frecuentes each have a switch that turns the whole module on or off.
+  // Off, the module is hidden and its pins leave the map. The choice is remembered in this browser only.
+  const MODULES_KEY = 'planeacion-geografica-modulos';
+  const MODULE_PREFIX = { overnight: 'pernocta:', antennas: 'antena:', contacts: 'contacto:' };
+  const modules = { overnight: true, antennas: true, contacts: true };
+  try {
+    const saved = JSON.parse(localStorage.getItem(MODULES_KEY) || '{}');
+    for (const name of Object.keys(modules)) if (typeof saved[name] === 'boolean') modules[name] = saved[name];
+  } catch { /* Without storage every module starts on. */ }
+  function applyModule(name) {
+    const toggle = document.querySelector(`input[data-module="${name}"]`);
+    toggle.checked = modules[name];
+    document.querySelector(`[data-module-body="${name}"]`).hidden = !modules[name];
+    if (name === 'contacts') byId('planningContactsExport').disabled = !modules.contacts || !contacts?.contacts.length;
+  }
+  function setModule(name, on) {
+    modules[name] = on;
+    try { localStorage.setItem(MODULES_KEY, JSON.stringify(modules)); } catch { /* The choice lasts until reload. */ }
+    applyModule(name);
+    if (!data) return;
+    // A module switched off takes its selected option off the map and the table too.
+    if (!on && option?.id.startsWith(MODULE_PREFIX[name])) {
+      clearSelection();
+      page = 1;
+      table();
+      draw({ fit: true });
+    }
+    if (name === 'overnight') overnightSummary();
+  }
+  for (const name of Object.keys(modules)) {
+    document.querySelector(`input[data-module="${name}"]`).addEventListener('change', (event) => setModule(name, event.target.checked));
   }
 
   function antennaSummary() {
@@ -344,11 +347,10 @@ if (!window.L) {
       button.append(title, location, coordinates);
       const antennaId = `antena:${group.name}|${group.coordinates}`;
       button.dataset.option = antennaId;
-      const pick = () => selectOption({
+      button.addEventListener('click', () => selectOption({
         id: antennaId, label: `Antena ${group.name}`, rows: group.rows,
         popup: { lat: group.points[0].lat, lng: group.points[0].lng, text: `${group.name} · ${group.ubicacion} · ${group.lugar} · ${group.rows.length} registros` },
-      });
-      button.addEventListener('click', pick);
+      }));
       const copy = document.createElement('button');
       copy.type = 'button';
       copy.className = 'btn btn-sm btn-outline-secondary planning-copy';
@@ -362,7 +364,7 @@ if (!window.L) {
           })
           .catch(() => message('No fue posible copiar la antena al portapapeles. Intenta de nuevo.', true));
       });
-      item.append(optionSwitch(antennaId, `la antena ${group.name}`, pick), button, copy);
+      item.append(button, copy);
       fragment.append(item);
     }
     if (!located.length) {
@@ -390,6 +392,7 @@ if (!window.L) {
   }
   function overnightSummary() {
     overnightLayer.clearLayers();
+    if (!modules.overnight) return;
     const list = byId('planningOvernight');
     const note = (text) => {
       const paragraph = document.createElement('p');
@@ -431,10 +434,7 @@ if (!window.L) {
       button.append(title, place, detail, coordinates);
       button.dataset.option = overnightId(location);
       button.addEventListener('click', () => showOvernight(location));
-      const item = document.createElement('div');
-      item.className = 'planning-antenna-item planning-option-nocopy';
-      item.append(optionSwitch(overnightId(location), `la pernocta ${index + 1} (${location.name})`, () => showOvernight(location)), button);
-      fragment.append(item);
+      fragment.append(button);
       // Numbered pins above the coverage, the most likely one larger and in its own colour.
       L.marker([location.lat, location.lng], {
         icon: L.divIcon({
@@ -455,11 +455,12 @@ if (!window.L) {
     markOption();
   }
   let contacts = null;
+  for (const name of Object.keys(modules)) applyModule(name);
   function contactSummary() {
     contacts = summarizeContacts(data, inPeriod);
     const fragment = document.createDocumentFragment();
     const note = byId('planningContactsTarget');
-    byId('planningContactsExport').disabled = !contacts?.contacts.length;
+    byId('planningContactsExport').disabled = !modules.contacts || !contacts?.contacts.length;
     if (!contacts) {
       note.textContent = 'El archivo no tiene columnas Número A y Número B; no es posible identificar contactos.';
       byId('planningContacts').replaceChildren();
@@ -469,7 +470,7 @@ if (!window.L) {
     note.textContent = !contacts.target ? 'No se encontraron números en las columnas A y B.'
       : contacts.detected
         ? `Objetivo detectado: ${contacts.target} (el número más frecuente en A y B${contacts.typed ? `; la línea capturada ${contacts.typed} no aparece en el archivo` : ''}). ${contacts.contacts.length} contactos${period}.`
-        : `Objetivo: ${contacts.target}. ${contacts.contacts.length} contactos${period}. Activa el switch de un contacto para ver en el mapa dónde se comunicó con él.`;
+        : `Objetivo: ${contacts.target}. ${contacts.contacts.length} contactos${period}. Pulsa un contacto para ver en el mapa dónde se comunicó con él.`;
     const total = contacts.contacts.reduce((sum, contact) => sum + contact.total, 0);
     for (const contact of contacts.contacts) {
       const item = document.createElement('div');
@@ -487,10 +488,8 @@ if (!window.L) {
         range.textContent = `Del ${formatContactTime(contact.first)} al ${formatContactTime(contact.last)}`;
         button.append(range);
       }
-      const contactId = `contacto:${contact.line}`;
-      button.dataset.option = contactId;
-      const pick = () => selectOption({ id: contactId, label: `Contacto ${contact.line}`, rows: contact.rows });
-      button.addEventListener('click', pick);
+      button.dataset.option = `contacto:${contact.line}`;
+      button.addEventListener('click', () => selectOption({ id: `contacto:${contact.line}`, label: `Contacto ${contact.line}`, rows: contact.rows }));
       const copy = document.createElement('button');
       copy.type = 'button';
       copy.className = 'btn btn-sm btn-outline-secondary planning-copy';
@@ -505,7 +504,7 @@ if (!window.L) {
           })
           .catch(() => message('No fue posible copiar el contacto al portapapeles. Intenta de nuevo.', true));
       });
-      item.append(optionSwitch(contactId, `el contacto ${contact.line}`, pick), button, copy);
+      item.append(button, copy);
       fragment.append(item);
     }
     if (contacts.target && !contacts.contacts.length) {
@@ -640,7 +639,7 @@ if (!window.L) {
     const visible = [];
     for (const [offset, row] of data.rows.entries()) {
       const rowNumber = offset + 1;
-      if (shownRows && !shownRows.has(rowNumber)) continue;
+      if (option && !option.rows.has(rowNumber)) continue;
       if (coordinateFilter !== null && coordinateKey(pointsByRow.get(rowNumber)) !== coordinateFilter) continue;
       if (!inPeriod(rowNumber) || !rowMatches(row, search.value)) continue;
       visible.push(rowNumber);
@@ -700,13 +699,13 @@ if (!window.L) {
     }
     byId('planningRows').replaceChildren(fragment);
     const filters = [
-      options.size ? optionsLabel() : '',
+      option ? option.label : '',
       coordinateFilter === null ? '' : `Coordenadas: ${coordinateFilter}`,
       timeFilterActive() ? 'Periodo filtrado' : '',
       search.value.trim() ? `Búsqueda: “${search.value.trim()}”` : '',
     ].filter(Boolean).join(' · ');
     byId('planningFile').textContent = `${data.name}${contacts?.target ? ` · Objetivo ${contacts.target}` : ''} · ${visible.length} de ${data.rows.length} registros${filters ? ` · ${filters}` : ''}`;
-    byId('planningClearFilter').hidden = coordinateFilter === null && !options.size;
+    byId('planningClearFilter').hidden = coordinateFilter === null && !option;
     const pager = document.querySelector('.planning-pager');
     pager.hidden = totalPages <= 1;
     byId('planningPageInfo').textContent = `Página ${page} de ${totalPages}`;
@@ -850,7 +849,7 @@ if (!window.L) {
   byId('planningClearFilter').addEventListener('click', () => {
     if (!data) return;
     page = 1;
-    if (!options.size) {
+    if (!option) {
       coordinateFilter = null;
       table();
       return;
