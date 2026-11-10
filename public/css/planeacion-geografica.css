@@ -77,3 +77,5 @@ html[data-theme="dark"] .planning-selected { background: #10263c; color: #e6f0fa
 html[data-theme="dark"] .planning-selected-chip { background: #16324f; color: #e6f0fa; border-color: #2d5679; }
 /* Última comunicación: a kind with no record in the period. */
 .planning-antenna:disabled { cursor: default; opacity: .65; pointer-events: none; }
+/* Pin label of Última comunicación: a sentence, wrapped in a few lines above the pin. */
+.planning-route-number.planning-route-text { width: 190px; white-space: normal; text-align: center; font-size: 12px; line-height: 1.2; }

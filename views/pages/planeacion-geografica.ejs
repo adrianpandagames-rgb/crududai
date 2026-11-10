@@ -3,7 +3,7 @@
 <head>
   <%- include('../includes/head') %>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <link rel="stylesheet" href="/public/css/planeacion-geografica.css?v=12" />
+  <link rel="stylesheet" href="/public/css/planeacion-geografica.css?v=13" />
 </head>
 <body>
   <%- include('../includes/header') %>
@@ -159,7 +159,8 @@
           <div class="form-check form-switch planning-module-switch mb-0"><input class="form-check-input" type="checkbox" role="switch" id="planningModule-last" data-module="last" checked aria-label="Activar última comunicación" /></div>
         </div>
         <div data-module-body="last">
-        <p class="small text-muted mb-2">El registro más reciente de llamada completada, de uso de datos y de mensajería SMS, según la columna de tipo (Tipo, Servicio…) y, para las llamadas, la duración mayor a cero. Respeta el periodo elegido en el mapa. Pulsa una para verla en el mapa.</p>
+        <p class="small text-muted mb-2">El registro más reciente de llamada completada, de uso de datos y de mensajería SMS, según la columna de tipo (Tipo, Servicio…) y, para las llamadas, la duración mayor a cero. Respeta el periodo elegido en el mapa. Pulsa una o varias para verlas juntas en el mapa; vuelve a pulsar una para quitarla.</p>
+        <div id="planningLastSelected" class="planning-selected mb-2" aria-live="polite" hidden></div>
         <div id="planningLast" class="planning-antennas-list" aria-live="polite"><p class="small mb-0">Importa un archivo con fecha y hora para ver la última comunicación.</p></div>
         </div>
       </div>
@@ -183,7 +184,7 @@
   </main>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="/public/js/ruta-upload.js"></script>
-  <script type="module" src="/public/js/planeacion-geografica.js?v=17"></script>
+  <script type="module" src="/public/js/planeacion-geografica.js?v=19"></script>
   <%- include('../includes/footer') %>
 </body>
 </html>

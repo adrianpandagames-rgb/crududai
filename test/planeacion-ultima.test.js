@@ -43,6 +43,16 @@ test('calls with no duration or a failed result are not completed calls', () => 
   assert.equal(classifyCommunication(['VOZ'], { type: 0, duration: -1, status: -1, a: -1, b: -1 }), 'call');
 });
 
+test('Telcel types: voice in both directions, data and messages in both directions', () => {
+  const columns = { type: 0, duration: 1, status: -1, a: -1, b: -1 };
+  assert.equal(classifyCommunication(['VOZ SALIENTE', '00:00:35'], columns), 'call');
+  assert.equal(classifyCommunication(['VOZ ENTRANTE', '12'], columns), 'call');
+  assert.equal(classifyCommunication(['VOZ ENTRANTE', '0'], columns), '');
+  assert.equal(classifyCommunication(['DATOS', ''], columns), 'data');
+  assert.equal(classifyCommunication(['MENSAJE ENTRANTE', ''], columns), 'sms');
+  assert.equal(classifyCommunication(['MENSAJE SALIENTE', ''], columns), 'sms');
+});
+
 test('without a type column a record whose B side is not a line is data', () => {
   const columns = { type: -1, duration: -1, status: -1, a: 0, b: 1 };
   assert.equal(classifyCommunication(['6620000001', 'ims'], columns), 'data');

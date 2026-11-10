@@ -259,6 +259,41 @@ if (!window.L) {
       button.setAttribute('aria-pressed', String(active));
     }
     renderSelectedAntennas();
+    renderSelectedLast();
+  }
+  // The box listing what is picked in a module where several options add up; each chip removes its option.
+  function renderSelectedBox(box, items, { title, clear, chip }) {
+    box.hidden = !items.length;
+    if (!items.length) return box.replaceChildren();
+    const head = document.createElement('div');
+    head.className = 'planning-selected-head';
+    const heading = document.createElement('strong');
+    heading.textContent = title;
+    const clearButton = document.createElement('button');
+    clearButton.type = 'button';
+    clearButton.className = 'btn btn-sm btn-link p-0';
+    clearButton.textContent = 'Quitar todas';
+    clearButton.addEventListener('click', clear);
+    head.append(heading, clearButton);
+    const list = document.createElement('div');
+    list.className = 'planning-selected-list';
+    for (const item of items) {
+      const { badge, text, label, remove } = chip(item);
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'planning-selected-chip';
+      button.setAttribute('aria-label', label);
+      if (badge) {
+        const number = document.createElement('span');
+        number.className = 'planning-overnight-rank';
+        number.textContent = badge;
+        button.append(number);
+      }
+      button.append(text, ' ×');
+      button.addEventListener('click', remove);
+      list.append(button);
+    }
+    box.replaceChildren(head, list);
   }
   function clearSelection() {
     option = null;
@@ -269,9 +304,10 @@ if (!window.L) {
     map.closePopup();
     markOption();
   }
-  function selectOption({ id, label, rows, popup = null, ids = new Set([id]), groups = null }) {
+  // `groups` (antennas) and `entries` (últimas comunicaciones) mark the modules where several options add up.
+  function selectOption({ id, label, rows, popup = null, ids = new Set([id]), groups = null, entries = null }) {
     if (!radius.reportValidity()) return;
-    const again = option?.id === id && !groups;
+    const again = option?.id === id && !groups && !entries;
     clearSelection();
     page = 1;
     if (again || !ids.size) {
@@ -279,7 +315,7 @@ if (!window.L) {
       draw({ fit: true });
       return;
     }
-    option = { id, label, rows: new Set(rows), ids, groups };
+    option = { id, label, rows: new Set(rows), ids, groups, entries };
     rows.filter((row) => pointsByRow.has(row)).forEach((row) => selectedRows.add(row));
     selectionActive = true;
     markOption();
@@ -382,36 +418,16 @@ if (!window.L) {
   }
   // The antennas picked in Frecuencia de antenas, with their number; each can be removed on its own.
   function renderSelectedAntennas() {
-    const box = byId('planningAntennasSelected');
     const groups = option?.groups || [];
-    box.hidden = !groups.length;
-    if (!groups.length) return box.replaceChildren();
-    const head = document.createElement('div');
-    head.className = 'planning-selected-head';
-    const title = document.createElement('strong');
     const records = new Set(groups.flatMap((group) => group.rows)).size;
-    title.textContent = `${groups.length} ${groups.length === 1 ? 'antena seleccionada' : 'antenas seleccionadas'} · ${records} registros`;
-    const clear = document.createElement('button');
-    clear.type = 'button';
-    clear.className = 'btn btn-sm btn-link p-0';
-    clear.textContent = 'Quitar todas';
-    clear.addEventListener('click', () => selectAntennas([]));
-    head.append(title, clear);
-    const list = document.createElement('div');
-    list.className = 'planning-selected-list';
-    for (const group of groups) {
-      const chip = document.createElement('button');
-      chip.type = 'button';
-      chip.className = 'planning-selected-chip';
-      chip.setAttribute('aria-label', `Quitar la antena ${antennaNumber(group)} de la selección`);
-      const number = document.createElement('span');
-      number.className = 'planning-overnight-rank';
-      number.textContent = antennaNumber(group);
-      chip.append(number, `${group.name} · ${group.rows.length} registros`, ' ×');
-      chip.addEventListener('click', () => showAntenna(group));
-      list.append(chip);
-    }
-    box.replaceChildren(head, list);
+    renderSelectedBox(byId('planningAntennasSelected'), groups, {
+      title: `${groups.length} ${groups.length === 1 ? 'antena seleccionada' : 'antenas seleccionadas'} · ${records} registros`,
+      clear: () => selectAntennas([]),
+      chip: (group) => ({
+        badge: antennaNumber(group), text: `${group.name} · ${group.rows.length} registros`,
+        label: `Quitar la antena ${antennaNumber(group)} de la selección`, remove: () => showAntenna(group),
+      }),
+    });
   }
   // Share of all the records of the file, as in the row "Copiar" puts on the clipboard.
   const usage = (group) => `${(data.rows.length ? group.rows.length / data.rows.length * 100 : 0).toFixed(1)}%`;
@@ -614,12 +630,58 @@ if (!window.L) {
   }
   // Última comunicación: the latest completed call, data session and SMS of the period, each one a single record.
   let lastCommunications = [];
+  // "llamada completada", "uso de datos", "mensajería SMS", joined as "llamada completada y mensajería SMS".
+  const kindName = (entry) => entry.label[0].toLowerCase() + entry.label.slice(1);
+  const kindList = (entries) => {
+    const names = entries.map(kindName);
+    return names.length > 1 ? `${names.slice(0, -1).join(', ')} y ${names.at(-1)}` : names[0];
+  };
+  const lastAntennaText = (entries) => `Antena de última comunicación de ${kindList(entries)}`;
+  // As in Frecuencia de antenas, pressing a kind adds it to the selection, or removes it when it was already there.
   function showLast(entry) {
-    const point = pointsByRow.get(entry.row);
+    const current = option?.entries ? [...option.entries] : [];
+    const entries = current.some((picked) => picked.kind === entry.kind)
+      ? current.filter((picked) => picked.kind !== entry.kind)
+      : [...current, entry];
+    selectLast(entries, entries.length === 1 && entries[0] === entry);
+  }
+  function selectLast(entries, withPopup = false) {
+    const [first] = entries;
+    const point = first && pointsByRow.get(first.row);
     selectOption({
-      id: `ultima:${entry.kind}`, label: `Última ${entry.label.toLowerCase()}`, rows: [entry.row],
-      popup: point ? { lat: point.lat, lng: point.lng, text: `Última ${entry.label.toLowerCase()} · ${formatContactTime(entry.time)} · registro ${entry.row}` } : null,
+      id: 'ultima:seleccion', ids: new Set(entries.map((entry) => `ultima:${entry.kind}`)), entries,
+      label: entries.length ? lastAntennaText(entries) : '', rows: [...new Set(entries.map((entry) => entry.row))],
+      popup: withPopup && point ? { lat: point.lat, lng: point.lng, text: `${lastAntennaText([first])} · ${formatContactTime(first.time)} · registro ${first.row}` } : null,
     });
+  }
+  function renderSelectedLast() {
+    const entries = option?.entries || [];
+    renderSelectedBox(byId('planningLastSelected'), entries, {
+      title: `${entries.length} ${entries.length === 1 ? 'comunicación seleccionada' : 'comunicaciones seleccionadas'}`,
+      clear: () => selectLast([]),
+      chip: (entry) => ({
+        badge: '', text: `${entry.label} · ${formatContactTime(entry.time)}`,
+        label: `Quitar ${kindName(entry)} de la selección`, remove: () => showLast(entry),
+      }),
+    });
+  }
+  // One pin per antenna, naming every kind whose latest record was there.
+  // Pressing a pin of the overview picks its kinds; once picked, it lists the records at that antenna.
+  function drawLastPins(entries, onPick = null) {
+    const byAntenna = new Map();
+    for (const entry of entries) {
+      const point = pointsByRow.get(entry.row);
+      if (!point) continue;
+      const key = coordinateKey(point);
+      if (!byAntenna.has(key)) byAntenna.set(key, { point, entries: [] });
+      byAntenna.get(key).entries.push(entry);
+    }
+    for (const { point, entries: here } of byAntenna.values()) {
+      routePin(point, lastAntennaText(here),
+        `${lastAntennaText(here)}: ${here.map((entry) => `${kindName(entry)} ${formatContactTime(entry.time)}`).join(' · ')}`,
+        () => (onPick ? onPick(here) : showCoordinateRecords(point)), 'planning-route-text');
+    }
+    return new Set(byAntenna.keys());
   }
   function lastSummary() {
     lastCommunications = [];
@@ -666,7 +728,9 @@ if (!window.L) {
       const point = pointsByRow.get(found.row);
       const number = point ? numbers.get(coordinateKey(point)) : '';
       const name = cell(found.row, antenna);
-      title.textContent = `${label} · ${formatContactTime(found.time)}`;
+      // The file's own type ("MENSAJE SALIENTE", "VOZ ENTRANTE") tells the direction.
+      const type = cell(found.row, result.columns.type);
+      title.textContent = `${label}${type ? ` (${type})` : ''} · ${formatContactTime(found.time)}`;
       const antennaLine = document.createElement('span');
       antennaLine.textContent = point
         ? `Antena ${number}${name && name !== number ? ` · ${name}` : ''} · Ubicación: ${cell(found.row, location) || 'Sin información'} · Lugar: ${cell(found.row, place) || 'Sin información'}`
@@ -726,7 +790,8 @@ if (!window.L) {
     const asRange = coverageMode.value === 'range';
     if (coverageMode.value === 'route' || (coverageMode.value === 'modules' && selectionActive)) {
       renderLegend(null);
-      finishDraw(points, drawRoute(ordered), shouldFit);
+      // Picked últimas comunicaciones keep their sentence instead of the antenna number.
+      finishDraw(points, option?.entries ? drawLastPins(option.entries) : drawRoute(ordered), shouldFit);
       return;
     }
     if (coverageMode.value === 'modules') {
@@ -764,6 +829,7 @@ if (!window.L) {
       routePin(group.points[0], antennaNumber(group), `Antena ${antennaNumber(group)} · ${group.name} · ${group.rows.length} registros`,
         () => showCoordinateRecords(group.points[0]));
     }
+    if (option?.entries) drawLastPins(option.entries);
     renderLegend(scale);
     finishDraw(points, seen, shouldFit);
   }
@@ -782,9 +848,9 @@ if (!window.L) {
     return placed;
   }
   // A red pin with a text above it: the antenna number in "Ruta", its share of use in "Solo módulos".
-  function routePin(point, text, tooltip, onClick) {
+  function routePin(point, text, tooltip, onClick, labelClass = '') {
     const label = document.createElement('span');
-    label.className = 'planning-route-number';
+    label.className = `planning-route-number ${labelClass}`.trim();
     label.textContent = text;
     const icon = document.createElement('div');
     icon.className = 'planning-route-marker';
@@ -806,23 +872,7 @@ if (!window.L) {
         routePin(group.points[0], usage(group), `${group.name} · ${group.rows.length} registros (${usage(group)} del archivo)`, () => showAntenna(group));
       }
     }
-    // Última comunicación: one pin per antenna, naming every kind whose latest record was there.
-    if (modules.last) {
-      const byAntenna = new Map();
-      for (const entry of lastCommunications) {
-        const point = pointsByRow.get(entry.row);
-        if (!point) continue;
-        const key = coordinateKey(point);
-        if (!byAntenna.has(key)) byAntenna.set(key, { point, entries: [] });
-        byAntenna.get(key).entries.push(entry);
-      }
-      for (const [key, { point, entries }] of byAntenna) {
-        placed.add(key);
-        routePin(point, `Última: ${entries.map((entry) => entry.short).join(' · ')}`,
-          entries.map((entry) => `Última ${entry.label.toLowerCase()} · ${formatContactTime(entry.time)}`).join(' / '),
-          () => showLast(entries[0]));
-      }
-    }
+    if (modules.last) for (const key of drawLastPins(lastCommunications, (here) => selectLast(here, here.length === 1))) placed.add(key);
     return placed;
   }
   function finishDraw(points, seen, shouldFit) {
