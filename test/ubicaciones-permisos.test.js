@@ -43,4 +43,3 @@ test('the edit window is on the page for those who may edit', async () => {
   assert.equal(await hasModal({ isAdmin: false, role: 'semiadmin', canEditRecords: true }), true);
   assert.equal(await hasModal({ isAdmin: false, role: 'usuario', canEditRecords: false }), false);
 });
-haz
