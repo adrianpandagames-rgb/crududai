@@ -177,6 +177,7 @@ if (!window.L) {
   let selectionActive = false;
   let pointsByRow = new Map();
   let numbers = new Map();
+  let antennaGroups = [];
   let coordinateFilter = null;
   let page = 1;
   const coordinateKey = (point) => point ? `${point.lat.toFixed(6)},${point.lng.toFixed(6)}` : null;
@@ -321,16 +322,27 @@ if (!window.L) {
       draw({ fit: true });
     }
     if (name === 'overnight') overnightSummary();
+    if (coverageMode.value === 'modules') draw({ fit: true });
   }
   for (const name of Object.keys(modules)) {
     document.querySelector(`input[data-module="${name}"]`).addEventListener('change', (event) => setModule(name, event.target.checked));
   }
 
+  const antennaOptionId = (group) => `antena:${group.name}|${group.coordinates}`;
+  function showAntenna(group) {
+    selectOption({
+      id: antennaOptionId(group), label: `Antena ${group.name}`, rows: group.rows,
+      popup: { lat: group.points[0].lat, lng: group.points[0].lng, text: `${group.name} · ${group.ubicacion} · ${group.lugar} · ${group.rows.length} registros` },
+    });
+  }
+  // Share of all the records of the file, as in the row "Copiar" puts on the clipboard.
+  const usage = (group) => `${(data.rows.length ? group.rows.length / data.rows.length * 100 : 0).toFixed(1)}%`;
   function antennaSummary() {
     const fragment = document.createDocumentFragment();
     // Only antennas that can be placed on the map are listed; the rest are counted in a note.
     const groups = summarizeAntennas(data);
     const located = groups.filter((group) => group.points.length);
+    antennaGroups = located;
     const hiddenRecords = groups.reduce((sum, group) => sum + (group.points.length ? 0 : group.rows.length), 0);
     for (const group of located) {
       const item = document.createElement('div');
@@ -345,12 +357,8 @@ if (!window.L) {
       const coordinates = document.createElement('span');
       coordinates.textContent = group.coordinates;
       button.append(title, location, coordinates);
-      const antennaId = `antena:${group.name}|${group.coordinates}`;
-      button.dataset.option = antennaId;
-      button.addEventListener('click', () => selectOption({
-        id: antennaId, label: `Antena ${group.name}`, rows: group.rows,
-        popup: { lat: group.points[0].lat, lng: group.points[0].lng, text: `${group.name} · ${group.ubicacion} · ${group.lugar} · ${group.rows.length} registros` },
-      }));
+      button.dataset.option = antennaOptionId(group);
+      button.addEventListener('click', () => showAntenna(group));
       const copy = document.createElement('button');
       copy.type = 'button';
       copy.className = 'btn btn-sm btn-outline-secondary planning-copy';
@@ -529,7 +537,11 @@ if (!window.L) {
     byId('planningData').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
   function fit() {
-    const bounds = layers.getBounds();
+    const bounds = L.latLngBounds([]);
+    const layerBounds = layers.getBounds();
+    if (layerBounds.isValid()) bounds.extend(layerBounds);
+    // "Solo módulos" may show nothing but the overnight pins.
+    if (coverageMode.value === 'modules') overnightLayer.eachLayer((marker) => bounds.extend(marker.getLatLng()));
     if (bounds.isValid()) {
       // A second fit during an active Leaflet zoom can retain the first bounds.
       map.stop();
@@ -554,9 +566,14 @@ if (!window.L) {
     // The busiest points are drawn last, so their darker colour stays on top where coverages overlap.
     const ordered = [...points].sort((a, b) => countOf(a) - countOf(b));
     const asRange = coverageMode.value === 'range';
-    if (coverageMode.value === 'route') {
+    if (coverageMode.value === 'route' || (coverageMode.value === 'modules' && selectionActive)) {
       renderLegend(null);
       finishDraw(points, drawRoute(ordered), shouldFit);
+      return;
+    }
+    if (coverageMode.value === 'modules') {
+      renderLegend(null);
+      finishDraw(points, drawModules(), shouldFit);
       return;
     }
     for (const point of ordered) {
@@ -597,18 +614,33 @@ if (!window.L) {
       if (placed.has(key)) continue;
       placed.add(key);
       const number = numbers.get(key) || '';
-      const label = document.createElement('span');
-      label.className = 'planning-route-number';
-      label.textContent = number;
-      const icon = document.createElement('div');
-      icon.className = 'planning-route-marker';
-      icon.innerHTML = ROUTE_PIN;
-      icon.prepend(label);
-      L.marker([point.lat, point.lng], {
-        icon: L.divIcon({ className: '', html: icon, iconSize: [40, 60], iconAnchor: [20, 60], tooltipAnchor: [0, -46] }),
-        keyboard: false, title: `Antena ${number}`,
-      }).bindTooltip(`Antena ${number} · ${records.get(key)} registros`)
-        .on('click', () => showCoordinateRecords(point)).addTo(layers);
+      routePin(point, number, `Antena ${number} · ${records.get(key)} registros`, () => showCoordinateRecords(point));
+    }
+    return placed;
+  }
+  // A red pin with a text above it: the antenna number in "Ruta", its share of use in "Solo módulos".
+  function routePin(point, text, tooltip, onClick) {
+    const label = document.createElement('span');
+    label.className = 'planning-route-number';
+    label.textContent = text;
+    const icon = document.createElement('div');
+    icon.className = 'planning-route-marker';
+    icon.innerHTML = ROUTE_PIN;
+    icon.prepend(label);
+    L.marker([point.lat, point.lng], {
+      icon: L.divIcon({ className: '', html: icon, iconSize: [40, 60], iconAnchor: [20, 60], tooltipAnchor: [0, -46] }),
+      keyboard: false, title: tooltip,
+    }).bindTooltip(tooltip).on('click', onClick).addTo(layers);
+  }
+  // "Solo módulos": only what the modules switched on put on the map. Pernocta keeps its numbered pins (its own
+  // layer); Frecuencia de antenas adds one pin per antenna with its share of use. Contactos adds nothing until a
+  // contact is picked, because a contact has no single location.
+  function drawModules() {
+    const placed = new Set();
+    if (!modules.antennas) return placed;
+    for (const group of antennaGroups) {
+      placed.add(coordinateKey(group.points[0]));
+      routePin(group.points[0], usage(group), `${group.name} · ${group.rows.length} registros (${usage(group)} del archivo)`, () => showAntenna(group));
     }
     return placed;
   }
@@ -616,7 +648,15 @@ if (!window.L) {
     byId('planningFit').disabled = !data.points.length;
     byId('planningExportSelection').disabled = !selectionActive || selectedRows.size === 0;
     const period = timeFilterActive() ? ` en el periodo elegido` : '';
-    if (coverageMode.value === 'route') {
+    if (coverageMode.value === 'modules' && !selectionActive) {
+      const shown = [
+        modules.overnight && data.hasTimes ? 'Pernocta' : '',
+        modules.antennas ? `Frecuencia de antenas (${seen.size} antenas, % de uso sobre ${data.rows.length} registros del archivo)` : '',
+      ].filter(Boolean);
+      message(shown.length
+        ? `Solo módulos: ${shown.join(' y ')}. Pulsa una opción de un módulo para ver sus registros.`
+        : 'Solo módulos: activa Pernocta o Frecuencia de antenas para mostrar sus antenas, o pulsa un contacto.');
+    } else if (coverageMode.value === 'route' || coverageMode.value === 'modules') {
       message(selectionActive
         ? `${selectedRows.size} registros seleccionados en ${seen.size} antenas. Pulsa un pin para ver sus registros.`
         : `${points.length} de ${data.rows.length} registros con coordenadas${period} en ${seen.size} antenas. ${data.omitted} registros sin coordenadas válidas.`);

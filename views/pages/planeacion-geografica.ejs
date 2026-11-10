@@ -35,6 +35,7 @@
             <option value="sector">Rango con azimut (sector)</option>
             <option value="range">Solo rango (círculo sin dirección)</option>
             <option value="route">Ruta (pin numerado por antena)</option>
+            <option value="modules">Solo módulos (lo que esté activo)</option>
           </select>
         </div>
         <div class="col-sm-6 col-xl-2 mb-2">
@@ -74,7 +75,7 @@
           <button id="planningClearTime" class="btn btn-outline-secondary" type="button">Todo el periodo</button>
         </div>
       </div>
-      <p class="small text-muted">El sector abarca la apertura elegida centrada en el azimut. “Solo rango” muestra un círculo de alcance. “Ruta” marca cada antena con un pin y su número, como en el KMZ de Ruta. Los registros sin azimut válido muestran únicamente la antena. Con color por frecuencia, los puntos más oscuros tienen más registros. Cobertura ilustrativa.</p>
+      <p class="small text-muted">El sector abarca la apertura elegida centrada en el azimut. “Solo rango” muestra un círculo de alcance. “Ruta” marca cada antena con un pin y su número, como en el KMZ de Ruta. “Solo módulos” muestra solo lo de los módulos activos: los pines de pernocta y, con Frecuencia de antenas, cada antena con su % de uso del archivo. Los registros sin azimut válido muestran únicamente la antena. Con color por frecuencia, los puntos más oscuros tienen más registros. Cobertura ilustrativa.</p>
       <div id="planningMap" aria-label="Mapa con sectores de cobertura de las antenas"></div>
       <fieldset id="planningStyle" class="row align-items-end mt-3 mb-0">
         <legend class="h6 mb-2">Apariencia de la cobertura</legend>
@@ -167,7 +168,7 @@
   </main>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="/public/js/ruta-upload.js"></script>
-  <script type="module" src="/public/js/planeacion-geografica.js?v=14"></script>
+  <script type="module" src="/public/js/planeacion-geografica.js?v=15"></script>
   <%- include('../includes/footer') %>
 </body>
 </html>
