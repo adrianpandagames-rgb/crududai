@@ -84,3 +84,18 @@ export function selectionCsv(headers, rows, rowNumbers) {
   const lines = [headers, ...[...rowNumbers].sort((a, b) => a - b).map((row) => rows[row - 1] || [])];
   return `﻿${lines.map((line) => line.map(csvCell).join(',')).join('\r\n')}\r\n`;
 }
+
+// The number shown over each antenna in the "Ruta" view, keyed by its coordinates rounded to six decimals. Same rule
+// as the Ruta KMZ (src/rutaKmz.js): the value of the antena column of its first record, or, without one, its order of
+// first appearance in the file.
+export function antennaNumbers(data) {
+  const { antenna } = antennaColumns(data.headers);
+  const numbers = new Map();
+  for (const point of [...data.points].sort((a, b) => a.row - b.row)) {
+    const key = `${point.lat.toFixed(6)},${point.lng.toFixed(6)}`;
+    if (numbers.has(key)) continue;
+    const name = antenna >= 0 ? String(data.rows[point.row - 1]?.[antenna] ?? '').trim() : '';
+    numbers.set(key, name || String(numbers.size + 1));
+  }
+  return numbers;
+}

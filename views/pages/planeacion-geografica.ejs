@@ -3,7 +3,7 @@
 <head>
   <%- include('../includes/head') %>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <link rel="stylesheet" href="/public/css/planeacion-geografica.css?v=8" />
+  <link rel="stylesheet" href="/public/css/planeacion-geografica.css?v=9" />
 </head>
 <body>
   <%- include('../includes/header') %>
@@ -34,6 +34,7 @@
           <select id="planningCoverageMode" class="form-select">
             <option value="sector">Rango con azimut (sector)</option>
             <option value="range">Solo rango (círculo sin dirección)</option>
+            <option value="route">Ruta (pin numerado por antena)</option>
           </select>
         </div>
         <div class="col-sm-6 col-xl-2 mb-2">
@@ -73,7 +74,7 @@
           <button id="planningClearTime" class="btn btn-outline-secondary" type="button">Todo el periodo</button>
         </div>
       </div>
-      <p class="small text-muted">El sector abarca la apertura elegida centrada en el azimut. “Solo rango” muestra un círculo de alcance. Los registros sin azimut válido muestran únicamente la antena. Con color por frecuencia, los puntos más oscuros tienen más registros. Cobertura ilustrativa.</p>
+      <p class="small text-muted">El sector abarca la apertura elegida centrada en el azimut. “Solo rango” muestra un círculo de alcance. “Ruta” marca cada antena con un pin y su número, como en el KMZ de Ruta. Los registros sin azimut válido muestran únicamente la antena. Con color por frecuencia, los puntos más oscuros tienen más registros. Cobertura ilustrativa.</p>
       <div id="planningMap" aria-label="Mapa con sectores de cobertura de las antenas"></div>
       <fieldset id="planningStyle" class="row align-items-end mt-3 mb-0">
         <legend class="h6 mb-2">Apariencia de la cobertura</legend>
@@ -98,7 +99,7 @@
     <section id="planningData" class="card p-3 planning-data-panel">
       <div class="planning-antennas mb-3" aria-labelledby="planningOvernightTitle">
         <h3 id="planningOvernightTitle" class="h6">Posibles ubicaciones de pernocta</h3>
-        <p class="small text-muted mb-2">Antenas que aparecen en el horario nocturno, ordenadas por el número de noches distintas. Los registros de madrugada cuentan para la noche anterior. Respeta el periodo elegido en el mapa.</p>
+        <p class="small text-muted mb-2">Antenas que aparecen en el horario nocturno, ordenadas por el número de noches distintas. Activa el switch de una o varias para verlas juntas en el mapa. Los registros de madrugada cuentan para la noche anterior. Respeta el periodo elegido en el mapa.</p>
         <form id="planningOvernightSettings" class="row g-2 align-items-end mb-2" novalidate>
           <div class="col-6 col-sm-3">
             <label for="planningNightStart" class="form-label small mb-1">Noche desde</label>
@@ -122,7 +123,7 @@
       </div>
       <div class="planning-antennas mb-3" aria-labelledby="planningAntennasTitle">
         <h3 id="planningAntennasTitle" class="h6">Frecuencia de antenas</h3>
-        <p class="small text-muted mb-2">Apariciones en el archivo. Pulsa una antena para identificarla en el mapa; “Copiar” la lleva al portapapeles.</p>
+        <p class="small text-muted mb-2">Apariciones en el archivo. Activa el switch (o pulsa la antena) para mostrarla en el mapa; puedes activar varias a la vez; “Copiar” la lleva al portapapeles.</p>
         <div id="planningAntennas" class="planning-antennas-list"><p class="small mb-0">Importa un archivo para ver las antenas.</p></div>
       </div>
       <div class="planning-antennas mb-3" aria-labelledby="planningContactsTitle">
@@ -130,7 +131,7 @@
           <h3 id="planningContactsTitle" class="h6 mb-0">Contactos frecuentes</h3>
           <button id="planningContactsExport" class="btn btn-sm btn-outline-secondary" type="button" disabled>Exportar CSV</button>
         </div>
-        <p id="planningContactsTarget" class="small text-muted my-2">Con las columnas Número A y Número B se identifica la línea objetivo y se cuentan sus contactos. Pulsa un contacto para ver en el mapa dónde se comunicó con él.</p>
+        <p id="planningContactsTarget" class="small text-muted my-2">Con las columnas Número A y Número B se identifica la línea objetivo y se cuentan sus contactos. Activa el switch de uno o varios contactos para ver en el mapa dónde se comunicó con ellos.</p>
         <div id="planningContacts" class="planning-antennas-list"><p class="small mb-0">Importa un archivo para ver los contactos.</p></div>
       </div>
       <h3 class="h5">Información del archivo</h3>
@@ -153,7 +154,7 @@
   </main>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="/public/js/ruta-upload.js"></script>
-  <script type="module" src="/public/js/planeacion-geografica.js?v=12"></script>
+  <script type="module" src="/public/js/planeacion-geografica.js?v=13"></script>
   <%- include('../includes/footer') %>
 </body>
 </html>

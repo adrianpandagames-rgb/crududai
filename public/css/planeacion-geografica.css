@@ -56,3 +56,12 @@ html[data-theme="dark"] .planning-antenna.is-selected { background: #16324f; col
 .planning-palette:has(input:focus-visible) { outline: 2px solid #16456b; outline-offset: 2px; }
 html[data-theme="dark"] .planning-palette { background: #1f2937; border-color: #374151; color: var(--dark-text); }
 html[data-theme="dark"] .planning-palette:hover { background: #273449; }
+/* A switch before each option of Pernocta, Frecuencia and Contactos; several can be on at once. */
+.planning-antenna-item { grid-template-columns: auto minmax(0, 1fr) auto; }
+.planning-option-nocopy { grid-template-columns: auto minmax(0, 1fr); }
+.planning-option-switch { display: flex; align-items: center; margin: 0; padding-left: 2.5em; min-height: 0; }
+.planning-option-switch .form-check-input { width: 2.2em; height: 1.2em; margin-top: 0; cursor: pointer; }
+/* "Ruta" view: red pin with the antenna number above it. */
+.planning-route-marker { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; width: 40px; height: 60px; pointer-events: auto; cursor: pointer; }
+.planning-route-marker svg { display: block; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .4)); }
+.planning-route-number { margin-bottom: 1px; color: #1f1f1f; font: 700 15px/1 system-ui, sans-serif; white-space: nowrap; text-shadow: -1.5px -1.5px 0 #fff, 1.5px -1.5px 0 #fff, -1.5px 1.5px 0 #fff, 1.5px 1.5px 0 #fff, 0 0 3px #fff; }

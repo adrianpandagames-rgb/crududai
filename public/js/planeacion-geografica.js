@@ -1,14 +1,18 @@
 import { coverageSector, adjustSaturation } from './planeacion-geometry.js?v=7';
 import { COVERAGE_PALETTES, DEFAULT_PALETTE, paletteById } from './planeacion-paletas.js?v=1';
 import {
-  summarizeAntennas, antennaClipboardText, antennaClipboardHtml, rowMatches, frequencyScale, selectionCsv,
-} from './planeacion-antenas.js?v=9';
-import { findOvernightLocations } from './planeacion-pernocta.js?v=2';
+  summarizeAntennas, antennaClipboardText, antennaClipboardHtml, rowMatches, frequencyScale, selectionCsv, antennaNumbers,
+} from './planeacion-antenas.js?v=10';
+import { findOvernightLocations } from './planeacion-pernocta.js?v=3';
 import { summarizeContacts, contactCells, contactsCsv, formatContactTime } from './planeacion-contactos.js?v=1';
 
 const byId = (id) => document.getElementById(id);
 const status = byId('planningStatus');
 const PAGE_SIZE = 200;
+// Red map pin with a dark centre, drawn under the antenna number in the "Ruta" view.
+const ROUTE_PIN = '<svg viewBox="0 0 24 34" width="28" height="40" aria-hidden="true">'
+  + '<path d="M12 1C5.9 1 1 5.8 1 11.8 1 20 12 33 12 33s11-13 11-21.2C23 5.8 18.1 1 12 1z" fill="#d93a2b" stroke="#a3261b" stroke-width="1.2"/>'
+  + '<circle cx="12" cy="12" r="4.2" fill="#7a1a12"/></svg>';
 // Imported files live only in this page: leaving or reloading it discards them. Earlier versions
 // kept the last import in sessionStorage; wipe anything they left behind.
 try {
@@ -172,6 +176,7 @@ if (!window.L) {
   const selectedRows = new Set();
   let selectionActive = false;
   let pointsByRow = new Map();
+  let numbers = new Map();
   let coordinateFilter = null;
   let page = 1;
   const coordinateKey = (point) => point ? `${point.lat.toFixed(6)},${point.lng.toFixed(6)}` : null;
@@ -240,18 +245,26 @@ if (!window.L) {
     return Boolean(time) && (!from.value || time >= from.value) && (!to.value || time <= to.value);
   }
 
-  // An option picked in Frecuencia de antenas, Pernocta or Contactos frecuentes replaces whatever was shown before:
-  // the map and the table keep only its records. Picking the same option again shows everything.
-  let option = null;
+  // Every option in Frecuencia de antenas, Pernocta and Contactos frecuentes has its own switch. The map and the table
+  // show the records of all the options switched on together; with none on, everything is shown.
+  const options = new Map();
+  const optionRows = () => {
+    const rows = new Set();
+    for (const entry of options.values()) for (const row of entry.rows) rows.add(row);
+    return rows;
+  };
+  let shownRows = null;
   function markOption() {
-    for (const button of document.querySelectorAll('[data-option]')) {
-      const active = button.dataset.option === option?.id;
+    for (const button of document.querySelectorAll('button[data-option]')) {
+      const active = options.has(button.dataset.option);
       button.classList.toggle('is-selected', active);
       button.setAttribute('aria-pressed', String(active));
     }
+    for (const toggle of document.querySelectorAll('input[data-option]')) toggle.checked = options.has(toggle.dataset.option);
   }
   function clearSelection() {
-    option = null;
+    options.clear();
+    shownRows = null;
     selectedRows.clear();
     selectionActive = false;
     coordinateFilter = null;
@@ -259,23 +272,28 @@ if (!window.L) {
     map.closePopup();
     markOption();
   }
+  function optionsLabel() {
+    const labels = [...options.values()].map((entry) => entry.label);
+    return labels.length <= 3 ? labels.join(' + ') : `${labels.length} opciones activas`;
+  }
+  // Switches the option on or off, keeping the others as they are.
   function selectOption({ id, label, rows, popup = null }) {
     if (!radius.reportValidity()) return;
-    const again = option?.id === id;
-    clearSelection();
+    const turningOn = !options.has(id);
+    if (turningOn) options.set(id, { label, rows });
+    else options.delete(id);
+    selectedRows.clear();
+    coordinateFilter = null;
+    map.closePopup();
     page = 1;
-    if (again) {
-      table();
-      draw({ fit: true });
-      return;
-    }
-    option = { id, label, rows: new Set(rows) };
-    rows.filter((row) => pointsByRow.has(row)).forEach((row) => selectedRows.add(row));
-    selectionActive = true;
+    shownRows = options.size ? optionRows() : null;
+    selectionActive = Boolean(shownRows);
+    if (shownRows) for (const row of shownRows) if (pointsByRow.has(row)) selectedRows.add(row);
     markOption();
     table();
     draw({ fit: true });
-    if (!selectedRows.size) {
+    if (!turningOn) return;
+    if (!rows.some((row) => pointsByRow.has(row))) {
       message(`${label}: sus registros no tienen coordenadas válidas para mostrar en el mapa; se listan en la tabla.`, true);
       byId('planningData').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       return;
@@ -286,6 +304,23 @@ if (!window.L) {
       L.popup().setLatLng([popup.lat, popup.lng]).setContent(description).openOn(map);
     }
     mapElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  // The switch at the start of each option; the option's button does the same when clicked.
+  let switchCount = 0;
+  function optionSwitch(id, label, select) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'form-check form-switch planning-option-switch';
+    const toggle = document.createElement('input');
+    toggle.type = 'checkbox';
+    toggle.className = 'form-check-input';
+    toggle.setAttribute('role', 'switch');
+    toggle.id = `planningOption${++switchCount}`;
+    toggle.dataset.option = id;
+    toggle.checked = options.has(id);
+    toggle.setAttribute('aria-label', `Mostrar ${label} en el mapa`);
+    toggle.addEventListener('change', select);
+    wrapper.append(toggle);
+    return wrapper;
   }
 
   function antennaSummary() {
@@ -309,10 +344,11 @@ if (!window.L) {
       button.append(title, location, coordinates);
       const antennaId = `antena:${group.name}|${group.coordinates}`;
       button.dataset.option = antennaId;
-      button.addEventListener('click', () => selectOption({
+      const pick = () => selectOption({
         id: antennaId, label: `Antena ${group.name}`, rows: group.rows,
         popup: { lat: group.points[0].lat, lng: group.points[0].lng, text: `${group.name} · ${group.ubicacion} · ${group.lugar} · ${group.rows.length} registros` },
-      }));
+      });
+      button.addEventListener('click', pick);
       const copy = document.createElement('button');
       copy.type = 'button';
       copy.className = 'btn btn-sm btn-outline-secondary planning-copy';
@@ -326,7 +362,7 @@ if (!window.L) {
           })
           .catch(() => message('No fue posible copiar la antena al portapapeles. Intenta de nuevo.', true));
       });
-      item.append(button, copy);
+      item.append(optionSwitch(antennaId, `la antena ${group.name}`, pick), button, copy);
       fragment.append(item);
     }
     if (!located.length) {
@@ -395,7 +431,10 @@ if (!window.L) {
       button.append(title, place, detail, coordinates);
       button.dataset.option = overnightId(location);
       button.addEventListener('click', () => showOvernight(location));
-      fragment.append(button);
+      const item = document.createElement('div');
+      item.className = 'planning-antenna-item planning-option-nocopy';
+      item.append(optionSwitch(overnightId(location), `la pernocta ${index + 1} (${location.name})`, () => showOvernight(location)), button);
+      fragment.append(item);
       // Numbered pins above the coverage, the most likely one larger and in its own colour.
       L.marker([location.lat, location.lng], {
         icon: L.divIcon({
@@ -430,7 +469,7 @@ if (!window.L) {
     note.textContent = !contacts.target ? 'No se encontraron números en las columnas A y B.'
       : contacts.detected
         ? `Objetivo detectado: ${contacts.target} (el número más frecuente en A y B${contacts.typed ? `; la línea capturada ${contacts.typed} no aparece en el archivo` : ''}). ${contacts.contacts.length} contactos${period}.`
-        : `Objetivo: ${contacts.target}. ${contacts.contacts.length} contactos${period}. Pulsa un contacto para ver en el mapa dónde se comunicó con él.`;
+        : `Objetivo: ${contacts.target}. ${contacts.contacts.length} contactos${period}. Activa el switch de un contacto para ver en el mapa dónde se comunicó con él.`;
     const total = contacts.contacts.reduce((sum, contact) => sum + contact.total, 0);
     for (const contact of contacts.contacts) {
       const item = document.createElement('div');
@@ -448,8 +487,10 @@ if (!window.L) {
         range.textContent = `Del ${formatContactTime(contact.first)} al ${formatContactTime(contact.last)}`;
         button.append(range);
       }
-      button.dataset.option = `contacto:${contact.line}`;
-      button.addEventListener('click', () => selectOption({ id: `contacto:${contact.line}`, label: `Contacto ${contact.line}`, rows: contact.rows }));
+      const contactId = `contacto:${contact.line}`;
+      button.dataset.option = contactId;
+      const pick = () => selectOption({ id: contactId, label: `Contacto ${contact.line}`, rows: contact.rows });
+      button.addEventListener('click', pick);
       const copy = document.createElement('button');
       copy.type = 'button';
       copy.className = 'btn btn-sm btn-outline-secondary planning-copy';
@@ -464,7 +505,7 @@ if (!window.L) {
           })
           .catch(() => message('No fue posible copiar el contacto al portapapeles. Intenta de nuevo.', true));
       });
-      item.append(button, copy);
+      item.append(optionSwitch(contactId, `el contacto ${contact.line}`, pick), button, copy);
       fragment.append(item);
     }
     if (contacts.target && !contacts.contacts.length) {
@@ -514,6 +555,11 @@ if (!window.L) {
     // The busiest points are drawn last, so their darker colour stays on top where coverages overlap.
     const ordered = [...points].sort((a, b) => countOf(a) - countOf(b));
     const asRange = coverageMode.value === 'range';
+    if (coverageMode.value === 'route') {
+      renderLegend(null);
+      finishDraw(points, drawRoute(ordered), shouldFit);
+      return;
+    }
     for (const point of ordered) {
       const bearing = point.azimuth;
       // Records of the same antenna and azimuth share one coverage; repeating it would only darken it.
@@ -540,10 +586,42 @@ if (!window.L) {
       }).on('click', () => showCoordinateRecords(point)).addTo(layers);
     }
     renderLegend(scale);
+    finishDraw(points, seen, shouldFit);
+  }
+  // "Ruta": no coverage, one red pin per antenna with its number above, as in the Ruta KMZ.
+  function drawRoute(points) {
+    const placed = new Set();
+    const records = new Map();
+    for (const point of points) records.set(coordinateKey(point), (records.get(coordinateKey(point)) || 0) + 1);
+    for (const point of points) {
+      const key = coordinateKey(point);
+      if (placed.has(key)) continue;
+      placed.add(key);
+      const number = numbers.get(key) || '';
+      const label = document.createElement('span');
+      label.className = 'planning-route-number';
+      label.textContent = number;
+      const icon = document.createElement('div');
+      icon.className = 'planning-route-marker';
+      icon.innerHTML = ROUTE_PIN;
+      icon.prepend(label);
+      L.marker([point.lat, point.lng], {
+        icon: L.divIcon({ className: '', html: icon, iconSize: [40, 60], iconAnchor: [20, 60], tooltipAnchor: [0, -46] }),
+        keyboard: false, title: `Antena ${number}`,
+      }).bindTooltip(`Antena ${number} · ${records.get(key)} registros`)
+        .on('click', () => showCoordinateRecords(point)).addTo(layers);
+    }
+    return placed;
+  }
+  function finishDraw(points, seen, shouldFit) {
     byId('planningFit').disabled = !data.points.length;
     byId('planningExportSelection').disabled = !selectionActive || selectedRows.size === 0;
     const period = timeFilterActive() ? ` en el periodo elegido` : '';
-    if (selectionActive && selectedRows.size === 1) {
+    if (coverageMode.value === 'route') {
+      message(selectionActive
+        ? `${selectedRows.size} registros seleccionados en ${seen.size} antenas. Pulsa un pin para ver sus registros.`
+        : `${points.length} de ${data.rows.length} registros con coordenadas${period} en ${seen.size} antenas. ${data.omitted} registros sin coordenadas válidas.`);
+    } else if (selectionActive && selectedRows.size === 1) {
       const selectedRow = [...selectedRows][0];
       const point = pointsByRow.get(selectedRow);
       message(point.azimuth === null
@@ -562,7 +640,7 @@ if (!window.L) {
     const visible = [];
     for (const [offset, row] of data.rows.entries()) {
       const rowNumber = offset + 1;
-      if (option && !option.rows.has(rowNumber)) continue;
+      if (shownRows && !shownRows.has(rowNumber)) continue;
       if (coordinateFilter !== null && coordinateKey(pointsByRow.get(rowNumber)) !== coordinateFilter) continue;
       if (!inPeriod(rowNumber) || !rowMatches(row, search.value)) continue;
       visible.push(rowNumber);
@@ -622,13 +700,13 @@ if (!window.L) {
     }
     byId('planningRows').replaceChildren(fragment);
     const filters = [
-      option ? option.label : '',
+      options.size ? optionsLabel() : '',
       coordinateFilter === null ? '' : `Coordenadas: ${coordinateFilter}`,
       timeFilterActive() ? 'Periodo filtrado' : '',
       search.value.trim() ? `Búsqueda: “${search.value.trim()}”` : '',
     ].filter(Boolean).join(' · ');
     byId('planningFile').textContent = `${data.name}${contacts?.target ? ` · Objetivo ${contacts.target}` : ''} · ${visible.length} de ${data.rows.length} registros${filters ? ` · ${filters}` : ''}`;
-    byId('planningClearFilter').hidden = coordinateFilter === null && !option;
+    byId('planningClearFilter').hidden = coordinateFilter === null && !options.size;
     const pager = document.querySelector('.planning-pager');
     pager.hidden = totalPages <= 1;
     byId('planningPageInfo').textContent = `Página ${page} de ${totalPages}`;
@@ -661,6 +739,7 @@ if (!window.L) {
       input.max = times.at(-1) || '';
     }
     pointsByRow = new Map(data.points.map((point) => [point.row, point]));
+    numbers = antennaNumbers(data);
     antennaSummary();
     overnightSummary();
     contactSummary();
@@ -771,7 +850,7 @@ if (!window.L) {
   byId('planningClearFilter').addEventListener('click', () => {
     if (!data) return;
     page = 1;
-    if (!option) {
+    if (!options.size) {
       coordinateFilter = null;
       table();
       return;

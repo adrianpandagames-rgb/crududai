@@ -45,3 +45,15 @@ test('antenna summary includes records without coordinates and distinguishes dif
   assert.equal(groups[2].points.length, 0);
   assert.equal(groups[2].coordinates, 'Sin coordenadas válidas');
 });
+
+test('Ruta view numbers each antenna like the Ruta KMZ', async () => {
+  const { antennaNumbers } = await import('../public/js/planeacion-antenas.js');
+  const withColumn = {
+    headers: ['antena', 'latitud', 'longitud'],
+    rows: [['7', '29.1', '-110.9'], ['7', '29.1', '-110.9'], ['', '29.2', '-110.8']],
+    points: [{ lat: 29.1, lng: -110.9, row: 1 }, { lat: 29.1, lng: -110.9, row: 2 }, { lat: 29.2, lng: -110.8, row: 3 }],
+  };
+  assert.deepEqual([...antennaNumbers(withColumn)], [['29.100000,-110.900000', '7'], ['29.200000,-110.800000', '2']]);
+  const withoutColumn = { ...withColumn, headers: ['x', 'latitud', 'longitud'] };
+  assert.deepEqual([...antennaNumbers(withoutColumn).values()], ['1', '2']);
+});
