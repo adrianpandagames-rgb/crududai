@@ -3,7 +3,7 @@
 <head>
   <%- include('../includes/head') %>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <link rel="stylesheet" href="/public/css/planeacion-geografica.css?v=10" />
+  <link rel="stylesheet" href="/public/css/planeacion-geografica.css?v=11" />
 </head>
 <body>
   <%- include('../includes/header') %>
@@ -101,6 +101,7 @@
       <div class="planning-antennas mb-3" aria-labelledby="planningOvernightTitle">
         <div class="planning-module-head">
           <h3 id="planningOvernightTitle" class="h6 mb-0">Posibles ubicaciones de pernocta</h3>
+          <button class="btn btn-sm btn-outline-secondary ms-auto" type="button" data-module-reset="overnight" aria-label="Restablecer posibles ubicaciones de pernocta" title="Quita la selección del módulo y restaura sus valores iniciales">Restablecer</button>
           <div class="form-check form-switch planning-module-switch mb-0"><input class="form-check-input" type="checkbox" role="switch" id="planningModule-overnight" data-module="overnight" checked aria-label="Activar posibles ubicaciones de pernocta" /></div>
         </div>
         <div data-module-body="overnight">
@@ -130,10 +131,12 @@
       <div class="planning-antennas mb-3" aria-labelledby="planningAntennasTitle">
         <div class="planning-module-head">
           <h3 id="planningAntennasTitle" class="h6 mb-0">Frecuencia de antenas</h3>
+          <button class="btn btn-sm btn-outline-secondary ms-auto" type="button" data-module-reset="antennas" aria-label="Restablecer frecuencia de antenas" title="Quita la selección del módulo">Restablecer</button>
           <div class="form-check form-switch planning-module-switch mb-0"><input class="form-check-input" type="checkbox" role="switch" id="planningModule-antennas" data-module="antennas" checked aria-label="Activar frecuencia de antenas" /></div>
         </div>
         <div data-module-body="antennas">
-        <p class="small text-muted mb-2">Apariciones en el archivo. Pulsa una antena para identificarla en el mapa; “Copiar” la lleva al portapapeles.</p>
+        <p class="small text-muted mb-2">Apariciones en el archivo. Pulsa una o varias antenas para mostrarlas juntas en el mapa con su número; vuelve a pulsar una para quitarla. “Copiar” la lleva al portapapeles.</p>
+        <div id="planningAntennasSelected" class="planning-selected mb-2" aria-live="polite" hidden></div>
         <div id="planningAntennas" class="planning-antennas-list"><p class="small mb-0">Importa un archivo para ver las antenas.</p></div>
         </div>
       </div>
@@ -141,6 +144,7 @@
         <div class="d-flex justify-content-between align-items-center gap-2">
           <h3 id="planningContactsTitle" class="h6 mb-0 me-auto">Contactos frecuentes</h3>
           <button id="planningContactsExport" class="btn btn-sm btn-outline-secondary" type="button" disabled>Exportar CSV</button>
+          <button class="btn btn-sm btn-outline-secondary ms-auto" type="button" data-module-reset="contacts" aria-label="Restablecer contactos frecuentes" title="Quita la selección del módulo">Restablecer</button>
           <div class="form-check form-switch planning-module-switch mb-0"><input class="form-check-input" type="checkbox" role="switch" id="planningModule-contacts" data-module="contacts" checked aria-label="Activar contactos frecuentes" /></div>
         </div>
         <div data-module-body="contacts">
@@ -168,7 +172,7 @@
   </main>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="/public/js/ruta-upload.js"></script>
-  <script type="module" src="/public/js/planeacion-geografica.js?v=15"></script>
+  <script type="module" src="/public/js/planeacion-geografica.js?v=16"></script>
   <%- include('../includes/footer') %>
 </body>
 </html>

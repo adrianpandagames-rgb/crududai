@@ -64,3 +64,14 @@ html[data-theme="dark"] .planning-palette:hover { background: #273449; }
 .planning-route-marker { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; width: 40px; height: 60px; pointer-events: auto; cursor: pointer; }
 .planning-route-marker svg { display: block; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .4)); }
 .planning-route-number { margin-bottom: 1px; color: #1f1f1f; font: 700 15px/1 system-ui, sans-serif; white-space: nowrap; text-shadow: -1.5px -1.5px 0 #fff, 1.5px -1.5px 0 #fff, -1.5px 1.5px 0 #fff, 1.5px 1.5px 0 #fff, 0 0 3px #fff; }
+/* Frecuencia de antenas: the antennas picked together, each with its number. */
+.planning-antenna-number { display: none; }
+.planning-antenna.is-selected .planning-antenna-number { display: inline-flex; }
+.planning-selected { display: grid; gap: 6px; padding: 8px 10px; border: 1px solid #087cf0; border-radius: 6px; background: #f2f8ff; font-size: 12px; color: #16456b; }
+.planning-selected-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.planning-selected-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.planning-selected-chip { display: inline-flex; align-items: center; min-height: 32px; padding: 4px 8px; border: 1px solid #b9d3ec; border-radius: 16px; background: #fff; color: #16456b; font-size: 12px; cursor: pointer; overflow-wrap: anywhere; }
+.planning-selected-chip:hover { background: #eaf3ff; }
+.planning-selected-chip:focus-visible { outline: 2px solid #087cf0; outline-offset: 1px; }
+html[data-theme="dark"] .planning-selected { background: #10263c; color: #e6f0fa; }
+html[data-theme="dark"] .planning-selected-chip { background: #16324f; color: #e6f0fa; border-color: #2d5679; }

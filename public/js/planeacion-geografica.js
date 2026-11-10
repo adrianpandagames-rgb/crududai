@@ -248,13 +248,16 @@ if (!window.L) {
 
   // An option picked in Frecuencia de antenas, Pernocta or Contactos frecuentes replaces whatever was shown before:
   // the map and the table keep only its records. Picking the same option again shows everything.
+  // Frecuencia de antenas is the exception: each antenna toggles in or out of a selection of several antennas.
+  // `option.ids` holds the picked option ids (several only for antennas).
   let option = null;
   function markOption() {
     for (const button of document.querySelectorAll('[data-option]')) {
-      const active = button.dataset.option === option?.id;
+      const active = Boolean(option?.ids.has(button.dataset.option));
       button.classList.toggle('is-selected', active);
       button.setAttribute('aria-pressed', String(active));
     }
+    renderSelectedAntennas();
   }
   function clearSelection() {
     option = null;
@@ -265,17 +268,17 @@ if (!window.L) {
     map.closePopup();
     markOption();
   }
-  function selectOption({ id, label, rows, popup = null }) {
+  function selectOption({ id, label, rows, popup = null, ids = new Set([id]), groups = null }) {
     if (!radius.reportValidity()) return;
-    const again = option?.id === id;
+    const again = option?.id === id && !groups;
     clearSelection();
     page = 1;
-    if (again) {
+    if (again || !ids.size) {
       table();
       draw({ fit: true });
       return;
     }
-    option = { id, label, rows: new Set(rows) };
+    option = { id, label, rows: new Set(rows), ids, groups };
     rows.filter((row) => pointsByRow.has(row)).forEach((row) => selectedRows.add(row));
     selectionActive = true;
     markOption();
@@ -327,13 +330,86 @@ if (!window.L) {
   for (const name of Object.keys(modules)) {
     document.querySelector(`input[data-module="${name}"]`).addEventListener('change', (event) => setModule(name, event.target.checked));
   }
+  // "Restablecer" takes the module's selection off the map and the table and, for Pernocta, puts back the
+  // night hours, minimum share and grouping distance the page starts with. The switch stays as it is.
+  function resetModule(name) {
+    if (name === 'overnight') {
+      for (const input of [nightStart, nightEnd, nightShare, nightRadius]) input.value = input.defaultValue;
+    }
+    if (!data) return;
+    if (option?.id.startsWith(MODULE_PREFIX[name])) {
+      clearSelection();
+      page = 1;
+      table();
+      draw({ fit: true });
+    }
+    if (name === 'overnight') {
+      overnightSummary();
+      if (coverageMode.value === 'modules') draw({ fit: true });
+    }
+  }
+  for (const button of document.querySelectorAll('[data-module-reset]')) {
+    button.addEventListener('click', () => resetModule(button.dataset.moduleReset));
+  }
 
   const antennaOptionId = (group) => `antena:${group.name}|${group.coordinates}`;
+  // The antenna number of the Ruta view (antena column of its first record, or its order of appearance).
+  const antennaNumber = (group) => numbers.get(coordinateKey(group.points[0])) || '';
+  // Pressing an antenna adds it to the selection, or removes it when it was already there.
   function showAntenna(group) {
+    const id = antennaOptionId(group);
+    const current = option?.groups ? [...option.groups] : [];
+    const groups = current.some((picked) => antennaOptionId(picked) === id)
+      ? current.filter((picked) => antennaOptionId(picked) !== id)
+      : [...current, group];
+    selectAntennas(groups, groups.length === 1 && groups[0] === group);
+  }
+  function selectAntennas(groups, withPopup = false) {
+    const [first] = groups;
     selectOption({
-      id: antennaOptionId(group), label: `Antena ${group.name}`, rows: group.rows,
-      popup: { lat: group.points[0].lat, lng: group.points[0].lng, text: `${group.name} · ${group.ubicacion} · ${group.lugar} · ${group.rows.length} registros` },
+      id: 'antena:seleccion',
+      ids: new Set(groups.map(antennaOptionId)),
+      groups,
+      label: groups.length === 1 ? `Antena ${antennaNumber(first)}` : `Antenas ${groups.map(antennaNumber).join(', ')}`,
+      rows: [...new Set(groups.flatMap((group) => group.rows))],
+      popup: withPopup ? {
+        lat: first.points[0].lat, lng: first.points[0].lng,
+        text: `Antena ${antennaNumber(first)} · ${first.name} · ${first.ubicacion} · ${first.lugar} · ${first.rows.length} registros`,
+      } : null,
     });
+  }
+  // The antennas picked in Frecuencia de antenas, with their number; each can be removed on its own.
+  function renderSelectedAntennas() {
+    const box = byId('planningAntennasSelected');
+    const groups = option?.groups || [];
+    box.hidden = !groups.length;
+    if (!groups.length) return box.replaceChildren();
+    const head = document.createElement('div');
+    head.className = 'planning-selected-head';
+    const title = document.createElement('strong');
+    const records = new Set(groups.flatMap((group) => group.rows)).size;
+    title.textContent = `${groups.length} ${groups.length === 1 ? 'antena seleccionada' : 'antenas seleccionadas'} · ${records} registros`;
+    const clear = document.createElement('button');
+    clear.type = 'button';
+    clear.className = 'btn btn-sm btn-link p-0';
+    clear.textContent = 'Quitar todas';
+    clear.addEventListener('click', () => selectAntennas([]));
+    head.append(title, clear);
+    const list = document.createElement('div');
+    list.className = 'planning-selected-list';
+    for (const group of groups) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'planning-selected-chip';
+      chip.setAttribute('aria-label', `Quitar la antena ${antennaNumber(group)} de la selección`);
+      const number = document.createElement('span');
+      number.className = 'planning-overnight-rank';
+      number.textContent = antennaNumber(group);
+      chip.append(number, `${group.name} · ${group.rows.length} registros`, ' ×');
+      chip.addEventListener('click', () => showAntenna(group));
+      list.append(chip);
+    }
+    box.replaceChildren(head, list);
   }
   // Share of all the records of the file, as in the row "Copiar" puts on the clipboard.
   const usage = (group) => `${(data.rows.length ? group.rows.length / data.rows.length * 100 : 0).toFixed(1)}%`;
@@ -351,7 +427,11 @@ if (!window.L) {
       button.type = 'button';
       button.className = 'planning-antenna';
       const title = document.createElement('strong');
-      title.textContent = `${group.name} · ${group.rows.length} registros`;
+      // The antenna number shows only while the antenna is selected (see planeacion-geografica.css).
+      const number = document.createElement('span');
+      number.className = 'planning-overnight-rank planning-antenna-number';
+      number.textContent = antennaNumber(group);
+      title.append(number, `${group.name} · ${group.rows.length} registros`);
       const location = document.createElement('span');
       location.textContent = `Ubicación: ${group.ubicacion || 'Sin información'} · Lugar: ${group.lugar || 'Sin información'}`;
       const coordinates = document.createElement('span');
@@ -600,6 +680,11 @@ if (!window.L) {
       L.circleMarker([point.lat, point.lng], {
         radius: selectionActive ? 7 : 6, color: '#1f1f1f', weight: 1.5, fillColor: color, fillOpacity: 1, interactive: true,
       }).on('click', () => showCoordinateRecords(point)).addTo(layers);
+    }
+    // Selected antennas carry their number over the coverage, as the pins of "Ruta" do.
+    for (const group of option?.groups || []) {
+      routePin(group.points[0], antennaNumber(group), `Antena ${antennaNumber(group)} · ${group.name} · ${group.rows.length} registros`,
+        () => showCoordinateRecords(group.points[0]));
     }
     renderLegend(scale);
     finishDraw(points, seen, shouldFit);
