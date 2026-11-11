@@ -832,7 +832,9 @@ if (!window.L) {
       warning.textContent = 'El archivo no tiene una columna de tipo de comunicación (Tipo, Servicio…); solo se reconocen sesiones de datos por un Número B sin línea.';
       fragment.append(warning);
     }
-    for (const { kind, label, short } of COMMUNICATION_KINDS) {
+    // Most recent first, whatever its kind; kinds without records go last.
+    const byRecency = [...COMMUNICATION_KINDS].sort((x, y) => (result[y.kind].time || '').localeCompare(result[x.kind].time || ''));
+    for (const { kind, label, short } of byRecency) {
       const found = result[kind];
       const button = document.createElement('button');
       button.type = 'button';
