@@ -80,7 +80,6 @@
             <option value="todos">Todos los operadores</option>
           </select>
         </div>
-        <p id="planningRangeHint" class="small text-muted col-xl-6 mb-2">Alcance estimado: 0.6 veces la distancia al sitio más cercano del mismo operador dentro del azimut ± 60°, según OpenCelliD y las otras antenas del archivo (de 300 m a 10 km). Si no hay ninguno al frente se usa el alcance fijo, con contorno punteado. Es una aproximación para planear, no una cobertura medida ni sirve como prueba de presencia.</p>
       </div>
       <div id="planningTimeFilter" class="row align-items-end mb-2" hidden>
         <div class="col-sm-5 col-xl-4 mb-2">
@@ -125,7 +124,6 @@
         <div class="col-xl-2 mb-2">
           <button id="planningStyleReset" class="btn btn-sm btn-outline-secondary w-100" type="button">Restablecer</button>
         </div>
-        <p class="small text-muted mb-0">Con “Por frecuencia” el color va del tono más claro (menos registros en ese punto) al más oscuro (más registros); la leyenda del mapa indica cuántos registros representa cada tono, también al seleccionar registros. Con “Un solo color” se usa un tono oscuro de la paleta. La saturación y la opacidad se aplican a todas las coberturas por igual, aunque se encimen.</p>
       </fieldset>
     </section>
     <section id="planningData" class="card p-3 planning-data-panel">
@@ -190,7 +188,6 @@
           <div class="form-check form-switch planning-module-switch mb-0"><input class="form-check-input" type="checkbox" role="switch" id="planningModule-last" data-module="last" checked aria-label="Activar última comunicación" /></div>
         </div>
         <div data-module-body="last">
-        <p class="small text-muted mb-2">El registro más reciente de llamada completada, de uso de datos y de mensajería SMS, de la más reciente a la más antigua, según la columna de tipo (Tipo, Servicio…) y, para las llamadas, la duración mayor a cero. Respeta el periodo elegido en el mapa. Pulsa una o varias para verlas juntas en el mapa; vuelve a pulsar una para quitarla. “Copiar” la lleva al portapapeles con las columnas del reporte: tipo de comunicación, número emisor, número receptor, fecha, hora, duración en segundos, ubicación de la antena y lugar.</p>
         <div id="planningLastSelected" class="planning-selected mb-2" aria-live="polite" hidden></div>
         <div id="planningLast" class="planning-antennas-list" aria-live="polite"><p class="small mb-0">Importa un archivo con fecha y hora para ver la última comunicación.</p></div>
         </div>
