@@ -82,7 +82,7 @@ const getStoredImeiMetadata = async (imei) => {
 const fetchImeiMetadata = async (imei) => {
   const storedMetadata = await getStoredImeiMetadata(imei);
   if (storedMetadata) {
-    console.log('Reusing stored IMEI metadata for', imei, 'instead of querying the API.');
+    console.log('Reusing stored IMEI metadata instead of querying the API.');
     return storedMetadata;
   }
 
@@ -110,7 +110,8 @@ const fetchImeiMetadata = async (imei) => {
         timeout: 10000,
       };
 
-      console.log('Fetching IMEI metadata from', maskApiKeyInUrl(`https://${host}${path}`), 'attemptsLeft=', attemptsLeft);
+      // The URL carries the IMEI, so only the host is logged.
+      console.log(`Fetching IMEI metadata from ${host}, attemptsLeft=`, attemptsLeft);
 
       const req = https.request(options, (response) => {
         const { statusCode } = response;
@@ -120,15 +121,13 @@ const fetchImeiMetadata = async (imei) => {
         });
         response.on('end', () => {
           console.log(`IMEI metadata response status: ${statusCode}, length: ${data.length}`);
-          console.log('IMEI metadata raw body (truncated 200 chars):', data && data.toString().slice(0, 200));
           try {
             const parsed = JSON.parse(data || '{}');
-            console.log('IMEI metadata raw parsed:', parsed);
             const brandName = (parsed && typeof parsed.brand_name !== 'undefined') ? parsed.brand_name : (parsed?.result && typeof parsed.result.brand_name !== 'undefined' ? parsed.result.brand_name : null);
             const modelo = (parsed && typeof parsed.model !== 'undefined') ? parsed.model : (parsed?.result && typeof parsed.result.model !== 'undefined' ? parsed.result.model : null);
             resolve({ brand_name: brandName, modelo, raw: data });
           } catch (error) {
-            console.log('Error parsing IMEI metadata JSON', error);
+            console.log('Error parsing IMEI metadata JSON:', error && error.message);
             resolve({ brand_name: null, modelo: null, raw: data });
           }
         });

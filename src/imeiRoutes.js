@@ -156,7 +156,6 @@ router.post('/imei/register', requireRecordCreator, async (req, res) => {
       if (metadata?.available === false) {
         imeiMetadataUnavailable = true;
       }
-      console.log('IMEI metadata for', imeiCompleto, metadata);
       await agregarImei(imeiCompleto, idObjetivo, metadata);
       inserted += 1;
 
