@@ -6,7 +6,8 @@ const fold = (value) => String(value ?? '').normalize('NFD').replace(/[̀-ͯ]/g,
 // its result. Columns about the antenna, the device or the technology are not the kind of communication.
 const TYPE = /(^|[\W_])(tipo|servicio|evento|service|type)([\W_]|$)/;
 const NOT_TYPE = /antena|antenna|tecnologia|technology|equipo|imei|imsi|celda|cell|red|network/;
-const DURATION = /duracion|duration|^dur([\W_]|$)|segundos|seconds/;
+// Telcel names it "Durac. Seg".
+const DURATION = /durac|duration|^dur([\W_]|$)|segundos|seconds|(^|[\W_])segs?([\W_]|$)/;
 const STATUS = /estatus|status|estado|resultado|result/;
 
 export function findCommunicationColumns(headers) {

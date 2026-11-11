@@ -109,3 +109,9 @@ test('the copied hour keeps the seconds and they break ties within a minute', ()
   assert.equal(result.sms.time, '2026-10-05T08:30:10');
   assert.deepEqual(lastCommunicationCells(data, 1, result.columns).slice(3, 6), ['05/10/2026', '08:30:45', '30']);
 });
+
+test('the Telcel duration column "Durac. Seg" is recognised', () => {
+  assert.equal(findCommunicationColumns(['Tipo', 'Durac. Seg']).duration, 1);
+  assert.equal(findCommunicationColumns(['Tipo', 'Seg']).duration, 1);
+  assert.equal(findCommunicationColumns(['Tipo', 'Segmento']).duration, -1);
+});
