@@ -15,7 +15,9 @@ export const OPERATORS = {
 };
 
 export const SETTINGS = {
-  minSamples: 3, // cells measured fewer times have an unreliable position
+  // Small towns often have only cells measured once or twice; dropping them leaves whole areas empty, and
+  // merging into pseudo-sites already dilutes the error of a single measurement.
+  minSamples: 1,
   mergeMetres: 500, // cells closer than this belong to the same pseudo-site
   selfMetres: 600, // the pseudo-site this close to the antenna is the antenna itself
   halfWedge: 60, // neighbours within azimuth ± this many degrees limit the sector
@@ -23,7 +25,6 @@ export const SETTINGS = {
   factor: 0.6, // share of the distance to the nearest neighbour the sector reaches
   minRange: 300,
   maxRange: 10000,
-  noNeighbourRange: 5000, // nothing ahead within the search radius (road, sierra, border)
 };
 
 const EARTH = 6371008.8;
@@ -114,18 +115,25 @@ function nearbySites({ index }, lat, lng, metres, mnc) {
 
 const clamp = (value, settings) => Math.round(Math.min(Math.max(value, settings.minRange), settings.maxRange));
 
-// Returns { range, method, neighbour? } for one antenna. Without azimuth every direction counts as "ahead".
-export function estimateRange(sites, antenna, mnc, settings = SETTINGS) {
-  const around = nearbySites(sites, antenna.lat, antenna.lng, settings.searchMetres, mnc)
-    .filter((entry) => entry.metres > settings.selfMetres);
+// Returns { range, method, neighbour?, source? } for one antenna. Without azimuth every direction counts as "ahead".
+// `extra` are the other antennas of the same file: real sites of the line's operator that OpenCelliD may lack.
+// When nothing is ahead, range is null so the caller keeps its fixed reach instead of an invented value.
+export function estimateRange(sites, antenna, mnc, settings = SETTINGS, extra = []) {
+  const fromFile = extra
+    .map((site) => ({ site, metres: distance(antenna.lat, antenna.lng, site.lat, site.lng), source: 'archivo' }))
+    .filter((entry) => entry.metres <= settings.searchMetres);
+  const around = [
+    ...nearbySites(sites, antenna.lat, antenna.lng, settings.searchMetres, mnc).map((entry) => ({ ...entry, source: 'opencellid' })),
+    ...fromFile,
+  ].filter((entry) => entry.metres > settings.selfMetres).sort((a, b) => a.metres - b.metres);
   const hasAzimuth = Number.isFinite(antenna.azimuth);
   const ahead = hasAzimuth
     ? around.filter((entry) => angleGap(bearing(antenna.lat, antenna.lng, entry.site.lat, entry.site.lng), antenna.azimuth) <= settings.halfWedge)
     : around;
   if (ahead.length) {
-    return { range: clamp(ahead[0].metres * settings.factor, settings), method: 'vecinos', neighbour: Math.round(ahead[0].metres) };
+    return { range: clamp(ahead[0].metres * settings.factor, settings), method: 'vecinos', neighbour: Math.round(ahead[0].metres), source: ahead[0].source };
   }
-  return { range: settings.noNeighbourRange, method: around.length ? 'sin-vecinos-sector' : 'sin-datos' };
+  return { range: null, method: around.length ? 'sin-vecinos-sector' : 'sin-datos' };
 }
 
 let loaded = null;

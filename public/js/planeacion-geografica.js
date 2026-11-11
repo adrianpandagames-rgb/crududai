@@ -194,18 +194,26 @@ if (!window.L) {
   const estimateKey = (point) => `${point.lat},${point.lng},${point.azimuth}`;
   const estimateFor = (point) => (rangeMode.value === 'estimated' ? estimates?.get(estimateKey(point)) : null) || null;
   const rangeFor = (point) => estimateFor(point)?.range ?? Number(radius.value);
-  const ESTIMATE_METHODS = {
-    vecinos: (estimate) => `vecino a ${estimate.neighbour} m`,
-    'sin-vecinos-sector': () => 'sin sitios al frente, valor genérico',
-    'sin-datos': () => 'sin datos del operador en la zona, valor genérico',
-  };
-  const describeEstimate = (estimate) => `${estimate.range} m estimados (${ESTIMATE_METHODS[estimate.method]?.(estimate) || estimate.method})`;
+  // Antennas without a neighbour get no estimate and keep the fixed reach, drawn with a dashed outline.
+  const isEstimated = (point) => estimateFor(point)?.range != null;
+  const SOURCES = { opencellid: 'sitio de OpenCelliD', archivo: 'otra antena del archivo' };
+  const describeEstimate = (estimate) => (estimate.range != null
+    ? `${estimate.range} m estimados (${SOURCES[estimate.source] || 'vecino'} a ${estimate.neighbour} m)`
+    : `${radius.value} m fijos (${estimate.method === 'sin-datos'
+      ? 'sin sitios conocidos a 15 km' : 'sin sitios al frente'}; no se pudo estimar)`);
   const reachSummary = () => {
     if (rangeMode.value !== 'estimated' || !estimates) return `${radius.value} m`;
-    const ranges = [...estimates.values()].map((estimate) => estimate.range).sort((a, b) => a - b);
-    const generic = [...estimates.values()].filter((estimate) => estimate.method !== 'vecinos').length;
-    return `estimado por densidad de sitios de ${operator.selectedOptions[0].text}, de ${ranges[0]} a ${ranges.at(-1)} m`
-      + `${generic ? `; ${generic} de ${ranges.length} antenas sin vecinos al frente usan el valor genérico` : ''}`;
+    const all = [...estimates.values()];
+    const ranges = all.filter((estimate) => estimate.range != null).map((estimate) => estimate.range).sort((a, b) => a - b);
+    const bySource = (source) => all.filter((estimate) => estimate.source === source).length;
+    const missing = all.length - ranges.length;
+    if (!ranges.length) {
+      return `no se pudo estimar ninguna de las ${all.length} antenas (no hay sitios de ${operator.selectedOptions[0].text}`
+        + ` en OpenCelliD ni otras antenas del archivo al frente); se usa el alcance fijo de ${radius.value} m`;
+    }
+    return `estimado de ${ranges[0]} a ${ranges.at(-1)} m para ${ranges.length} de ${all.length} antenas`
+      + ` (${bySource('opencellid')} por sitios de ${operator.selectedOptions[0].text} en OpenCelliD, ${bySource('archivo')} por otras antenas del archivo)`
+      + `${missing ? `; ${missing} sin vecinos usan el alcance fijo de ${radius.value} m (contorno punteado)` : ''}`;
   };
   async function requestEstimates() {
     if (!data || rangeMode.value !== 'estimated') return;
@@ -854,7 +862,8 @@ if (!window.L) {
       const color = adjustSaturation(scale ? scale.colorFor(countOf(point)) : palette[3], saturation.value);
       if (bearing !== null) {
         const fill = { pane: 'coverageFill', stroke: false, fillColor: color, fillOpacity: 1, interactive: false };
-        const line = { pane: 'coverageLine', color, weight: 1.5, fill: false, interactive: false };
+        const line = { pane: 'coverageLine', color, weight: 1.5, fill: false, interactive: false,
+          dashArray: rangeMode.value === 'estimated' && estimates && !isEstimated(point) ? '6 5' : null };
         if (asRange) {
           const centre = [point.lat, point.lng];
           L.circle(centre, { ...fill, radius: rangeFor(point) }).addTo(layers);

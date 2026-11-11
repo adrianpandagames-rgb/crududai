@@ -36,7 +36,9 @@ export function createPlaneacionRouter(pool, { sites = loadSites } = {}) {
     } catch {
       return res.status(503).json({ error: 'La base de sitios (OpenCelliD) no está disponible en este servidor.' });
     }
-    return res.json({ operador: operator.label, alcances: antennas.map((a) => estimateRange(index, a, operator.mnc)) });
+    // Every location of the file is a site of the line's operator, so each antenna also measures against the others.
+    const fileSites = [...new Map(antennas.map((a) => [`${a.lat},${a.lng}`, { lat: a.lat, lng: a.lng }])).values()];
+    return res.json({ operador: operator.label, alcances: antennas.map((a) => estimateRange(index, a, operator.mnc, undefined, fileSites)) });
   });
   router.post('/importar', (req, res, next) => upload(req, res, (error) => {
     if (error) return res.status(400).json({ error: error.code === 'LIMIT_FILE_SIZE'
