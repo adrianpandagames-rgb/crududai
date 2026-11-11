@@ -257,6 +257,8 @@ if (!window.L) {
   // Radius in pixels of the circle that marks each antenna; a selection adds one so it stands out.
   const MARKER_SIZES = { punto: 3, chico: 6, mediano: 9, grande: 13 };
   const MARKER_SIZE_NAMES = { punto: 'Punto', chico: 'Chico', mediano: 'Mediano', grande: 'Grande' };
+  // The red pins of "Ruta", "Solo módulos" and selected antennas scale with the same size; Chico is the original pin.
+  const PIN_SCALES = { punto: 0.5, chico: 1, mediano: 1.4, grande: 1.85 };
   // "Combinada": the size picked for each antenna (by coordinates); belongs to the loaded file only.
   let antennaSizes = new Map();
   let paletteId = DEFAULT_PALETTE;
@@ -278,7 +280,7 @@ if (!window.L) {
     ? antennaSizes.get(coordinateKey(point)) || STYLE_DEFAULTS.markerSize
     : markerSize.value);
   // "Combinada": clicking an antenna offers its size and the way to its records.
-  function openSizeMenu(point) {
+  function openSizeMenu(point, action = () => showCoordinateRecords(point)) {
     const key = coordinateKey(point);
     const box = document.createElement('div');
     box.className = 'planning-size-menu';
@@ -309,7 +311,7 @@ if (!window.L) {
     records.textContent = 'Ver sus registros';
     records.addEventListener('click', () => {
       map.closePopup();
-      showCoordinateRecords(point);
+      action();
     });
     box.append(title, group, records);
     L.popup().setLatLng([point.lat, point.lng]).setContent(box).openOn(map);
@@ -960,11 +962,22 @@ if (!window.L) {
     const icon = document.createElement('div');
     icon.className = 'planning-route-marker';
     icon.innerHTML = ROUTE_PIN;
+    // The label keeps its size; only the pin under it grows or shrinks.
+    const scale = PIN_SCALES[sizeOf(point)];
+    const pinWidth = Math.round(28 * scale);
+    const pinHeight = Math.round(40 * scale);
+    const svg = icon.querySelector('svg');
+    svg.setAttribute('width', pinWidth);
+    svg.setAttribute('height', pinHeight);
+    const width = Math.max(40, pinWidth + 12);
+    const height = pinHeight + 20;
+    icon.style.width = `${width}px`;
+    icon.style.height = `${height}px`;
     icon.prepend(label);
     L.marker([point.lat, point.lng], {
-      icon: L.divIcon({ className: '', html: icon, iconSize: [40, 60], iconAnchor: [20, 60], tooltipAnchor: [0, -46] }),
+      icon: L.divIcon({ className: '', html: icon, iconSize: [width, height], iconAnchor: [width / 2, height], tooltipAnchor: [0, -(pinHeight + 6)] }),
       keyboard: false, title: tooltip,
-    }).bindTooltip(tooltip).on('click', onClick).addTo(layers);
+    }).bindTooltip(tooltip).on('click', () => (markerSize.value === 'combinada' ? openSizeMenu(point, onClick) : onClick())).addTo(layers);
   }
   // "Solo módulos": only what the modules switched on put on the map. Pernocta keeps its numbered pins (its own
   // layer); Frecuencia de antenas adds one pin per antenna with its share of use. Contactos adds nothing until a

@@ -113,7 +113,7 @@
             <option value="combinada">Combinada (uno por antena)</option>
           </select>
         </div>
-        <p id="planningMarkerSizeHint" class="small text-muted col-sm-6 col-xl-8 mb-2">Cambia el círculo que marca cada antena, no su cobertura. Con “Combinada” pulsa una antena en el mapa para elegir su tamaño; las que no elijas quedan en Chico.</p>
+        <p id="planningMarkerSizeHint" class="small text-muted col-sm-6 col-xl-8 mb-2">Cambia el círculo o el pin rojo que marca cada antena (también en Ruta y Solo módulos), no su cobertura. Con “Combinada” pulsa una antena en el mapa para elegir su tamaño; las que no elijas quedan en Chico.</p>
         <div class="col-sm-6 col-xl-5 mb-2">
           <label for="planningSaturation" class="form-label small mb-1">Saturación: <output id="planningSaturationValue">100</output>%</label>
           <input id="planningSaturation" type="range" class="form-range" min="0" max="200" step="5" value="100" />
@@ -215,7 +215,7 @@
   </main>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="/public/js/ruta-upload.js"></script>
-  <script type="module" src="/public/js/planeacion-geografica.js?v=21"></script>
+  <script type="module" src="/public/js/planeacion-geografica.js?v=22"></script>
   <%- include('../includes/footer') %>
 </body>
 </html>
