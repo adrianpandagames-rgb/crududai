@@ -7,7 +7,7 @@ import { findOvernightLocations } from './planeacion-pernocta.js?v=3';
 import { summarizeContacts, contactCells, contactsCsv, formatContactTime } from './planeacion-contactos.js?v=1';
 import {
   findLastCommunications, COMMUNICATION_KINDS, lastCommunicationCells, lastCommunicationClipboard,
-} from './planeacion-ultima.js?v=2';
+} from './planeacion-ultima.js?v=3';
 
 const byId = (id) => document.getElementById(id);
 const status = byId('planningStatus');

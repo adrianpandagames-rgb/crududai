@@ -96,3 +96,16 @@ test('several rows are copied as text and as an escaped HTML table', () => {
   assert.equal(text, 'VOZ\ta<b\nSMS\tc');
   assert.equal(html, '<table><tr><td>VOZ</td><td>a&lt;b</td></tr><tr><td>SMS</td><td>c</td></tr></table>');
 });
+
+test('the copied hour keeps the seconds and they break ties within a minute', () => {
+  const data = {
+    headers: ['Tipo', 'Numero A', 'Numero B', 'Duracion'],
+    rows: [['VOZ SALIENTE', '6620000001', '6620000002', '30'], ['SMS', '6620000001', '6620000002', '']],
+    times: { 1: '2026-10-05T08:30', 2: '2026-10-05T08:30' },
+    clocks: { 1: '08:30:45', 2: '08:30:10' },
+  };
+  const result = findLastCommunications(data);
+  assert.equal(result.call.time, '2026-10-05T08:30:45');
+  assert.equal(result.sms.time, '2026-10-05T08:30:10');
+  assert.deepEqual(lastCommunicationCells(data, 1, result.columns).slice(3, 6), ['05/10/2026', '08:30:45', '30']);
+});

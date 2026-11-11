@@ -65,13 +65,20 @@ export function extractPlanningPoints(rows) {
   const timeIndex = findHeaderColumn(headers, ['hora', 'time']);
   const points = [];
   const times = {};
+  // "HH:MM:SS" of each record: `times` stops at the minute, as the period inputs do, but reports need the seconds.
+  const clocks = {};
   let omitted = 0;
   let missingAzimuth = 0;
   for (let index = 1; index < rows.length; index++) {
     const row = rows[index];
     if (dateIndex >= 0) {
-      const time = parsePlanningTime(row[dateIndex], timeIndex >= 0 && timeIndex !== dateIndex ? row[timeIndex] : '');
-      if (time) times[index] = time;
+      const timeValue = timeIndex >= 0 && timeIndex !== dateIndex ? row[timeIndex] : '';
+      const time = parsePlanningTime(row[dateIndex], timeValue);
+      if (time) {
+        times[index] = time;
+        const [, , , hours, minutes, seconds] = parseDateTimeParts(row[dateIndex], timeValue);
+        clocks[index] = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+      }
     }
     const rawLat = latIndex >= 0 ? firstListedValue(row[latIndex]) : '';
     const rawLng = lngIndex >= 0 ? firstListedValue(row[lngIndex]) : '';
@@ -87,5 +94,5 @@ export function extractPlanningPoints(rows) {
     if (azimuth === null) missingAzimuth++;
     points.push({ lat, lng, azimuth, row: index, ...(times[index] ? { time: times[index] } : {}) });
   }
-  return { points, omitted, missingAzimuth, times, hasTimes: Object.keys(times).length > 0 };
+  return { points, omitted, missingAzimuth, times, clocks, hasTimes: Object.keys(times).length > 0 };
 }

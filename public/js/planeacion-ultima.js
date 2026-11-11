@@ -68,8 +68,9 @@ export function findLastCommunications(data, include = () => true) {
     if (!kind) return;
     const entry = result[kind];
     entry.count++;
-    const time = data.times?.[rowNumber];
-    // Ties keep the later row of the file.
+    // The seconds break ties within a minute; equal times keep the later row of the file.
+    const time = data.times?.[rowNumber] && data.clocks?.[rowNumber]
+      ? `${data.times[rowNumber].slice(0, 10)}T${data.clocks[rowNumber]}` : data.times?.[rowNumber];
     if (time && time >= entry.time) Object.assign(entry, { row: rowNumber, time });
   });
   return result;
@@ -94,7 +95,8 @@ export function lastCommunicationCells(data, rowNumber, columns, { label = '', l
   if (INCOMING.test(fold(type)) && target && lineKey(sender) === target && lineKey(receiver) !== target) {
     [sender, receiver] = [receiver, sender];
   }
-  const [, year, month, day, time = ''] = String(data.times?.[rowNumber] || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:T(.*))?$/) || [];
+  const [, year, month, day, minute = ''] = String(data.times?.[rowNumber] || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:T(.*))?$/) || [];
+  const time = data.clocks?.[rowNumber] || minute;
   const seconds = columns.duration >= 0 ? parseDuration(row[columns.duration]) : null;
   return [
     type || label, sender, receiver, year ? `${day}/${month}/${year}` : '', time,
