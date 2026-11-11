@@ -62,6 +62,26 @@
           <button id="planningFit" class="btn btn-outline-primary" type="button" disabled>Ver todas las antenas</button>
         </div>
       </div>
+      <div class="row align-items-end mb-2">
+        <div class="col-sm-6 col-xl-3 mb-2">
+          <label for="planningRangeMode" class="form-label">Tipo de alcance</label>
+          <select id="planningRangeMode" class="form-select" aria-describedby="planningRangeHint">
+            <option value="fixed" selected>Fijo (el de Alcance en metros)</option>
+            <option value="estimated">Estimado por densidad de sitios</option>
+          </select>
+        </div>
+        <div class="col-sm-6 col-xl-3 mb-2">
+          <label for="planningOperator" class="form-label">Operador de la sábana</label>
+          <select id="planningOperator" class="form-select" disabled>
+            <option value="telcel" selected>Telcel</option>
+            <option value="att">AT&amp;T</option>
+            <option value="movistar">Movistar</option>
+            <option value="altan">Altán (Red Compartida)</option>
+            <option value="todos">Todos los operadores</option>
+          </select>
+        </div>
+        <p id="planningRangeHint" class="small text-muted col-xl-6 mb-2">Alcance estimado: 0.6 veces la distancia al sitio más cercano del mismo operador dentro del azimut ± 60°, según OpenCelliD (de 300 m a 10 km; 5 km cuando no hay sitios al frente). Es una aproximación para planear, no una cobertura medida ni sirve como prueba de presencia.</p>
+      </div>
       <div id="planningTimeFilter" class="row align-items-end mb-2" hidden>
         <div class="col-sm-5 col-xl-4 mb-2">
           <label for="planningFrom" class="form-label">Desde</label>
@@ -184,7 +204,7 @@
   </main>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="/public/js/ruta-upload.js"></script>
-  <script type="module" src="/public/js/planeacion-geografica.js?v=19"></script>
+  <script type="module" src="/public/js/planeacion-geografica.js?v=20"></script>
   <%- include('../includes/footer') %>
 </body>
 </html>

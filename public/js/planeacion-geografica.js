@@ -186,6 +186,52 @@ if (!window.L) {
   const radius = byId('planningRadius');
   const beam = byId('planningBeam');
   const colorMode = byId('planningColorMode');
+  const rangeMode = byId('planningRangeMode');
+  const operator = byId('planningOperator');
+  // Estimated reach per antenna and azimuth, asked to the server for the chosen operator.
+  let estimates = null;
+  let estimateRequest = 0;
+  const estimateKey = (point) => `${point.lat},${point.lng},${point.azimuth}`;
+  const estimateFor = (point) => (rangeMode.value === 'estimated' ? estimates?.get(estimateKey(point)) : null) || null;
+  const rangeFor = (point) => estimateFor(point)?.range ?? Number(radius.value);
+  const ESTIMATE_METHODS = {
+    vecinos: (estimate) => `vecino a ${estimate.neighbour} m`,
+    'sin-vecinos-sector': () => 'sin sitios al frente, valor genérico',
+    'sin-datos': () => 'sin datos del operador en la zona, valor genérico',
+  };
+  const describeEstimate = (estimate) => `${estimate.range} m estimados (${ESTIMATE_METHODS[estimate.method]?.(estimate) || estimate.method})`;
+  const reachSummary = () => {
+    if (rangeMode.value !== 'estimated' || !estimates) return `${radius.value} m`;
+    const ranges = [...estimates.values()].map((estimate) => estimate.range).sort((a, b) => a - b);
+    const generic = [...estimates.values()].filter((estimate) => estimate.method !== 'vecinos').length;
+    return `estimado por densidad de sitios de ${operator.selectedOptions[0].text}, de ${ranges[0]} a ${ranges.at(-1)} m`
+      + `${generic ? `; ${generic} de ${ranges.length} antenas sin vecinos al frente usan el valor genérico` : ''}`;
+  };
+  async function requestEstimates() {
+    if (!data || rangeMode.value !== 'estimated') return;
+    const request = ++estimateRequest;
+    const unique = new Map();
+    for (const point of data.points) unique.set(estimateKey(point), { lat: point.lat, lng: point.lng, azimuth: point.azimuth });
+    const antennas = [...unique.values()];
+    if (!antennas.length) return;
+    message('Calculando el alcance estimado de cada antena…');
+    try {
+      const response = await fetch('/planeacion-geografica/alcance', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operador: operator.value, antenas: antennas }),
+      });
+      if (response.redirected || response.status === 401) throw new Error('Tu sesión terminó. Vuelve a iniciar sesión.');
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'No fue posible calcular el alcance estimado.');
+      if (request !== estimateRequest) return;
+      estimates = new Map([...unique.keys()].map((key, index) => [key, result.alcances[index]]));
+      draw();
+    } catch (error) {
+      if (request !== estimateRequest) return;
+      estimates = null;
+      message(`${error.message || 'No fue posible conectar con el servidor.'} Se usa el alcance fijo.`, true);
+    }
+  }
   const from = byId('planningFrom');
   const to = byId('planningTo');
   const search = byId('planningSearch');
@@ -811,10 +857,10 @@ if (!window.L) {
         const line = { pane: 'coverageLine', color, weight: 1.5, fill: false, interactive: false };
         if (asRange) {
           const centre = [point.lat, point.lng];
-          L.circle(centre, { ...fill, radius: Number(radius.value) }).addTo(layers);
-          L.circle(centre, { ...line, radius: Number(radius.value) }).addTo(layers);
+          L.circle(centre, { ...fill, radius: rangeFor(point) }).addTo(layers);
+          L.circle(centre, { ...line, radius: rangeFor(point) }).addTo(layers);
         } else {
-          const sector = coverageSector(point.lat, point.lng, bearing, Number(radius.value), Number(beam.value));
+          const sector = coverageSector(point.lat, point.lng, bearing, rangeFor(point), Number(beam.value));
           L.polygon(sector, fill).addTo(layers);
           L.polygon(sector, line).addTo(layers);
         }
@@ -895,15 +941,17 @@ if (!window.L) {
     } else if (selectionActive && selectedRows.size === 1) {
       const selectedRow = [...selectedRows][0];
       const point = pointsByRow.get(selectedRow);
+      const estimate = estimateFor(point);
+      const reach = estimate ? describeEstimate(estimate) : `${radius.value} m`;
       message(point.azimuth === null
         ? `Registro ${selectedRow}: antena sin azimut en el archivo; se muestra únicamente su ubicación.`
         : coverageMode.value === 'range'
-          ? `Registro ${selectedRow}: solo rango de ${radius.value} m, sin dirección.`
-          : `Registro ${selectedRow}: azimut ${point.azimuth}°, apertura ${beam.value}°. Alcance: ${radius.value} m.`);
+          ? `Registro ${selectedRow}: solo rango de ${reach}, sin dirección.`
+          : `Registro ${selectedRow}: azimut ${point.azimuth}°, apertura ${beam.value}°. Alcance: ${reach}.`);
     } else if (selectionActive) {
-      message(`${selectedRows.size} registros seleccionados; ${seen.size} ubicaciones y orientaciones representadas. ${selectedRows.size ? `Alcance: ${radius.value} m. Los registros sin azimut muestran únicamente la antena.` : 'Selecciona registros o usa “Ver todas las antenas”.'}`);
+      message(`${selectedRows.size} registros seleccionados; ${seen.size} ubicaciones y orientaciones representadas. ${selectedRows.size ? `Alcance: ${reachSummary()}. Los registros sin azimut muestran únicamente la antena.` : 'Selecciona registros o usa “Ver todas las antenas”.'}`);
     } else {
-      message(`${points.length} de ${data.rows.length} registros con coordenadas${period}; ${seen.size} ubicaciones y orientaciones representadas. ${data.omitted} registros sin coordenadas válidas. ${data.missingAzimuth} registros sin azimut válido muestran únicamente la antena.`);
+      message(`${points.length} de ${data.rows.length} registros con coordenadas${period}; ${seen.size} ubicaciones y orientaciones representadas. ${data.omitted} registros sin coordenadas válidas. ${data.missingAzimuth} registros sin azimut válido muestran únicamente la antena. Alcance: ${reachSummary()}.`);
     }
     if (shouldFit) fit();
   }
@@ -1030,7 +1078,10 @@ if (!window.L) {
     map.invalidateSize({ pan: false });
     byId('planningExport').disabled = false;
     table();
+    estimates = null;
+    estimateRequest++;
     draw({ fit: true });
+    requestEstimates();
   }
 
   byId('planningUpload').addEventListener('submit', async (event) => {
@@ -1063,6 +1114,15 @@ if (!window.L) {
   coverageMode.addEventListener('change', () => draw());
   beam.addEventListener('change', () => draw());
   radius.addEventListener('change', () => draw());
+  rangeMode.addEventListener('change', () => {
+    operator.disabled = rangeMode.value !== 'estimated';
+    if (rangeMode.value === 'estimated' && !estimates) requestEstimates();
+    else draw();
+  });
+  operator.addEventListener('change', () => {
+    estimates = null;
+    requestEstimates();
+  });
   colorMode.addEventListener('change', () => draw());
   // Opacity only changes the fill pane, so it needs no redraw.
   opacity.addEventListener('input', () => { applyStyleValues(); saveStyle(); });
