@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   findCommunicationColumns, parseDuration, classifyCommunication, findLastCommunications,
+  LAST_COMMUNICATION_HEADERS, lastCommunicationCells, lastCommunicationClipboard,
 } from '../public/js/planeacion-ultima.js';
 
 // Invented records only.
@@ -68,4 +69,30 @@ test('the latest record of each kind is chosen by date and time, within the peri
   assert.deepEqual(early.call, { count: 1, row: 1, time: '2026-10-01T10:00' });
   assert.deepEqual(early.data, { count: 1, row: 5, time: '2026-10-01T07:00' });
   assert.deepEqual(early.sms, { count: 0, row: null, time: '' });
+});
+
+test('a last communication is copied in the columns of the report table', () => {
+  const data = { headers: [...headers, 'Ubicacion', 'Lugar'], rows: rows.map((row) => [...row, 'Calle Inventada 1', 'Hermosillo']), times };
+  const { columns } = findLastCommunications(data);
+  const options = { location: 8, place: 9, target: '6620000001' };
+  assert.deepEqual(LAST_COMMUNICATION_HEADERS.length, 8);
+  assert.deepEqual(lastCommunicationCells(data, 1, columns, options),
+    ['VOZ SALIENTE', '6620000001', '6620000002', '01/10/2026', '10:00', '70', 'Calle Inventada 1', 'Hermosillo']);
+  // The file already puts the caller in A: nothing is swapped.
+  assert.deepEqual(lastCommunicationCells(data, 6, columns, options).slice(0, 3), ['VOZ ENTRANTE', '6620000004', '6620000001']);
+  assert.deepEqual(lastCommunicationCells(data, 4, columns, options).slice(1, 3), ['6620000001', 'internet']);
+});
+
+test('an incoming record with the target in Número A names the other line as sender', () => {
+  const data = { headers, rows: [['6620000001', 'SMS ENTRANTE', '6620000001', '6620000009', '', '05/10/2026', '08:30:00', 'Macro']],
+    times: { 1: '2026-10-05T08:30:00' } };
+  const { columns } = findLastCommunications(data);
+  const cells = lastCommunicationCells(data, 1, columns, { label: 'Mensajería SMS', target: '6620000001' });
+  assert.deepEqual(cells, ['SMS ENTRANTE', '6620000009', '6620000001', '05/10/2026', '08:30:00', '', '', '']);
+});
+
+test('several rows are copied as text and as an escaped HTML table', () => {
+  const { text, html } = lastCommunicationClipboard([['VOZ', 'a<b'], ['SMS', 'c']]);
+  assert.equal(text, 'VOZ\ta<b\nSMS\tc');
+  assert.equal(html, '<table><tr><td>VOZ</td><td>a&lt;b</td></tr><tr><td>SMS</td><td>c</td></tr></table>');
 });

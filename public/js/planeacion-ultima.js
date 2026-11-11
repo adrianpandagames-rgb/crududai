@@ -74,3 +74,40 @@ export function findLastCommunications(data, include = () => true) {
   });
   return result;
 }
+
+// The columns of the report table the "Copiar" button fills, in its order.
+export const LAST_COMMUNICATION_HEADERS = [
+  'Tipo de comunicación', 'Número emisor', 'Número receptor', 'Fecha', 'Hora', 'Duración en segundos',
+  'Ubicación de la antena', 'Lugar',
+];
+const INCOMING = /entrante|recibid|incoming|\bmt\b|terminad/;
+
+// One report row for record `rowNumber`. `columns` is findLastCommunications().columns; `location` and `place` are
+// the indexes of the Ubicación and Lugar columns; `target` is the line of the file (lineKey) when known.
+// Carriers that keep the target in Número A for every record mark the incoming ones only by their type, so an
+// incoming record with the target in A has its sides swapped to name who sent it.
+export function lastCommunicationCells(data, rowNumber, columns, { label = '', location = -1, place = -1, target = '' } = {}) {
+  const row = data.rows[rowNumber - 1] || [];
+  const cell = (column) => (column >= 0 ? String(row[column] ?? '').replace(/[\t\r\n]+/g, ' ').trim() : '');
+  const type = cell(columns.type);
+  let [sender, receiver] = [cell(columns.a), cell(columns.b)];
+  if (INCOMING.test(fold(type)) && target && lineKey(sender) === target && lineKey(receiver) !== target) {
+    [sender, receiver] = [receiver, sender];
+  }
+  const [, year, month, day, time = ''] = String(data.times?.[rowNumber] || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:T(.*))?$/) || [];
+  const seconds = columns.duration >= 0 ? parseDuration(row[columns.duration]) : null;
+  return [
+    type || label, sender, receiver, year ? `${day}/${month}/${year}` : '', time,
+    seconds === null ? cell(columns.duration) : String(seconds), cell(location), cell(place),
+  ];
+}
+
+const escapeHtml = (value) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+// Tab-separated text and an HTML table (Excel pastes it cell by cell) for one or more report rows.
+export function lastCommunicationClipboard(rowsOfCells) {
+  return {
+    text: rowsOfCells.map((cells) => cells.join('\t')).join('\n'),
+    html: `<table>${rowsOfCells.map((cells) => `<tr>${cells.map((value) => `<td>${escapeHtml(value)}</td>`).join('')}</tr>`).join('')}</table>`,
+  };
+}

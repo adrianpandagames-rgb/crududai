@@ -5,7 +5,9 @@ import {
 } from './planeacion-antenas.js?v=10';
 import { findOvernightLocations } from './planeacion-pernocta.js?v=3';
 import { summarizeContacts, contactCells, contactsCsv, formatContactTime } from './planeacion-contactos.js?v=1';
-import { findLastCommunications, COMMUNICATION_KINDS } from './planeacion-ultima.js?v=1';
+import {
+  findLastCommunications, COMMUNICATION_KINDS, lastCommunicationCells, lastCommunicationClipboard,
+} from './planeacion-ultima.js?v=2';
 
 const byId = (id) => document.getElementById(id);
 const status = byId('planningStatus');
@@ -804,6 +806,26 @@ if (!window.L) {
     const cell = (row, column) => (column >= 0 ? String(data.rows[row - 1]?.[column] ?? '').trim() : '');
     const period = timeFilterActive() ? ' en el periodo elegido' : '';
     const fragment = document.createDocumentFragment();
+    // "Copiar" fills the report table: tipo, emisor, receptor, fecha, hora, duración, ubicación y lugar.
+    const target = summarizeContacts(data)?.target || '';
+    const reportRow = (entry) => lastCommunicationCells(data, entry.row, result.columns, { label: entry.label, location, place, target });
+    const copyButton = (text, ariaLabel, rowsOfCells) => {
+      const copy = document.createElement('button');
+      copy.type = 'button';
+      copy.className = 'btn btn-sm btn-outline-secondary planning-copy';
+      copy.textContent = text;
+      copy.setAttribute('aria-label', ariaLabel);
+      copy.addEventListener('click', () => {
+        const clip = lastCommunicationClipboard(rowsOfCells());
+        copyAntenna(clip.text, clip.html)
+          .then(() => {
+            copy.textContent = 'Copiado';
+            setTimeout(() => { copy.textContent = text; }, 1500);
+          })
+          .catch(() => message('No fue posible copiar la última comunicación al portapapeles. Intenta de nuevo.', true));
+      });
+      return copy;
+    };
     if (!result.hasType) {
       const warning = document.createElement('p');
       warning.className = 'small text-muted mb-0';
@@ -852,7 +874,16 @@ if (!window.L) {
       }
       button.dataset.option = `ultima:${kind}`;
       button.addEventListener('click', () => showLast(entry));
-      fragment.append(button);
+      const item = document.createElement('div');
+      item.className = 'planning-antenna-item';
+      item.append(button, copyButton('Copiar', `Copiar ${label} al portapapeles`, () => [reportRow(entry)]));
+      fragment.append(item);
+    }
+    if (lastCommunications.length > 1) {
+      const all = copyButton('Copiar todas', 'Copiar todas las últimas comunicaciones al portapapeles',
+        () => lastCommunications.map(reportRow));
+      all.style.justifySelf = 'start';
+      fragment.append(all);
     }
     list.replaceChildren(fragment);
     markOption();
