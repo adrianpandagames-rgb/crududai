@@ -3,7 +3,7 @@
 <head>
   <%- include('../includes/head') %>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <link rel="stylesheet" href="/public/css/planeacion-geografica.css?v=13" />
+  <link rel="stylesheet" href="/public/css/planeacion-geografica.css?v=14" />
 </head>
 <body>
   <%- include('../includes/header') %>
@@ -103,6 +103,17 @@
           <span id="planningPalettesLabel" class="form-label small mb-1 d-block">Paleta de colores</span>
           <div id="planningPalettes" class="planning-palettes" role="radiogroup" aria-labelledby="planningPalettesLabel"></div>
         </div>
+        <div class="col-sm-6 col-xl-4 mb-2">
+          <label for="planningMarkerSize" class="form-label small mb-1">Tamaño de la antena</label>
+          <select id="planningMarkerSize" class="form-select form-select-sm" aria-describedby="planningMarkerSizeHint">
+            <option value="punto">Punto</option>
+            <option value="chico" selected>Chico</option>
+            <option value="mediano">Mediano</option>
+            <option value="grande">Grande</option>
+            <option value="combinada">Combinada (uno por antena)</option>
+          </select>
+        </div>
+        <p id="planningMarkerSizeHint" class="small text-muted col-sm-6 col-xl-8 mb-2">Cambia el círculo que marca cada antena, no su cobertura. Con “Combinada” pulsa una antena en el mapa para elegir su tamaño; las que no elijas quedan en Chico.</p>
         <div class="col-sm-6 col-xl-5 mb-2">
           <label for="planningSaturation" class="form-label small mb-1">Saturación: <output id="planningSaturationValue">100</output>%</label>
           <input id="planningSaturation" type="range" class="form-range" min="0" max="200" step="5" value="100" />
@@ -204,7 +215,7 @@
   </main>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="/public/js/ruta-upload.js"></script>
-  <script type="module" src="/public/js/planeacion-geografica.js?v=20"></script>
+  <script type="module" src="/public/js/planeacion-geografica.js?v=21"></script>
   <%- include('../includes/footer') %>
 </body>
 </html>

@@ -252,18 +252,67 @@ if (!window.L) {
   const paletteList = byId('planningPalettes');
   // Coverage appearance is a per-viewer preference, remembered in this browser only.
   const STYLE_KEY = 'planeacion-geografica-estilo';
-  const STYLE_DEFAULTS = { palette: DEFAULT_PALETTE, saturation: '100', opacity: '30' };
+  const STYLE_DEFAULTS = { palette: DEFAULT_PALETTE, saturation: '100', opacity: '30', markerSize: 'chico' };
+  const markerSize = byId('planningMarkerSize');
+  // Radius in pixels of the circle that marks each antenna; a selection adds one so it stands out.
+  const MARKER_SIZES = { punto: 3, chico: 6, mediano: 9, grande: 13 };
+  const MARKER_SIZE_NAMES = { punto: 'Punto', chico: 'Chico', mediano: 'Mediano', grande: 'Grande' };
+  // "Combinada": the size picked for each antenna (by coordinates); belongs to the loaded file only.
+  let antennaSizes = new Map();
   let paletteId = DEFAULT_PALETTE;
   try {
     const saved = JSON.parse(localStorage.getItem(STYLE_KEY) || '{}');
     if (typeof saved.palette === 'string') paletteId = paletteById(saved.palette).id;
     if (typeof saved.saturation === 'string') saturation.value = saved.saturation;
     if (typeof saved.opacity === 'string') opacity.value = saved.opacity;
+    if (saved.markerSize in MARKER_SIZES || saved.markerSize === 'combinada') markerSize.value = saved.markerSize;
   } catch { /* Without storage the defaults apply. */ }
   function saveStyle() {
     try {
-      localStorage.setItem(STYLE_KEY, JSON.stringify({ palette: paletteId, saturation: saturation.value, opacity: opacity.value }));
+      localStorage.setItem(STYLE_KEY, JSON.stringify({
+        palette: paletteId, saturation: saturation.value, opacity: opacity.value, markerSize: markerSize.value,
+      }));
     } catch { /* Storage may be disabled; the choice lasts until reload. */ }
+  }
+  const sizeOf = (point) => (markerSize.value === 'combinada'
+    ? antennaSizes.get(coordinateKey(point)) || STYLE_DEFAULTS.markerSize
+    : markerSize.value);
+  // "Combinada": clicking an antenna offers its size and the way to its records.
+  function openSizeMenu(point) {
+    const key = coordinateKey(point);
+    const box = document.createElement('div');
+    box.className = 'planning-size-menu';
+    const title = document.createElement('p');
+    title.className = 'small fw-semibold mb-1';
+    title.textContent = `Tamaño de la antena${numbers.get(key) ? ` ${numbers.get(key)}` : ''}`;
+    const group = document.createElement('div');
+    group.className = 'btn-group btn-group-sm mb-2';
+    group.setAttribute('role', 'group');
+    group.setAttribute('aria-label', 'Tamaño de esta antena');
+    for (const [size, name] of Object.entries(MARKER_SIZE_NAMES)) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      const active = sizeOf(point) === size;
+      button.className = `btn ${active ? 'btn-primary' : 'btn-outline-primary'}`;
+      button.setAttribute('aria-pressed', String(active));
+      button.textContent = name;
+      button.addEventListener('click', () => {
+        antennaSizes.set(key, size);
+        map.closePopup();
+        draw();
+      });
+      group.append(button);
+    }
+    const records = document.createElement('button');
+    records.type = 'button';
+    records.className = 'btn btn-sm btn-outline-secondary d-block';
+    records.textContent = 'Ver sus registros';
+    records.addEventListener('click', () => {
+      map.closePopup();
+      showCoordinateRecords(point);
+    });
+    box.append(title, group, records);
+    L.popup().setLatLng([point.lat, point.lng]).setContent(box).openOn(map);
   }
   // Saturation recolours every swatch too, so each one previews what the map will show.
   function renderPalettes() {
@@ -876,8 +925,9 @@ if (!window.L) {
       }
       // A dark outline keeps every point visible over roads, parks and water.
       L.circleMarker([point.lat, point.lng], {
-        radius: selectionActive ? 7 : 6, color: '#1f1f1f', weight: 1.5, fillColor: color, fillOpacity: 1, interactive: true,
-      }).on('click', () => showCoordinateRecords(point)).addTo(layers);
+        radius: MARKER_SIZES[sizeOf(point)] + (selectionActive ? 1 : 0),
+        color: '#1f1f1f', weight: sizeOf(point) === 'punto' ? 1 : 1.5, fillColor: color, fillOpacity: 1, interactive: true,
+      }).on('click', () => (markerSize.value === 'combinada' ? openSizeMenu(point) : showCoordinateRecords(point))).addTo(layers);
     }
     // Selected antennas carry their number over the coverage, as the pins of "Ruta" do.
     for (const group of option?.groups || []) {
@@ -1055,6 +1105,7 @@ if (!window.L) {
   }
   function load(result) {
     data = { times: {}, hasTimes: false, ...result };
+    antennaSizes = new Map();
     clearSelection();
     page = 1;
     search.disabled = false;
@@ -1133,6 +1184,11 @@ if (!window.L) {
     requestEstimates();
   });
   colorMode.addEventListener('change', () => draw());
+  markerSize.addEventListener('change', () => {
+    saveStyle();
+    map.closePopup();
+    draw();
+  });
   // Opacity only changes the fill pane, so it needs no redraw.
   opacity.addEventListener('input', () => { applyStyleValues(); saveStyle(); });
   let styleFrame = 0;
@@ -1153,6 +1209,8 @@ if (!window.L) {
     paletteId = STYLE_DEFAULTS.palette;
     saturation.value = STYLE_DEFAULTS.saturation;
     opacity.value = STYLE_DEFAULTS.opacity;
+    markerSize.value = STYLE_DEFAULTS.markerSize;
+    antennaSizes = new Map();
     applyStyleValues();
     saveStyle();
     renderPalettes();
