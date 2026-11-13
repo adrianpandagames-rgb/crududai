@@ -8,8 +8,7 @@
 <% const groups = [
   { label: 'Datos conservados', links: [
     ['Ficha de línea o caso', '/ficha'],
-    ['Líneas', '/Crud', ['/lineas', '/estudiantes']],
-    ['IMEI', '/imei'],
+    ...(isUecs ? [] : [['Líneas', '/Crud', ['/lineas', '/estudiantes']], ['IMEI', '/imei']]),
     ['Perfiles', '/perfiles'],
     ['Limpieza', '/limpieza'],
   ] },
@@ -36,7 +35,8 @@
 ].filter((group) => group.links.length); %>
 <% const linkAt = ([, href, extra = []]) => navAt(href, ...extra); %>
 <header class="header">
-  <a href="/Crud" class="logo">
+  <%# /app opens each person's start page (UECS cannot open Líneas). %>
+  <a href="/app" class="logo">
     <img src="/public/imgs/logo.png" alt="Logo" />
     <span class="logo-text">Unidad de Análisis</span>
   </a>

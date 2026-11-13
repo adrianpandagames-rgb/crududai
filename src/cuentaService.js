@@ -8,9 +8,10 @@ const FOTO_SIZE = 256;
 
 export const temas = { sistema: 'Igual que el sistema', claro: 'Claro', oscuro: 'Oscuro' };
 
-// Pages a person may land on after signing in; UECS cannot open Métricas or Tareas.
+// Pages a person may land on after signing in; UECS cannot open Líneas, IMEI, Métricas or Tareas.
 const paginasInicio = [
-  ['/Crud', 'Líneas'], ['/tareas', 'Tareas', true], ['/metricas', 'Métricas', true], ['/imei', 'IMEI'], ['/perfiles', 'Perfiles'],
+  ['/Crud', 'Líneas', true], ['/tareas', 'Tareas', true], ['/metricas', 'Métricas', true], ['/imei', 'IMEI', true],
+  ['/ficha', 'Ficha de línea o caso'], ['/perfiles', 'Perfiles'],
   ['/ubicaciones', 'Ubicaciones'], ['/planeacion-geografica', 'Planeación geográfica'], ['/ruta', 'Ruta'],
 ];
 export const paginasInicioPara = (role) => paginasInicio
@@ -18,6 +19,15 @@ export const paginasInicioPara = (role) => paginasInicio
   .map(([path, label]) => ({ path, label }));
 
 export const preferenciasPorDefecto = { tema: 'sistema', inicio: '/Crud', avisos: true };
+// UECS starts on the line file, the way it now looks up lines and IMEI.
+export const inicioPorDefecto = (role) => (role === 'uecs' ? '/ficha' : preferenciasPorDefecto.inicio);
+// Where to send someone who signs in or reaches a page they may not open. The saved start page is checked
+// against the role again: a session opened before a role change could still hold one the role lost, and
+// redirecting there would bounce back here forever.
+export const paginaDeInicio = (session) => {
+  const inicio = session?.preferencias?.inicio;
+  return paginasInicioPara(session?.role).some(({ path }) => path === inicio) ? inicio : inicioPorDefecto(session?.role);
+};
 
 // Saved preferences are re-checked on every read, so a role change never leaves someone landing on a page they lost.
 export function normalizarPreferencias(raw, role) {
@@ -26,7 +36,7 @@ export function normalizarPreferencias(raw, role) {
     try { value = JSON.parse(raw); } catch { value = {}; }
   }
   value = value && typeof value === 'object' ? value : {};
-  const inicio = paginasInicioPara(role).some(({ path }) => path === value.inicio) ? value.inicio : preferenciasPorDefecto.inicio;
+  const inicio = paginasInicioPara(role).some(({ path }) => path === value.inicio) ? value.inicio : inicioPorDefecto(role);
   return {
     tema: Object.hasOwn(temas, value.tema) ? value.tema : preferenciasPorDefecto.tema,
     inicio,

@@ -36,7 +36,7 @@ import { createPerfilesRouter } from './src/perfilesRouter.js';
 import { createFichaRouter } from './src/fichaRouter.js';
 import { createTareasRouter } from './src/tareasRouter.js';
 import { createCuentaRouter } from './src/cuentaRouter.js';
-import { createCuentaStore } from './src/cuentaService.js';
+import { createCuentaStore, inicioPorDefecto, paginaDeInicio } from './src/cuentaService.js';
 import { createNotificacionesStore } from './src/notificacionesService.js';
 import { obtenerMedidores } from './src/medidoresService.js';
 import { resetGoogleGeocodingQuota } from './src/googleGeocodingQuota.js';
@@ -229,7 +229,7 @@ const requireAdmin = async (req, res, next) => {
       req.session.isAdmin = isAdmin;
 
       if (!isAdmin) {
-        return res.status(403).redirect('/Crud');
+        return res.status(403).redirect(paginaDeInicio(req.session));
       }
 
       res.locals.currentUser.isAdmin = true;
@@ -245,13 +245,15 @@ app.use('/api-docs', requireAdmin, swaggerUi.serve, swaggerUi.setup(swaggerSpec)
 
 const requireNonUecs = (req, res, next) => {
   if (req.session.role === 'uecs') {
-    return res.status(403).redirect('/Crud');
+    return res.status(403).redirect(paginaDeInicio(req.session));
   }
   return next();
 };
 
 app.use(['/metricas', '/Crud', '/imei', '/lineas', '/ubicaciones', '/api/ubicaciones', '/estudiantes', '/georeferenciacion', '/ruta', '/limpieza', '/inicio', '/telefono', '/api/telefono', '/api/localidades', '/cambiar-contrasena'], requireAuth);
 app.use('/metricas', requireNonUecs);
+// UECS looks up lines and IMEI through the line file (/ficha), not the Líneas and IMEI modules.
+app.use(['/Crud', '/imei', '/lineas', '/estudiantes'], requireNonUecs);
 // The web tabs and the Telegram bot share one Maigret queue and one SpiderFoot queue.
 const maigretSearches = createMaigretSearches(pool);
 const spiderfootSearches = createSpiderfootSearches(pool);
@@ -337,7 +339,7 @@ app.post('/login', requireSameOrigin, async (req, res) => {
 
         if (Number(user.must_change_password) === 1) return res.redirect('/cambiar-contrasena');
         const cuenta = await cuentas.get(user.id, userRoleOf(user)).catch(() => null);
-        return res.redirect(cuenta?.preferencias.inicio || '/Crud');
+        return res.redirect(cuenta?.preferencias.inicio || inicioPorDefecto(userRoleOf(user)));
     } catch (error) {
         console.error(error.stack || error);
         writeAuditLog({ userEmail: normalizedEmail, action: 'LOGIN_FAILED', requestPath: '/login', statusCode: 500, ipAddress: req.ip });
@@ -447,7 +449,7 @@ app.get('/sw.js', (_req, res) => {
   res.type('application/javascript');
   res.sendFile(fileURLToPath(new URL('./public/sw.js', import.meta.url)));
 });
-app.get('/app', requireAuth, (req, res) => res.redirect(req.session.preferencias?.inicio || '/Crud'));
+app.get('/app', requireAuth, (req, res) => res.redirect(paginaDeInicio(req.session)));
 
 app.get('/terminos', (_req, res) => {
   res.setHeader('Cache-Control', 'public, max-age=3600');
@@ -496,7 +498,7 @@ app.post('/cambiar-contrasena', requireSameOrigin, requireAuth, soloCambioObliga
     if (!notification.sent) {
       return res.render('pages/cambiar-contrasena', { error: `Contraseña actualizada. ${notification.warning}`, completed: true });
     }
-    return res.redirect(req.session.preferencias?.inicio || '/Crud');
+    return res.redirect(paginaDeInicio(req.session));
   } catch (error) {
     return next(error);
   }

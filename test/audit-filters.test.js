@@ -156,6 +156,7 @@ test('the menu is grouped and each role keeps exactly its links', async () => {
   assert.ok(user.includes('Métricas') && user.includes('Tareas') && !user.includes('Georeferenciación') && !user.includes('[Administración]'));
   const uecs = await menu({ isAdmin: false, role: 'uecs' });
   assert.ok(!uecs.includes('Métricas') && !uecs.includes('Tareas') && uecs.includes('Georeferenciación') && !uecs.includes('[Administración]'));
-  // The line and case file is open to every signed-in user.
+  // The line and case file is open to every signed-in user; UECS looks up lines and IMEI there, not in Líneas or IMEI.
   assert.ok(user.includes('Ficha de línea o caso') && uecs.includes('Ficha de línea o caso'));
+  assert.ok(user.includes('Líneas') && user.includes('IMEI') && !uecs.includes('Líneas') && !uecs.includes('IMEI'));
 });

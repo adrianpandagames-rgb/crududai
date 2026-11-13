@@ -207,7 +207,7 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
   const message = (response) => new URL(response.headers.get('location'), base).searchParams.get('message');
 
   assert.equal((await fetch(base, { redirect: 'manual' })).headers.get('location'), '/');
-  assert.equal((await fetch(base, as('uecs'))).headers.get('location'), '/Crud');
+  assert.equal((await fetch(base, as('uecs'))).headers.get('location'), '/ficha');
 
   const page = await (await fetch(base, as('usuario'))).text();
   assert.ok(page.includes('Contestar oficio') && page.includes('Analizar sábana'));
@@ -358,18 +358,18 @@ test('the board is closed to UECS and moves cards by drag or by arrow', async (t
   assert.ok(archivo.indexOf('Enviadas en Octubre 2026') < archivo.indexOf('Enviadas en Septiembre 2026'));
   const buscado = await (await fetch(`${base}/archivo?buscar=viejo`, as('usuario'))).text();
   assert.ok(buscado.includes('1 tarea archivada') && !buscado.includes('Oficio de septiembre'));
-  assert.equal((await fetch(`${base}/archivo`, as('uecs'))).headers.get('location'), '/Crud');
+  assert.equal((await fetch(`${base}/archivo`, as('uecs'))).headers.get('location'), '/ficha');
 
   assert.match(message(await fetch(`${base}/eliminar/2`, as('usuario', form({})))), /Solo quien creó/);
   assert.match(message(await fetch(`${base}/eliminar/1`, as('usuario', form({})))), /eliminada/);
-  assert.equal((await fetch(`${base}/eliminar/1`, as('uecs', form({})))).headers.get('location'), '/Crud');
+  assert.equal((await fetch(`${base}/eliminar/1`, as('uecs', form({})))).headers.get('location'), '/ficha');
   // Every saved change tells the open boards (create, three edits, drag, two arrows, two done marks, a comment, delete);
   // rejected ones, conflicts among them, do not.
   assert.equal(avisos, 11);
 
   const columns = await (await fetch(`${base}/tablero?responsable=5`, as('usuario'))).text();
   assert.ok(columns.includes('data-estado="pendiente"') && !columns.includes('<header') && !columns.includes('Nueva tarea'));
-  assert.equal((await fetch(`${base}/tablero`, as('uecs'))).headers.get('location'), '/Crud');
+  assert.equal((await fetch(`${base}/tablero`, as('uecs'))).headers.get('location'), '/ficha');
 });
 
 test('open boards hear about every change until their session expires', async (t) => {

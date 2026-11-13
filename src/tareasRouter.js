@@ -5,6 +5,7 @@ import {
   puedeEliminar, usuarioDe, validarComentario, validarEtiqueta, validarItem, validarLlegada, validarTarea,
 } from './tareasService.js';
 import { puestoLabels, userPuestos } from './usuariosService.js';
+import { paginaDeInicio } from './cuentaService.js';
 
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const nombreMes = (clave) => {
@@ -113,7 +114,7 @@ export function createTareasRouter(pool, {
   // UECS users are kept out of the board, like the metrics.
   router.use((req, res, next) => {
     if (!req.session?.userId) return res.redirect('/');
-    if (req.session.role === 'uecs') return res.status(403).redirect('/Crud');
+    if (req.session.role === 'uecs') return res.status(403).redirect(paginaDeInicio(req.session));
     res.setHeader('Cache-Control', 'no-store');
     next();
   });

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import express from 'express';
 import sharp from 'sharp';
 import { fileURLToPath } from 'node:url';
-import { normalizarPreferencias, paginasInicioPara, procesarFoto, validarNombre } from '../src/cuentaService.js';
+import { normalizarPreferencias, paginaDeInicio, paginasInicioPara, procesarFoto, validarNombre } from '../src/cuentaService.js';
 import { createCuentaRouter } from '../src/cuentaRouter.js';
 import { createNotificacionesStore } from '../src/notificacionesService.js';
 
@@ -11,11 +11,22 @@ test('preferences fall back to defaults and never keep a start page the role can
   assert.deepEqual(normalizarPreferencias(null, 'usuario'), { tema: 'sistema', inicio: '/Crud', avisos: true });
   assert.deepEqual(normalizarPreferencias('{"tema":"oscuro","inicio":"/tareas","avisos":false}', 'usuario'),
     { tema: 'oscuro', inicio: '/tareas', avisos: false });
-  assert.equal(normalizarPreferencias({ inicio: '/tareas' }, 'uecs').inicio, '/Crud');
+  // UECS cannot open Líneas or IMEI either, and starts on the line file.
+  assert.equal(normalizarPreferencias({ inicio: '/tareas' }, 'uecs').inicio, '/ficha');
+  assert.equal(normalizarPreferencias({ inicio: '/Crud' }, 'uecs').inicio, '/ficha');
+  assert.equal(normalizarPreferencias({ inicio: '/imei' }, 'uecs').inicio, '/ficha');
+  assert.equal(normalizarPreferencias(null, 'uecs').inicio, '/ficha');
+  assert.equal(normalizarPreferencias({ inicio: '/ficha' }, 'usuario').inicio, '/ficha');
   assert.equal(normalizarPreferencias({ inicio: 'https://example.com' }, 'admin').inicio, '/Crud');
   assert.equal(normalizarPreferencias({ tema: 'rosa' }, 'admin').tema, 'sistema');
   assert.equal(normalizarPreferencias('no es json', 'admin').tema, 'sistema');
-  assert.ok(!paginasInicioPara('uecs').some(({ path }) => path === '/metricas' || path === '/tareas'));
+  assert.ok(!paginasInicioPara('uecs').some(({ path }) => ['/metricas', '/tareas', '/Crud', '/imei'].includes(path)));
+  assert.ok(paginasInicioPara('uecs').some(({ path }) => path === '/ficha'));
+  assert.equal(paginaDeInicio({ role: 'uecs' }), '/ficha');
+  assert.equal(paginaDeInicio({ role: 'usuario' }), '/Crud');
+  assert.equal(paginaDeInicio({ role: 'usuario', preferencias: { inicio: '/ruta' } }), '/ruta');
+  // A UECS session that still holds Líneas as start page (opened before the change) must not loop back to it.
+  assert.equal(paginaDeInicio({ role: 'uecs', preferencias: { inicio: '/Crud' } }), '/ficha');
 });
 
 test('names are optional, trimmed and limited', () => {
