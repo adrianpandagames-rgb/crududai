@@ -23,6 +23,15 @@ test('other carriers name the columns origen and destino, and the right sheet is
   assert.deepEqual(contactosPorNumeros([[['Resumen']], generic], '6624287887').contactos, ['5512345678', '5598765432']);
 });
 
+test('a sábana split over several sheets contributes the contacts of every sheet', () => {
+  const header = ['Numero A', 'Numero B', 'Fecha'];
+  const hoja1 = [header, ['6624287887', '6621112233', '01/10/2026']];
+  const hoja2 = [header, ['5512345678', '6624287887', '02/10/2026']];
+  // A sheet without its own header continues the columns of the previous one.
+  const hoja3 = [['6624287887', '5598765432', '03/10/2026']];
+  assert.deepEqual(contactosPorNumeros([hoja1, hoja2, hoja3], '6624287887').contactos, ['6621112233', '5512345678', '5598765432']);
+});
+
 test('a mistyped line is reported with the number the file repeats most', () => {
   const { contactos, error } = contactosPorNumeros([telcel], '6624287888');
   assert.deepEqual(contactos, []);

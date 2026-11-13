@@ -36,15 +36,22 @@ const perfiles = createPerfilesStore(pool);
 const isContactsHeader = (row) => row.some((value) => String(value).trim().toLowerCase() === 'contactos');
 const isXlsx = (file) => /\.xlsx$/i.test(file.originalname);
 
-// The CSV lines, or for Excel the first sheet with a "contactos" column, as rows of text cells.
+// The CSV lines, or every sheet of the Excel, as rows of text cells.
 const readContactRows = (file) => {
   if (isXlsx(file)) {
-    const sheets = readXlsxSheets(file.buffer).map((rows) => rows.map((row) => row.map((cell) => String(cell ?? ''))));
-    return { sheets, rows: sheets.find((rows) => rows.some(isContactsHeader)) || sheets[0] || [] };
+    return { sheets: readXlsxSheets(file.buffer).map((rows) => rows.map((row) => row.map((cell) => String(cell ?? '')))) };
   }
   const rows = file.buffer.toString('utf8').split(/\r?\n/).map((line) => line.trim()).filter((line) => line !== '').map(parseCsvRow);
-  return { sheets: [rows], rows };
+  return { sheets: [rows] };
 };
+
+// The numeric values under a "contactos" header, in every sheet that has one.
+const contactosDeColumna = (sheets) => sheets.flatMap((rows) => {
+  const headerIndex = rows.findIndex(isContactsHeader);
+  if (headerIndex === -1) return [];
+  const column = rows[headerIndex].findIndex((header) => String(header).trim().toLowerCase() === 'contactos');
+  return rows.slice(headerIndex + 1).map((values) => String(values[column] ?? '').trim()).filter((value) => /^\d+$/.test(value));
+});
 
 router.get('/lineas/editar/:id', requireRecordEditor, async (req, res) => {
   const idObjetivo = Number.parseInt(req.params.id, 10);
@@ -208,11 +215,11 @@ router.post('/Crud/import-csv', requireRecordCreator, contactsUpload, async (req
     } catch {
       return res.json({ status: 'error', message: 'No fue posible leer el archivo Excel.' });
     }
-    const { rows } = contactRows;
-    if (rows.length > CONTACTS_MAX_ROWS + 1) {
-      return res.status(413).json({ status: 'error', message: 'El archivo supera el límite de 10000 filas.' });
+    const { sheets } = contactRows;
+    if (sheets.some((rows) => rows.length > CONTACTS_MAX_ROWS + 1)) {
+      return res.status(413).json({ status: 'error', message: 'Una hoja del archivo supera el límite de 10000 filas.' });
     }
-    if (rows.length === 0) {
+    if (sheets.every((rows) => rows.length === 0)) {
       return res.redirect('/Crud?message=' + encodeURIComponent('CSV no contiene datos válidos.') + '&type=error');
     }
 
@@ -230,9 +237,6 @@ router.post('/Crud/import-csv', requireRecordCreator, contactsUpload, async (req
       }
     };
 
-    const headerIndex = rows.findIndex(isContactsHeader);
-    const headers = headerIndex === -1 ? [] : rows[headerIndex].map((header) => String(header).trim().toLowerCase());
-
     // A file with the holder's data but no numeric contacts still registers the profile.
     const soloTitular = async (reason) => {
       if (validateOnly) return res.json({ status: 'ready' });
@@ -241,17 +245,7 @@ router.post('/Crud/import-csv', requireRecordCreator, contactsUpload, async (req
     };
     // A "contactos" column prepared by hand wins; otherwise the contacts come from the carrier's Número A and
     // Número B columns, taking in each record the number that is not the typed line.
-    let contactosCSV = [];
-    if (headerIndex !== -1) {
-      const contactColumnIndex = headers.findIndex((value) => value === 'contactos');
-      for (let i = headerIndex + 1; i < rows.length; i++) {
-        const values = rows[i];
-        const contactoValue = values[contactColumnIndex] ? values[contactColumnIndex].trim() : '';
-        if (contactoValue !== '' && /^\d+$/.test(contactoValue)) {
-          contactosCSV.push(contactoValue);
-        }
-      }
-    }
+    let contactosCSV = contactosDeColumna(sheets);
     if (contactosCSV.length === 0) {
       const deNumeros = contactosPorNumeros(contactRows.sheets, numObjetivo);
       contactosCSV = deNumeros.contactos;
