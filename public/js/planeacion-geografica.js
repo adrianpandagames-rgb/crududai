@@ -7,7 +7,7 @@ import { findOvernightLocations } from './planeacion-pernocta.js?v=3';
 import { summarizeContacts, contactCells, contactsCsv, formatContactTime } from './planeacion-contactos.js?v=1';
 import {
   findLastCommunications, COMMUNICATION_KINDS, lastCommunicationCells, lastCommunicationClipboard,
-} from './planeacion-ultima.js?v=4';
+} from './planeacion-ultima.js?v=5';
 
 const byId = (id) => document.getElementById(id);
 const status = byId('planningStatus');
@@ -939,24 +939,26 @@ if (!window.L) {
     }
     for (const point of ordered) {
       const bearing = point.azimuth;
+      // Without an azimuth there is no direction, but the reach is still known: the antenna gets the circle of its
+      // range, as in the Rango mode. In the sector mode its outline is dotted, so it reads as "no direction".
+      const asCircle = asRange || bearing === null;
       // Records of the same antenna and azimuth share one coverage; repeating it would only darken it.
-      const key = `${point.lat},${point.lng},${asRange && bearing !== null ? 'range' : bearing}`;
+      const key = `${point.lat},${point.lng},${asCircle ? 'range' : bearing}`;
       if (seen.has(key)) continue;
       seen.add(key);
       const color = adjustSaturation(scale ? scale.colorFor(countOf(point)) : palette[3], saturation.value);
-      if (bearing !== null) {
-        const fill = { pane: 'coverageFill', stroke: false, fillColor: color, fillOpacity: 1, interactive: false };
-        const line = { pane: 'coverageLine', color, weight: 1.5, fill: false, interactive: false,
-          dashArray: rangeMode.value === 'estimated' && estimates && !isEstimated(point) ? '6 5' : null };
-        if (asRange) {
-          const centre = [point.lat, point.lng];
-          L.circle(centre, { ...fill, radius: rangeFor(point) }).addTo(layers);
-          L.circle(centre, { ...line, radius: rangeFor(point) }).addTo(layers);
-        } else {
-          const sector = coverageSector(point.lat, point.lng, bearing, rangeFor(point), Number(beam.value));
-          L.polygon(sector, fill).addTo(layers);
-          L.polygon(sector, line).addTo(layers);
-        }
+      const fill = { pane: 'coverageFill', stroke: false, fillColor: color, fillOpacity: 1, interactive: false };
+      const dashArray = !asRange && bearing === null ? '1 5'
+        : rangeMode.value === 'estimated' && estimates && !isEstimated(point) ? '6 5' : null;
+      const line = { pane: 'coverageLine', color, weight: 1.5, fill: false, interactive: false, dashArray };
+      if (asCircle) {
+        const centre = [point.lat, point.lng];
+        L.circle(centre, { ...fill, radius: rangeFor(point) }).addTo(layers);
+        L.circle(centre, { ...line, radius: rangeFor(point) }).addTo(layers);
+      } else {
+        const sector = coverageSector(point.lat, point.lng, bearing, rangeFor(point), Number(beam.value));
+        L.polygon(sector, fill).addTo(layers);
+        L.polygon(sector, line).addTo(layers);
       }
       // A dark outline keeps every point visible over roads, parks and water.
       L.circleMarker([point.lat, point.lng], {
@@ -1049,14 +1051,14 @@ if (!window.L) {
       const estimate = estimateFor(point);
       const reach = estimate ? describeEstimate(estimate) : `${radius.value} m`;
       message(point.azimuth === null
-        ? `Registro ${selectedRow}: antena sin azimut en el archivo; se muestra únicamente su ubicación.`
+        ? `Registro ${selectedRow}: antena sin azimut en el archivo; se muestra el rango de ${reach} sin dirección.`
         : coverageMode.value === 'range'
           ? `Registro ${selectedRow}: solo rango de ${reach}, sin dirección.`
           : `Registro ${selectedRow}: azimut ${point.azimuth}°, apertura ${beam.value}°. Alcance: ${reach}.`);
     } else if (selectionActive) {
-      message(`${selectedRows.size} registros seleccionados; ${seen.size} ubicaciones y orientaciones representadas. ${selectedRows.size ? `Alcance: ${reachSummary()}. Los registros sin azimut muestran únicamente la antena.` : 'Selecciona registros o usa “Ver todas las antenas”.'}`);
+      message(`${selectedRows.size} registros seleccionados; ${seen.size} ubicaciones y orientaciones representadas. ${selectedRows.size ? `Alcance: ${reachSummary()}. Los registros sin azimut muestran su rango sin dirección (contorno de puntos).` : 'Selecciona registros o usa “Ver todas las antenas”.'}`);
     } else {
-      message(`${points.length} de ${data.rows.length} registros con coordenadas${period}; ${seen.size} ubicaciones y orientaciones representadas. ${data.omitted} registros sin coordenadas válidas. ${data.missingAzimuth} registros sin azimut válido muestran únicamente la antena. Alcance: ${reachSummary()}.`);
+      message(`${points.length} de ${data.rows.length} registros con coordenadas${period}; ${seen.size} ubicaciones y orientaciones representadas. ${data.omitted} registros sin coordenadas válidas. ${data.missingAzimuth} registros sin azimut válido muestran su rango sin dirección (contorno de puntos). Alcance: ${reachSummary()}.`);
     }
     if (shouldFit) fit();
   }

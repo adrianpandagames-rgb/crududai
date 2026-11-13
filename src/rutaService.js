@@ -361,15 +361,10 @@ const formatExcelDateCells = (worksheet, date1904) => {
   }
 };
 
-export const readRutaXlsxRows = (buffer) => {
-  const workbook = readWorkbook(buffer, { type: 'buffer', cellDates: false, cellNF: true });
-  const firstSheetName = workbook.SheetNames[0];
-  if (!firstSheetName) throw new Error('El archivo Excel no contiene hojas.');
-
-  const worksheet = boundSheet(workbook.Sheets[firstSheetName]);
-  const date1904 = workbook.Workbook?.WBProps?.date1904 === true;
+// The rows of one sheet, with its date cells written as dd/mm/aaaa. `header` is the table's header row: the
+// sheet's own first row, or the first sheet's one for a sheet that continues it without repeating the header.
+const readRutaSheetRows = (worksheet, date1904, header = null) => {
   formatExcelDateCells(worksheet, date1904);
-
   const rows = XLSX.utils.sheet_to_json(worksheet, {
     header: 1,
     defval: '',
@@ -377,11 +372,12 @@ export const readRutaXlsxRows = (buffer) => {
     blankrows: false,
   });
 
-  const dateColumns = (rows[0] || []).reduce((columns, header, index) => {
-    if (/^(fecha|date)$/i.test(String(header).trim())) columns.push(index);
+  const firstDataRow = header ? 0 : 1;
+  const dateColumns = (header || rows[0] || []).reduce((columns, name, index) => {
+    if (/^(fecha|date)$/i.test(String(name).trim())) columns.push(index);
     return columns;
   }, []);
-  for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {
+  for (let rowIndex = firstDataRow; rowIndex < rows.length; rowIndex += 1) {
     for (const columnIndex of dateColumns) {
       const cellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex });
       const cell = worksheet[cellAddress];
@@ -396,6 +392,40 @@ export const readRutaXlsxRows = (buffer) => {
       } else if (typeof cell.w === 'string' && cell.w.trim()) {
         rows[rowIndex][columnIndex] = cell.w;
       }
+    }
+  }
+  return rows;
+};
+
+const headerKey = (row) => (row || []).map((cell) => normalizeRutaValue(String(cell ?? ''))).join('|');
+const sheetWidth = (worksheet) => (worksheet?.['!ref'] ? XLSX.utils.decode_range(worksheet['!ref']).e.c + 1 : 0);
+
+// Every sheet of the workbook as one table. Carriers such as Movistar split a long record over several sheets:
+// a sheet that repeats the first sheet's header adds its rows, and one with the same width whose first row is not
+// a header continues the previous sheet. Any other sheet (a summary, a cover) is a different table and is skipped.
+export const readRutaXlsxRows = (buffer) => {
+  const workbook = readWorkbook(buffer, { type: 'buffer', cellDates: false, cellNF: true });
+  const [firstSheetName, ...otherSheetNames] = workbook.SheetNames;
+  if (!firstSheetName) throw new Error('El archivo Excel no contiene hojas.');
+
+  const date1904 = workbook.Workbook?.WBProps?.date1904 === true;
+  const firstSheet = boundSheet(workbook.Sheets[firstSheetName]);
+  const rows = readRutaSheetRows(firstSheet, date1904);
+  const header = rows[0] || [];
+  const key = headerKey(header);
+  const headerNames = new Set(header.map((cell) => normalizeRutaValue(String(cell ?? ''))).filter(Boolean));
+  const width = sheetWidth(firstSheet);
+
+  for (const name of otherSheetNames) {
+    const worksheet = boundSheet(workbook.Sheets[name]);
+    if (!worksheet || !key) continue;
+    const [firstRow] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '', raw: false, blankrows: false });
+    if (!firstRow) continue;
+    if (headerKey(firstRow) === key) {
+      rows.push(...readRutaSheetRows(worksheet, date1904).slice(1));
+    } else if (sheetWidth(worksheet) === width
+      && !firstRow.some((cell) => headerNames.has(normalizeRutaValue(String(cell ?? ''))))) {
+      rows.push(...readRutaSheetRows(worksheet, date1904, header));
     }
   }
 
@@ -455,15 +485,9 @@ export const generateRutaHeatmapImageFromSource = async (buffer, extension, opti
   const normalizedExtension = String(extension || '').toLowerCase();
 
   if (normalizedExtension === '.xlsx') {
-    const workbook = readWorkbook(buffer, { type: 'buffer', cellDates: false, raw: false });
-    const worksheet = boundSheet(workbook.Sheets[workbook.SheetNames[0]]);
-    if (!worksheet) return null;
-    const rows = XLSX.utils.sheet_to_json(worksheet, {
-      header: 1,
-      defval: '',
-      raw: false,
-      blankrows: false,
-    });
+    // Every sheet, as the route itself is read.
+    const rows = readRutaXlsxRows(buffer);
+    if (!rows.length) return null;
     return generateRutaHeatmapImageFromCsv(
       rows.length > 0 ? rows.map((row) => row.join(',')).join('\n') : '',
       options,

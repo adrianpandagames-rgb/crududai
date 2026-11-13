@@ -2,18 +2,22 @@ import { findContactColumns, lineKey } from './planeacion-contactos.js?v=1';
 
 const fold = (value) => String(value ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
 
-// Column of the kind of communication ("Tipo", "Servicio", "Tipo de evento", "Call type"…), of its duration and of
-// its result. Columns about the antenna, the device or the technology are not the kind of communication.
+// Columns of the kind of communication ("Tipo", "Servicio", "Tipo de evento", "Call type"…), of its duration and of
+// its result. Columns about the antenna, the device or the technology are not the kind of communication, nor the
+// date and hour of the event (Movistar: "Fecha evento", "Hora evento"). A file may split the kind in two columns,
+// as Movistar does with "Tipo CDR" (GSM, SMS) and "Tipo evento", so every one of them is read.
 const TYPE = /(^|[\W_])(tipo|servicio|evento|service|type)([\W_]|$)/;
-const NOT_TYPE = /antena|antenna|tecnologia|technology|equipo|imei|imsi|celda|cell|red|network/;
+const NOT_TYPE = /antena|antenna|tecnologia|technology|equipo|imei|imsi|celda|cell|red|network|fecha|hora|date|time|durac/;
 // Telcel names it "Durac. Seg".
 const DURATION = /durac|duration|^dur([\W_]|$)|segundos|seconds|(^|[\W_])segs?([\W_]|$)/;
 const STATUS = /estatus|status|estado|resultado|result/;
 
 export function findCommunicationColumns(headers) {
   const folded = headers.map(fold);
+  const types = folded.flatMap((header, index) => (TYPE.test(header) && !NOT_TYPE.test(header) ? [index] : []));
   return {
-    type: folded.findIndex((header) => TYPE.test(header) && !NOT_TYPE.test(header)),
+    type: types.length ? types[0] : -1,
+    types,
     duration: folded.findIndex((header) => DURATION.test(header)),
     status: folded.findIndex((header) => STATUS.test(header)),
   };
@@ -32,13 +36,18 @@ export function parseDuration(value) {
 }
 
 const SMS = /sms|mms|mensaj|\bmsg\b/;
-const VOICE = /voz|llamada|\bcall|voice|volte|\bmoc\b|\bmtc\b|desvio/;
+// Movistar's "Tipo CDR" calls a voice record GSM.
+const VOICE = /voz|llamada|\bcall|voice|volte|\bgsm\b|\bmoc\b|\bmtc\b|desvio/;
 const DATA = /dato|gprs|internet|\bdata\b|navegac|\bpdp\b|\bps\b|\bims\b/;
 const FAILED = /no contest|fallid|rechaz|ocupad|perdid|cancel|failed|busy|no answer|unanswered|missed/;
 
+// The values of every type column of a record, in file order ("GSM SALIENTE").
+const typeValues = (row, columns) => (columns.types ?? (columns.type >= 0 ? [columns.type] : []))
+  .map((column) => String(row[column] ?? '').replace(/[\t\r\n]+/g, ' ').trim()).filter(Boolean);
+
 // 'call' (completed call), 'data', 'sms', or '' when the record is none of them or cannot be told apart.
 export function classifyCommunication(row, columns) {
-  const kind = columns.type >= 0 ? fold(row[columns.type]) : '';
+  const kind = fold(typeValues(row, columns).join(' '));
   const seconds = columns.duration >= 0 ? parseDuration(row[columns.duration]) : null;
   const failed = columns.status >= 0 && FAILED.test(fold(row[columns.status]));
   if (SMS.test(kind)) return 'sms';
@@ -82,7 +91,7 @@ export const LAST_COMMUNICATION_HEADERS = [
   'Tipo de comunicación', 'Número emisor', 'Número receptor', 'Fecha', 'Hora', 'Duración en segundos',
   'Ubicación de la antena', 'Lugar',
 ];
-const INCOMING = /entrante|recibid|incoming|\bmt\b|terminad/;
+const INCOMING = /entrante|entrada|recibid|incoming|\bmt\b|\bmtc\b|terminad/;
 
 // One report row for record `rowNumber`. `columns` is findLastCommunications().columns; `location` and `place` are
 // the indexes of the Ubicación and Lugar columns; `target` is the line of the file (lineKey) when known.
@@ -91,7 +100,7 @@ const INCOMING = /entrante|recibid|incoming|\bmt\b|terminad/;
 export function lastCommunicationCells(data, rowNumber, columns, { label = '', location = -1, place = -1, target = '' } = {}) {
   const row = data.rows[rowNumber - 1] || [];
   const cell = (column) => (column >= 0 ? String(row[column] ?? '').replace(/[\t\r\n]+/g, ' ').trim() : '');
-  const type = cell(columns.type);
+  const type = typeValues(row, columns).join(' ');
   let [sender, receiver] = [cell(columns.a), cell(columns.b)];
   if (INCOMING.test(fold(type)) && target && lineKey(sender) === target && lineKey(receiver) !== target) {
     [sender, receiver] = [receiver, sender];

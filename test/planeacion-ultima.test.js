@@ -20,8 +20,8 @@ const times = {
 };
 
 test('the type, duration and result columns are found, never the antenna type', () => {
-  assert.deepEqual(findCommunicationColumns(headers), { type: 1, duration: 4, status: -1 });
-  assert.deepEqual(findCommunicationColumns(['Tipo de antena', 'Servicio', 'Estatus']), { type: 1, duration: -1, status: 2 });
+  assert.deepEqual(findCommunicationColumns(headers), { type: 1, types: [1], duration: 4, status: -1 });
+  assert.deepEqual(findCommunicationColumns(['Tipo de antena', 'Servicio', 'Estatus']), { type: 1, types: [1], duration: -1, status: 2 });
 });
 
 test('durations are read as seconds', () => {
@@ -108,6 +108,45 @@ test('the copied hour keeps the seconds and they break ties within a minute', ()
   assert.equal(result.call.time, '2026-10-05T08:30:45');
   assert.equal(result.sms.time, '2026-10-05T08:30:10');
   assert.deepEqual(lastCommunicationCells(data, 1, result.columns).slice(3, 6), ['05/10/2026', '08:30:45', '30']);
+});
+
+// Movistar's CDR as delivered; the records are invented.
+const movistarHeaders = ['COD OFICIO', 'TIPO CDR', 'NUMERO A', 'NUMERO B', 'TIPO EVENTO', 'FECHA EVENTO', 'HORA EVENTO',
+  'DURACION', 'IMEI', 'IMSI', 'codBTS', 'LATITUD', 'LONGITUD'];
+const movistar = (tipo, evento, a, b, fecha, hora, duracion) => [
+  'OF-1', tipo, a, b, evento, fecha, hora, duracion, '350000000000001', '334020000000001', 'BTS1', '29.07', '-110.95'];
+
+test('Movistar: both type columns are read, never the event date or hour', () => {
+  const columns = findCommunicationColumns(movistarHeaders);
+  assert.deepEqual(columns, { type: 1, types: [1, 4], duration: 7, status: -1 });
+});
+
+test('Movistar: GSM is a call, completed only with duration; SMS is a message', () => {
+  const columns = { ...findCommunicationColumns(movistarHeaders), a: 2, b: 3 };
+  assert.equal(classifyCommunication(movistar('GSM', 'SALIENTE', '6620000001', '6620000002', '01/10/2026', '10:00:00', '35'), columns), 'call');
+  assert.equal(classifyCommunication(movistar('GSM', 'ENTRANTE', '6620000003', '6620000001', '01/10/2026', '11:00:00', '0'), columns), '');
+  assert.equal(classifyCommunication(movistar('SMS', 'ENTRANTE', '6620000003', '6620000001', '01/10/2026', '12:00:00', '0'), columns), 'sms');
+});
+
+test('Movistar: the latest call and SMS are found and copied with both type columns', () => {
+  const data = {
+    headers: movistarHeaders,
+    rows: [
+      movistar('GSM', 'SALIENTE', '6620000001', '6620000002', '01/10/2026', '10:00:00', '35'),
+      movistar('SMS', 'SALIENTE', '6620000001', '6620000002', '01/10/2026', '12:00:00', '0'),
+      movistar('GSM', 'ENTRANTE', '6620000001', '6620000004', '02/10/2026', '09:15:20', '60'),
+      movistar('GSM', 'ENTRANTE', '6620000005', '6620000001', '03/10/2026', '08:00:00', '0'),
+    ],
+    times: { 1: '2026-10-01T10:00', 2: '2026-10-01T12:00', 3: '2026-10-02T09:15', 4: '2026-10-03T08:00' },
+    clocks: { 1: '10:00:00', 2: '12:00:00', 3: '09:15:20', 4: '08:00:00' },
+  };
+  const result = findLastCommunications(data);
+  // The unanswered call of the 3rd (duration 0) is not the last completed call.
+  assert.deepEqual(result.call, { count: 2, row: 3, time: '2026-10-02T09:15:20' });
+  assert.deepEqual(result.sms, { count: 1, row: 2, time: '2026-10-01T12:00:00' });
+  // An incoming call with the target in Número A names the other line as sender.
+  assert.deepEqual(lastCommunicationCells(data, 3, result.columns, { target: '6620000001' }).slice(0, 6),
+    ['GSM ENTRANTE', '6620000004', '6620000001', '02/10/2026', '09:15:20', '60']);
 });
 
 test('the Telcel duration column "Durac. Seg" is recognised', () => {
