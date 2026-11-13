@@ -25,6 +25,7 @@ import { MAX_REDIRECT_ITEMS, parsePagination } from './routeHelpers.js';
 import pool from './db.js';
 import { createPerfilesStore, extractTitular, readXlsxSheets } from './perfilesService.js';
 import { contactosPorNumeros } from './contactosArchivo.js';
+import { listarDelitos } from './casosService.js';
 
 const CONTACTS_MAX_FILE_SIZE = 5 * 1024 * 1024;
 const CONTACTS_MAX_ROWS = 10000;
@@ -32,6 +33,9 @@ const uploadStorage = multer.memoryStorage();
 const upload = multer({ storage: uploadStorage, limits: { fileSize: CONTACTS_MAX_FILE_SIZE, files: 1, fields: 10, parts: 11, fieldSize: 4096 } });
 const router = forwardAsyncErrors(express.Router());
 const perfiles = createPerfilesStore(pool);
+
+// Suggestions for the delito field; the page still works without them.
+const delitosSugeridos = () => listarDelitos(pool).catch(() => []);
 
 const isContactsHeader = (row) => row.some((value) => String(value).trim().toLowerCase() === 'contactos');
 const isXlsx = (file) => /\.xlsx$/i.test(file.originalname);
@@ -58,7 +62,7 @@ router.get('/lineas/editar/:id', requireRecordEditor, async (req, res) => {
   if (!Number.isSafeInteger(idObjetivo) || idObjetivo < 1) return res.status(400).send('Línea inválida.');
   const objetivo = await obtenerObjetivoPorId(idObjetivo);
   if (!objetivo) return res.status(404).send('Línea no encontrada.');
-  return res.render('pages/editar-linea', { objetivo, error: null });
+  return res.render('pages/editar-linea', { objetivo, error: null, delitos: await delitosSugeridos() });
 });
 
 router.post('/lineas/editar/:id', requireRecordEditor, async (req, res) => {
@@ -72,14 +76,14 @@ router.post('/lineas/editar/:id', requireRecordEditor, async (req, res) => {
     ano: String(req.body.ano || '').trim(),
   };
   if (!Number.isSafeInteger(idObjetivo) || idObjetivo < 1 || !objetivo.numObjetivo || !objetivo.nuc || !objetivo.tipo || objetivo.delito.length > 255 || !/^\d{4}$/.test(objetivo.ano)) {
-    return res.status(400).render('pages/editar-linea', { objetivo, error: 'Completa todos los campos con valores válidos.' });
+    return res.status(400).render('pages/editar-linea', { objetivo, error: 'Completa todos los campos con valores válidos.', delitos: await delitosSugeridos() });
   }
   try {
     const updated = await actualizarObjetivo(idObjetivo, objetivo);
     if (!updated) return res.status(404).send('Línea no encontrada.');
     return res.redirect('/Crud?message=' + encodeURIComponent('Línea actualizada correctamente.') + '&type=success');
   } catch (error) {
-    return res.status(500).render('pages/editar-linea', { objetivo, error: 'No fue posible actualizar la línea.' });
+    return res.status(500).render('pages/editar-linea', { objetivo, error: 'No fue posible actualizar la línea.', delitos: await delitosSugeridos() });
   }
 });
 
@@ -111,6 +115,7 @@ router.get("/Crud", async (req, res, next) => {
     }
 
     res.render("pages/estudiantes", {
+      delitos: await delitosSugeridos(),
       objetivos,
       searchTerm,
       objectiveImeiMatches,

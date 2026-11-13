@@ -2,5 +2,6 @@
 import nombresTablasOficios from './001-nombres-tablas-oficios.js';
 import collationUnica from './002-collation-unica.js';
 import indicesUnicos from './003-indices-unicos-contactos-imei.js';
+import casosYDelitos from './004-casos-y-delitos.js';
 
-export default [nombresTablasOficios, collationUnica, indicesUnicos];
+export default [nombresTablasOficios, collationUnica, indicesUnicos, casosYDelitos];

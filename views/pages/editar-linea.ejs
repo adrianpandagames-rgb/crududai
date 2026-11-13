@@ -22,7 +22,8 @@
               </div>
               <div class="mb-3">
                 <label for="delito" class="form-label">Delito</label>
-                <input type="text" id="delito" name="delito" class="form-control" maxlength="255" value="<%= objetivo.delito || '' %>" placeholder="Ingrese el delito (opcional)">
+                <input type="text" id="delito" name="delito" class="form-control" maxlength="255" value="<%= objetivo.delito || '' %>" placeholder="Ingrese el delito (opcional)" list="delitosSugeridos" autocomplete="off">
+                <datalist id="delitosSugeridos"><% (locals.delitos || []).forEach((nombre) => { %><option value="<%= nombre %>"></option><% }) %></datalist>
               </div>
               <div class="mb-3">
                 <label for="ano" class="form-label">Año</label>

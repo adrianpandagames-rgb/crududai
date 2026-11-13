@@ -1,5 +1,6 @@
 import pool from "./db.js";
 import { normalizeStoredCity } from './locationText.js';
+import { casoIdPara, delitoPara } from './casosService.js';
 
 const formatCoordinateValue = (value) => {
   if (value === null || value === undefined || value === "") {
@@ -106,18 +107,24 @@ export const obtenerOCrearObjetivo = async (numObjetivo, nuc, tipo, ano, delito 
       }
     }
 
+    const casoId = await casoIdPara(pool, nuc, ano);
+    const delitoCatalogo = await delitoPara(pool, delito);
+
     const [empty] = await pool.query(
       `SELECT idObjetivo FROM objetivo WHERE numObjetivo = ? AND nuc = ? AND ano = ? AND ${sinContactos} ORDER BY idObjetivo LIMIT 1`,
       [numObjetivo, nuc, ano]
     );
     if (empty.length > 0) {
-      await pool.query("UPDATE objetivo SET tipo = ?, delito = ? WHERE idObjetivo = ?", [tipoToInsert, delito || null, empty[0].idObjetivo]);
+      await pool.query(
+        "UPDATE objetivo SET tipo = ?, delito = ?, delito_id = ?, caso_id = ? WHERE idObjetivo = ?",
+        [tipoToInsert, delitoCatalogo.nombre, delitoCatalogo.id, casoId, empty[0].idObjetivo]
+      );
       return { idObjetivo: empty[0].idObjetivo, tipo: tipoToInsert };
     }
 
     const [result] = await pool.query(
-      "INSERT INTO objetivo (numObjetivo, nuc, tipo, ano, delito) VALUES (?, ?, ?, ?, ?)",
-      [numObjetivo, nuc, tipoToInsert, ano, delito || null]
+      "INSERT INTO objetivo (numObjetivo, nuc, tipo, ano, delito, delito_id, caso_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [numObjetivo, nuc, tipoToInsert, ano, delitoCatalogo.nombre, delitoCatalogo.id, casoId]
     );
 
     return { idObjetivo: result.insertId, tipo: tipoToInsert };
@@ -141,8 +148,8 @@ export const obtenerOCrearObjetivoImei = async (numObjetivo, nuc, tipo, ano) => 
     }
 
     const [result] = await pool.query(
-      "INSERT INTO objetivoImei (numObjetivo, nuc, tipo, ano) VALUES (?, ?, ?, ?)",
-      [numObjetivo, nuc, normalizedTipo, ano]
+      "INSERT INTO objetivoImei (numObjetivo, nuc, tipo, ano, caso_id) VALUES (?, ?, ?, ?, ?)",
+      [numObjetivo, nuc, normalizedTipo, ano, await casoIdPara(pool, nuc, ano)]
     );
 
     return { idObjetivo: result.insertId, tipo: normalizedTipo };
@@ -157,9 +164,10 @@ export const registrarLineaSinUtilidad = async (numObjetivo, nuc, tipo, ano, del
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
+    const delitoCatalogo = await delitoPara(connection, delito);
     const [result] = await connection.query(
-      'INSERT INTO objetivo (numObjetivo, nuc, tipo, ano, delito) VALUES (?, ?, ?, ?, ?)',
-      [numObjetivo, nuc, tipo, ano, delito || null]
+      'INSERT INTO objetivo (numObjetivo, nuc, tipo, ano, delito, delito_id, caso_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [numObjetivo, nuc, tipo, ano, delitoCatalogo.nombre, delitoCatalogo.id, await casoIdPara(connection, nuc, ano)]
     );
     await connection.query(
       'INSERT INTO contactos (contacto, idObjetivo) VALUES (?, ?)',
@@ -324,9 +332,10 @@ export const obtenerObjetivoPorId = async (idObjetivo) => {
 export const actualizarObjetivo = async (idObjetivo, { numObjetivo, nuc, tipo, ano, delito = '' }) => {
   const [existingRows] = await pool.query('SELECT idObjetivo FROM objetivo WHERE idObjetivo = ?', [idObjetivo]);
   if (existingRows.length !== 1) return false;
+  const delitoCatalogo = await delitoPara(pool, delito);
   const [result] = await pool.execute(
-    'UPDATE objetivo SET numObjetivo = ?, nuc = ?, tipo = ?, ano = ?, delito = ? WHERE idObjetivo = ?',
-    [numObjetivo, nuc, tipo, ano, delito || null, idObjetivo],
+    'UPDATE objetivo SET numObjetivo = ?, nuc = ?, tipo = ?, ano = ?, delito = ?, delito_id = ?, caso_id = ? WHERE idObjetivo = ?',
+    [numObjetivo, nuc, tipo, ano, delitoCatalogo.nombre, delitoCatalogo.id, await casoIdPara(pool, nuc, ano), idObjetivo],
   );
   return result.affectedRows >= 0;
 };
@@ -359,9 +368,9 @@ export const actualizarImei = async (idImei, { imei, numObjetivo, nuc, tipo, ano
     await connection.execute(
       `UPDATE objetivoImei o
        INNER JOIN imei i ON i.idObjetivo = o.idObjetivo
-       SET o.numObjetivo = ?, o.nuc = ?, o.tipo = ?, o.ano = ?
+       SET o.numObjetivo = ?, o.nuc = ?, o.tipo = ?, o.ano = ?, o.caso_id = ?
        WHERE i.idImei = ?`,
-      [numObjetivo, nuc, tipo, ano, idImei],
+      [numObjetivo, nuc, tipo, ano, await casoIdPara(connection, nuc, ano), idImei],
     );
     await connection.commit();
     return true;
