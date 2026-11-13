@@ -26,6 +26,7 @@
     "migrate:cuentas": "node scripts/add-cuentas.js",
     "migrate:carpeta-resguardo": "node scripts/add-carpeta-resguardo.js",
     "package:win": "pkg . --targets node18-win-x64 --output dist/correlatador.exe",
+    "migrate": "node scripts/migrate.js",
     "build": "node --check app.js"
   },
   "keywords": [],

@@ -49,6 +49,10 @@ router.post('/imei/editar/:id', requireRecordEditor, async (req, res) => {
     if (!updated) return res.status(404).send('IMEI no encontrado.');
     return res.redirect('/imei?message=' + encodeURIComponent('IMEI actualizado correctamente.') + '&type=success');
   } catch (error) {
+    // The unique index on (line, IMEI) refuses a value the line already has.
+    if (error?.code === 'ER_DUP_ENTRY') {
+      return res.status(409).render('pages/editar-imei', { imei, error: 'Esa línea ya tiene registrado ese IMEI.' });
+    }
     return res.status(500).render('pages/editar-imei', { imei, error: 'No fue posible actualizar el IMEI.' });
   }
 });

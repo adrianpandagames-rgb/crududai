@@ -55,7 +55,7 @@ export async function crearTablaViaAlcance(db) {
     creado_por BIGINT UNSIGNED NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX via_alcance_fecha_envio (fecha_envio)
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci`);
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci`);
 }
 
 export async function guardarViaAlcance(db, datos, userId) {

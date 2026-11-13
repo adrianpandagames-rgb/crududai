@@ -12,7 +12,7 @@ export async function crearTablaCarpetasResguardo(db) {
     creado_por BIGINT UNSIGNED NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY carpetas_resguardo_nombre (nombre)
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci`);
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci`);
 }
 
 export async function agregarColumnaCarpetaResguardo(db) {

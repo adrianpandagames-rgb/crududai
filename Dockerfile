@@ -11,6 +11,7 @@ COPY src ./src
 COPY views ./views
 COPY public ./public
 COPY scripts ./scripts
+COPY migrations ./migrations
 RUN mkdir -p /app/certs && chown node:node /app/certs
 
 USER node

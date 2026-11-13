@@ -25,7 +25,7 @@ try {
       localidad VARCHAR(255) NOT NULL,
       UNIQUE KEY localidades_mexico_estado_localidad (estado, localidad),
       INDEX localidades_mexico_estado_index (estado)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   `);
 
   let imported = 0;

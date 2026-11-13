@@ -63,7 +63,7 @@ export async function crearTablaDatosConservados(db) {
     creado_por BIGINT UNSIGNED NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX datos_conservados_fecha_envio (fecha_envio)
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci`);
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci`);
   // Actualiza también tablas creadas antes de permitir campos opcionales.
   await db.query(`ALTER TABLE DatosConservados ${columns.map(column => `MODIFY COLUMN ${column}`).join(', ')},
     MODIFY COLUMN lineas SMALLINT UNSIGNED NULL,
