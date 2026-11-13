@@ -146,7 +146,7 @@ test('the menu is grouped and each role keeps exactly its links', async () => {
   };
   assert.deepEqual(await menu({ isAdmin: true, role: 'admin' }), [
     'Métricas', 'Tareas',
-    '[Datos conservados]', 'Líneas', 'IMEI', 'Perfiles', 'Limpieza',
+    '[Datos conservados]', 'Ficha de línea o caso', 'Líneas', 'IMEI', 'Perfiles', 'Limpieza',
     '[Mapeo]', 'Ubicaciones', 'Georeferenciación', 'Planeación geográfica', 'Ruta', 'Coincidencias de antenas',
     '[OSINT]', 'Líneas Internacionales', 'Maigret', 'SpiderFoot', 'RastroX', 'Búsqueda por imagen',
     '[Administración]', 'Usuarios', 'Auditoría', 'Medidores', 'Red telefónica',
@@ -156,4 +156,6 @@ test('the menu is grouped and each role keeps exactly its links', async () => {
   assert.ok(user.includes('Métricas') && user.includes('Tareas') && !user.includes('Georeferenciación') && !user.includes('[Administración]'));
   const uecs = await menu({ isAdmin: false, role: 'uecs' });
   assert.ok(!uecs.includes('Métricas') && !uecs.includes('Tareas') && uecs.includes('Georeferenciación') && !uecs.includes('[Administración]'));
+  // The line and case file is open to every signed-in user.
+  assert.ok(user.includes('Ficha de línea o caso') && uecs.includes('Ficha de línea o caso'));
 });

@@ -1,0 +1,6 @@
+<form class="ficha-buscador" action="/ficha" method="GET" role="search">
+  <label for="fichaQ" class="visually-hidden">Línea o NUC</label>
+  <input type="search" id="fichaQ" name="q" class="form-control" maxlength="60" required
+    placeholder="Número de línea (10 dígitos) o NUC" value="<%= typeof q === 'string' ? q : '' %>" autocomplete="off" />
+  <button type="submit" class="btn btn-primary"><i class="bi bi-search" aria-hidden="true"></i> Buscar</button>
+</form>

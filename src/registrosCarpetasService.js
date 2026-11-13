@@ -14,7 +14,7 @@ export async function listarRegistrosCarpetas(db, tipo, pagina = '1') {
   const total = Number(conteo.total);
   const paginas = Math.max(1, Math.ceil(total / 5));
   const actual = Math.min(consulta.pagina, paginas);
-  const [registros] = await db.query(`SELECT id, nuc,
+  const [registros] = await db.query(`SELECT id, nuc, caso_id AS casoId,
     DATE_FORMAT(fecha_envio, '%d/%m/%Y') AS fecha_envio, agencia, ciudad
     FROM ${tabla} ORDER BY id DESC LIMIT ? OFFSET ?`, [5, (actual - 1) * 5]);
   return { tipo, registros, total, pagina: actual, paginas };

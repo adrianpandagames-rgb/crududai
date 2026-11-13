@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <%- include('../includes/head') %>
+    <%- include('../partials/ficha-estilos') %>
+  </head>
+  <body>
+    <%- include('../includes/header') %>
+    <main class="container px-3 page-offset ficha-page">
+      <div class="row justify-content-md-center">
+        <div class="col-md-12 mt-5">
+          <h1 class="text-center title">FICHA DE CASO</h1>
+          <hr />
+        </div>
+      </div>
+      <%- include('../partials/ficha-buscador', { q: caso.nuc }) %>
+
+      <div class="ficha-encabezado">
+        <h2 class="h3 mb-1">NUC <%= caso.nuc %> · <%= caso.ano %></h2>
+        <% if (caso.otrosAnos.length) { %>
+          <p class="ficha-sub mb-1">Mismo NUC en otros años:
+            <% caso.otrosAnos.forEach((otro, index) => { %><%= index ? ', ' : '' %><a href="/ficha/caso/<%= otro.id %>"><%= otro.ano %></a><% }) %>
+          </p>
+        <% } %>
+        <% if (caso.delitos.length) { %>
+          <div class="ficha-chips justify-content-center mt-2" aria-label="Delitos">
+            <% caso.delitos.forEach((delito) => { %><span class="badge text-bg-secondary"><%= delito %></span><% }) %>
+          </div>
+        <% } %>
+      </div>
+
+      <section class="card ficha-card" aria-labelledby="casoLineas">
+        <div class="card-header" id="casoLineas">Líneas del caso<span class="ficha-cuenta"><%= caso.lineas.length %></span></div>
+        <div class="card-body">
+          <% if (!caso.lineas.length) { %>
+            <p class="ficha-vacio">Este caso no tiene líneas registradas.</p>
+          <% } else { %>
+            <div class="table-responsive">
+              <table class="table table-sm ficha-table mb-0">
+                <thead><tr><th scope="col">Línea</th><th scope="col">Registros</th><th scope="col">Desde</th><th scope="col">Contactos</th><th scope="col">IMEI</th></tr></thead>
+                <tbody>
+                  <% caso.lineas.forEach((linea) => { %>
+                    <tr>
+                      <td><a class="ficha-num" href="/ficha/linea/<%= linea.numero %>"><%= linea.numero %></a></td>
+                      <td><%= linea.registros ? `${linea.registros} (${linea.tipos})` : 'Solo IMEI' %></td>
+                      <td class="ficha-num"><%= linea.desde || '—' %></td>
+                      <td class="ficha-num"><%= linea.contactos %></td>
+                      <td class="ficha-num"><%= linea.imeis %></td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          <% } %>
+        </div>
+      </section>
+
+      <section class="card ficha-card" aria-labelledby="casoComun">
+        <div class="card-header" id="casoComun">Contactos en común entre líneas del caso<span class="ficha-cuenta"><%= caso.enComun.length %></span></div>
+        <div class="card-body">
+          <% if (!caso.enComun.length) { %>
+            <p class="ficha-vacio"><%= caso.lineas.length > 1 ? 'Las líneas del caso no comparten contactos.' : 'Hace falta más de una línea con contactos.' %></p>
+          <% } else { %>
+            <div class="table-responsive">
+              <table class="table table-sm ficha-table mb-0">
+                <thead><tr><th scope="col">Contacto</th><th scope="col">Líneas</th><th scope="col">De las líneas</th></tr></thead>
+                <tbody>
+                  <% caso.enComun.forEach((fila) => { %>
+                    <tr>
+                      <td><a class="ficha-num" href="/ficha/linea/<%= fila.numero %>"><%= fila.numero %></a></td>
+                      <td class="ficha-num"><%= fila.lineas %></td>
+                      <td class="ficha-num small"><%= fila.deLineas %></td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          <% } %>
+        </div>
+      </section>
+
+      <% if (verOficios && caso.oficios) { %>
+        <section class="card ficha-card" aria-labelledby="casoOficios">
+          <div class="card-header" id="casoOficios">Oficios<span class="ficha-cuenta"><%= caso.oficios.length %></span></div>
+          <div class="card-body">
+            <% if (!caso.oficios.length) { %>
+              <p class="ficha-vacio">No hay oficios registrados para este caso.</p>
+            <% } else { %>
+              <div class="table-responsive">
+                <table class="table table-sm ficha-table mb-0">
+                  <thead><tr><th scope="col">Tipo</th><th scope="col">Folio</th><th scope="col">Envío</th></tr></thead>
+                  <tbody>
+                    <% caso.oficios.forEach((oficio) => { %>
+                      <tr><td><%= oficio.tipo %></td><td class="ficha-num"><%= oficio.id %></td><td class="ficha-num"><%= oficio.fecha || '—' %></td></tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            <% } %>
+            <% if (caso.oficiosSinAno.length) { %>
+              <div class="alert alert-warning small mt-3 mb-0" role="note">
+                <%= caso.oficiosSinAno.length %> <%= caso.oficiosSinAno.length === 1 ? 'oficio' : 'oficios' %> con este NUC todavía sin año:
+                <%= caso.oficiosSinAno.map((oficio) => `${oficio.tipo} folio ${oficio.id}`).join(', ') %>.
+                Ábrelos en Métricas › Registros de carpetas y ponles el año para enlazarlos al caso que corresponda.
+              </div>
+            <% } %>
+            <p class="small mt-3 mb-0"><a href="/metricas">Abrir Métricas</a></p>
+          </div>
+        </section>
+      <% } %>
+    </main>
+    <%- include('../includes/scripts') %>
+    <%- include('../includes/footer') %>
+  </body>
+</html>

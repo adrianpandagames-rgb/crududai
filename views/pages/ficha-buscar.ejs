@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <%- include('../includes/head') %>
+    <%- include('../partials/ficha-estilos') %>
+  </head>
+  <body>
+    <%- include('../includes/header') %>
+    <main class="container px-3 page-offset ficha-page">
+      <div class="row justify-content-md-center">
+        <div class="col-md-12 mt-5">
+          <h1 class="text-center title">FICHA DE LÍNEA O CASO</h1>
+          <hr />
+        </div>
+      </div>
+      <p class="text-center text-muted">Escribe un número de línea para ver sus casos, IMEI, contactos y cruces, o un NUC para ver su caso.</p>
+      <%- include('../partials/ficha-buscador', { q }) %>
+
+      <% if (typeof aviso === 'string' && aviso) { %>
+        <div class="alert alert-warning text-center" role="alert"><%= aviso %></div>
+      <% } %>
+
+      <% if (busqueda.tipo === 'nuc') { %>
+        <section class="card ficha-card mx-auto" style="max-width: 560px;" aria-labelledby="fichaResultados">
+          <div class="card-header" id="fichaResultados">NUC <%= busqueda.nuc %></div>
+          <div class="card-body">
+            <% if (casos.length) { %>
+              <p class="mb-2"><%= casos.length > 1 ? 'Este NUC tiene casos en varios años; elige uno:' : 'Caso encontrado:' %></p>
+              <ul class="mb-0">
+                <% casos.forEach((caso) => { %>
+                  <li><a href="/ficha/caso/<%= caso.id %>">NUC <%= caso.nuc %> · <%= caso.ano %></a></li>
+                <% }) %>
+              </ul>
+            <% } else { %>
+              <p class="ficha-vacio">No hay un caso con ese NUC.</p>
+            <% } %>
+            <% if (busqueda.numero) { %>
+              <p class="mt-3 mb-0"><a href="/ficha/linea/<%= busqueda.numero %>">Buscarlo como número de línea (<%= busqueda.numero %>)</a></p>
+            <% } %>
+          </div>
+        </section>
+      <% } %>
+    </main>
+    <%- include('../includes/scripts') %>
+    <%- include('../includes/footer') %>
+  </body>
+</html>

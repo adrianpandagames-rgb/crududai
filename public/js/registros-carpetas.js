@@ -31,7 +31,16 @@
         const row = document.createElement('tr');
         for (const key of ['id', 'nuc', 'fecha_envio', 'agencia', 'ciudad']) {
           const cell = document.createElement('td');
-          cell.textContent = registro[key] ?? '—';
+          if (key === 'nuc' && registro.nuc) {
+            // The NUC opens the case's file; a record still without its year opens the NUC search.
+            const enlace = document.createElement('a');
+            enlace.href = registro.casoId ? `/ficha/caso/${encodeURIComponent(registro.casoId)}` : `/ficha?${new URLSearchParams({ q: registro.nuc })}`;
+            enlace.textContent = registro.nuc;
+            enlace.title = registro.casoId ? 'Ver ficha del caso' : 'Sin año del NUC: buscar el caso';
+            cell.append(enlace);
+          } else {
+            cell.textContent = registro[key] ?? '—';
+          }
           row.append(cell);
         }
         if (filas.dataset.canEdit === 'true') {

@@ -33,6 +33,7 @@ import { createSpiderfootRouter, createSpiderfootSearches } from './src/spiderfo
 import { createImagenesRouter, createPublicImageRouter } from './src/imagenesRouter.js';
 import { createNombresRouter } from './src/nombresRouter.js';
 import { createPerfilesRouter } from './src/perfilesRouter.js';
+import { createFichaRouter } from './src/fichaRouter.js';
 import { createTareasRouter } from './src/tareasRouter.js';
 import { createCuentaRouter } from './src/cuentaRouter.js';
 import { createCuentaStore } from './src/cuentaService.js';
@@ -262,6 +263,7 @@ app.use('/spiderfoot', requireAuth, createSpiderfootRouter(pool, { searches: spi
 app.use('/imagenes', requireAuth, createImagenesRouter(pool));
 app.use('/nombres', requireAuth, createNombresRouter(pool, { maigretSearches }));
 app.use('/perfiles', requireAuth, createPerfilesRouter(pool));
+app.use('/ficha', requireAuth, createFichaRouter(pool));
 app.use('/tareas', requireAuth, requireNonUecs, createTareasRouter(pool, { avisar: notificar }));
 // Reverse image search engines download the image without a session, through an expiring token.
 app.use('/imagen-publica', createPublicImageRouter(pool));

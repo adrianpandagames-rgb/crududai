@@ -1,3 +1,6 @@
+<%# Line numbers and NUCs open their file; values without digits ("sin utilidad") stay as text. %>
+<% const fichaLinea = (valor) => /\d{3,}/.test(String(valor ?? '')) ? `/ficha/linea/${encodeURIComponent(String(valor).replace(/\D/g, ''))}` : null; %>
+<% const fichaCaso = (nuc, ano) => `/ficha/caso?${new URLSearchParams({ nuc: String(nuc ?? ''), ano: String(ano ?? '') })}`; %>
 <div class="table-responsive">
   <table data-tabla="imei-resultados" class="table w-100 imei-results-table table-stack">
     <thead>
@@ -24,8 +27,8 @@
         <tr data-imei-row>
           <th scope="row" data-label="#"><%= startPos + index %></th>
           <td data-label="IMEI"><%= item.imei %></td>
-          <td data-label="Objetivo"><%= item.numObjetivo %></td>
-          <td data-label="NUC"><%= item.nuc %></td>
+          <td data-label="Objetivo"><% if (fichaLinea(item.numObjetivo)) { %><a href="<%= fichaLinea(item.numObjetivo) %>" title="Ver ficha de la línea"><%= item.numObjetivo %></a><% } else { %><%= item.numObjetivo %><% } %></td>
+          <td data-label="NUC"><a href="<%= fichaCaso(item.nuc, item.ano) %>" title="Ver ficha del caso"><%= item.nuc %></a></td>
           <td data-label="Año"><%= item.ano %></td>
           <td data-label="Tipo"><%= item.tipo %></td>
           <td data-label="Marca"><%= item.brand_name || '—' %></td>

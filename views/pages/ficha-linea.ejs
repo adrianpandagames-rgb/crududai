@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <%- include('../includes/head') %>
+    <%- include('../partials/ficha-estilos') %>
+  </head>
+  <body>
+    <%- include('../includes/header') %>
+    <%# casoLink builds HTML printed unescaped, so every value in it is escaped here. %>
+    <% const escape = (texto) => String(texto ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]); %>
+    <% const casoLink = (c) => `<a href="/ficha/caso/${Number(c.casoId)}">NUC ${escape(c.nuc)} · ${escape(c.ano)}</a>`; %>
+    <main class="container px-3 page-offset ficha-page">
+      <div class="row justify-content-md-center">
+        <div class="col-md-12 mt-5">
+          <h1 class="text-center title">FICHA DE LÍNEA</h1>
+          <hr />
+        </div>
+      </div>
+      <%- include('../partials/ficha-buscador', { q: ficha.numero }) %>
+
+      <div class="ficha-encabezado">
+        <h2 class="h3 ficha-numero mb-1"><%= ficha.numero %></h2>
+        <p class="ficha-sub mb-0">
+          <%= ficha.casos.length ? `Objetivo en ${ficha.casos.length} ${ficha.casos.length === 1 ? 'caso' : 'casos'}` : 'No registrada como objetivo' %>
+          · Contacto de <%= ficha.comoContacto.length %> <%= ficha.comoContacto.length === 1 ? 'línea objetivo' : 'líneas objetivo' %>
+        </p>
+      </div>
+
+      <% if (ficha.perfiles.length) { %>
+        <section class="card ficha-card" aria-labelledby="fichaPerfiles">
+          <div class="card-header" id="fichaPerfiles">Titular (perfiles)<span class="ficha-cuenta"><%= ficha.perfiles.length %></span></div>
+          <div class="card-body">
+            <% ficha.perfiles.forEach((perfil) => { %>
+              <p class="mb-1"><strong><%= perfil.nombre %></strong><%= perfil.alias ? ` · Alias: ${perfil.alias}` : '' %></p>
+              <% if (perfil.direccion) { %><p class="mb-2 small"><%= perfil.direccion %></p><% } %>
+            <% }) %>
+            <a class="small" href="/perfiles?search=<%= encodeURIComponent(ficha.numero) %>">Abrir en Perfiles</a>
+          </div>
+        </section>
+      <% } %>
+
+      <section class="card ficha-card" aria-labelledby="fichaCasos">
+        <div class="card-header" id="fichaCasos">Como objetivo</div>
+        <div class="card-body">
+          <% if (!ficha.casos.length) { %>
+            <p class="ficha-vacio">Esta línea no está registrada como objetivo en ningún caso.</p>
+          <% } %>
+          <% ficha.casos.forEach((caso, index) => { %>
+            <div class="<%= index ? 'mt-4' : '' %>">
+              <h3 class="h6 mb-2"><%- casoLink(caso) %></h3>
+              <% if (caso.registros.length) { %>
+                <div class="table-responsive">
+                  <table class="table table-sm ficha-table mb-2">
+                    <thead><tr><th scope="col">Registro</th><th scope="col">Fecha</th><th scope="col">Contactos</th><th scope="col">Delito</th></tr></thead>
+                    <tbody>
+                      <% caso.registros.forEach((registro) => { %>
+                        <tr><td><%= registro.tipo %></td><td class="ficha-num"><%= registro.fecha %></td><td class="ficha-num"><%= registro.contactos %></td><td><%= registro.delito || '—' %></td></tr>
+                      <% }) %>
+                    </tbody>
+                  </table>
+                </div>
+              <% } else { %>
+                <p class="small text-muted mb-2">Sin sábana de contactos registrada en este caso.</p>
+              <% } %>
+              <% if (caso.imeis.length) { %>
+                <div class="ficha-chips" aria-label="IMEI">
+                  <% caso.imeis.forEach((imei) => { %>
+                    <span class="badge text-bg-light border ficha-num">IMEI <%= imei.imei %><%= imei.marca || imei.modelo ? ` · ${[imei.marca, imei.modelo].filter(Boolean).join(' ')}` : '' %></span>
+                  <% }) %>
+                </div>
+              <% } %>
+            </div>
+          <% }) %>
+        </div>
+      </section>
+
+      <section class="card ficha-card" aria-labelledby="fichaComoContacto">
+        <div class="card-header" id="fichaComoContacto">Aparece como contacto de<span class="ficha-cuenta"><%= ficha.comoContacto.length %></span></div>
+        <div class="card-body">
+          <% if (!ficha.comoContacto.length) { %>
+            <p class="ficha-vacio">No aparece en las sábanas de otras líneas objetivo.</p>
+          <% } else { %>
+            <div class="table-responsive">
+              <table class="table table-sm ficha-table mb-0">
+                <thead><tr><th scope="col">Línea objetivo</th><th scope="col">Caso</th><th scope="col">Registros</th></tr></thead>
+                <tbody>
+                  <% ficha.comoContacto.forEach((fila) => { %>
+                    <tr><td><a class="ficha-num" href="/ficha/linea/<%= fila.linea %>"><%= fila.linea %></a></td><td><%- casoLink(fila) %></td><td class="ficha-num"><%= fila.registros %></td></tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          <% } %>
+        </div>
+      </section>
+
+      <section class="card ficha-card" aria-labelledby="fichaCruces">
+        <div class="card-header" id="fichaCruces">Contactos que cruzan con otros objetivos<span class="ficha-cuenta"><%= ficha.contactosCruzados.length %> de <%= ficha.totalContactos %> contactos</span></div>
+        <div class="card-body">
+          <% if (!ficha.totalContactos) { %>
+            <p class="ficha-vacio">Esta línea no tiene contactos registrados.</p>
+          <% } else if (!ficha.contactosCruzados.length) { %>
+            <p class="ficha-vacio">Ninguno de sus contactos aparece en otra línea objetivo.</p>
+          <% } else { %>
+            <div class="table-responsive">
+              <table class="table table-sm ficha-table mb-0">
+                <thead><tr><th scope="col">Contacto</th><th scope="col">También en</th></tr></thead>
+                <tbody>
+                  <% ficha.contactosCruzados.forEach((contacto) => { %>
+                    <tr>
+                      <td>
+                        <a class="ficha-num" href="/ficha/linea/<%= contacto.numero %>"><%= contacto.numero %></a>
+                        <% if (contacto.esObjetivo) { %><span class="badge text-bg-warning ms-1">Es objetivo</span><% } %>
+                      </td>
+                      <td>
+                        <div class="ficha-cruces">
+                          <% contacto.cruces.forEach((cruce) => { %>
+                            <span><a class="ficha-num" href="/ficha/linea/<%= cruce.linea %>"><%= cruce.linea %></a> <span class="small text-muted">(<%- casoLink(cruce) %>)</span></span>
+                          <% }) %>
+                          <% if (!contacto.cruces.length) { %><span class="small text-muted">Solo como objetivo</span><% } %>
+                        </div>
+                      </td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          <% } %>
+          <% if (ficha.totalContactos) { %>
+            <details class="mt-3">
+              <summary>Todos los contactos (<%= ficha.totalContactos %>)</summary>
+              <ul class="ficha-contactos">
+                <% ficha.contactos.forEach((contacto) => { %>
+                  <li><a class="ficha-num" href="/ficha/linea/<%= contacto.numero %>"><%= contacto.numero %></a></li>
+                <% }) %>
+              </ul>
+              <% if (ficha.totalContactos > ficha.contactos.length) { %>
+                <p class="small text-muted mt-2 mb-0">Se muestran los primeros <%= ficha.contactos.length %>.</p>
+              <% } %>
+            </details>
+          <% } %>
+        </div>
+      </section>
+
+      <% if (verOficios && ficha.oficios) { %>
+        <section class="card ficha-card" aria-labelledby="fichaOficios">
+          <div class="card-header" id="fichaOficios">Oficios que la mencionan<span class="ficha-cuenta"><%= ficha.oficios.length %></span></div>
+          <div class="card-body">
+            <% if (!ficha.oficios.length) { %>
+              <p class="ficha-vacio">Ningún oficio la incluye entre sus líneas.</p>
+            <% } else { %>
+              <ul class="mb-0">
+                <% ficha.oficios.forEach((oficio) => { %>
+                  <li><%= oficio.tipo %> · Folio <%= oficio.id %> · <%- oficio.casoId ? casoLink(oficio) : `NUC ${escape(oficio.nuc)} (sin año)` %><%= oficio.fecha ? ` · ${oficio.fecha}` : '' %></li>
+                <% }) %>
+              </ul>
+            <% } %>
+          </div>
+        </section>
+      <% } %>
+
+      <% const { rutas, limpiezas, georeferencias } = ficha.archivos; %>
+      <% const totalArchivos = rutas.length + limpiezas.length + (georeferencias || []).length; %>
+      <section class="card ficha-card" aria-labelledby="fichaArchivos">
+        <div class="card-header" id="fichaArchivos">Archivos de esta línea<span class="ficha-cuenta"><%= totalArchivos %></span></div>
+        <div class="card-body">
+          <% if (!totalArchivos) { %>
+            <p class="ficha-vacio">No hay archivos vigentes de esta línea que puedas ver.</p>
+          <% } %>
+          <% if (rutas.length) { %>
+            <h3 class="h6">Ruta</h3>
+            <ul>
+              <% rutas.forEach((archivo) => { %>
+                <li><%= archivo.nombre %> · <span class="ficha-num"><%= archivo.fecha %></span>
+                  <% if (archivo.estado === 'listo') { %> · <a href="/ruta/exportar/<%= archivo.id %>">CSV</a> · <a href="/ruta/exportar-kmz/<%= archivo.id %>">KMZ</a><% } else { %> · <%= archivo.estado %><% } %></li>
+              <% }) %>
+            </ul>
+          <% } %>
+          <% if (limpiezas.length) { %>
+            <h3 class="h6">Limpieza</h3>
+            <ul>
+              <% limpiezas.forEach((archivo) => { %>
+                <li><%= archivo.nombre %> · <span class="ficha-num"><%= archivo.fecha %></span> · <a href="/limpieza/descargar/<%= archivo.id %>/sabana">Sábana</a> · <a href="/limpieza/descargar/<%= archivo.id %>/geo">Geoposicionamiento</a></li>
+              <% }) %>
+            </ul>
+          <% } %>
+          <% if (georeferencias && georeferencias.length) { %>
+            <h3 class="h6">Georeferenciación</h3>
+            <ul class="mb-0">
+              <% georeferencias.forEach((archivo) => { %>
+                <li><%= archivo.nombre %> · <span class="ficha-num"><%= archivo.fecha %></span>
+                  <% if (archivo.estado === 'listo') { %> · <a href="/georeferenciacion/exportar/<%= archivo.id %>">CSV</a><% } else { %> · <%= archivo.estado %><% } %></li>
+              <% }) %>
+            </ul>
+          <% } %>
+        </div>
+      </section>
+    </main>
+    <%- include('../includes/scripts') %>
+    <%- include('../includes/footer') %>
+  </body>
+</html>
