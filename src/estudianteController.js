@@ -1,6 +1,6 @@
 import pool from "./db.js";
 import { normalizeStoredCity } from './locationText.js';
-import { casoIdPara, delitoPara } from './casosService.js';
+import { casoYLineaPara, delitoPara } from './casosService.js';
 
 const formatCoordinateValue = (value) => {
   if (value === null || value === undefined || value === "") {
@@ -107,7 +107,7 @@ export const obtenerOCrearObjetivo = async (numObjetivo, nuc, tipo, ano, delito 
       }
     }
 
-    const casoId = await casoIdPara(pool, nuc, ano);
+    const { casoId, lineaId } = await casoYLineaPara(pool, numObjetivo, nuc, ano);
     const delitoCatalogo = await delitoPara(pool, delito);
 
     const [empty] = await pool.query(
@@ -116,15 +116,15 @@ export const obtenerOCrearObjetivo = async (numObjetivo, nuc, tipo, ano, delito 
     );
     if (empty.length > 0) {
       await pool.query(
-        "UPDATE objetivo SET tipo = ?, delito = ?, delito_id = ?, caso_id = ? WHERE idObjetivo = ?",
-        [tipoToInsert, delitoCatalogo.nombre, delitoCatalogo.id, casoId, empty[0].idObjetivo]
+        "UPDATE objetivo SET tipo = ?, delito = ?, delito_id = ?, caso_id = ?, linea_id = ? WHERE idObjetivo = ?",
+        [tipoToInsert, delitoCatalogo.nombre, delitoCatalogo.id, casoId, lineaId, empty[0].idObjetivo]
       );
       return { idObjetivo: empty[0].idObjetivo, tipo: tipoToInsert };
     }
 
     const [result] = await pool.query(
-      "INSERT INTO objetivo (numObjetivo, nuc, tipo, ano, delito, delito_id, caso_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      [numObjetivo, nuc, tipoToInsert, ano, delitoCatalogo.nombre, delitoCatalogo.id, casoId]
+      "INSERT INTO objetivo (numObjetivo, nuc, tipo, ano, delito, delito_id, caso_id, linea_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      [numObjetivo, nuc, tipoToInsert, ano, delitoCatalogo.nombre, delitoCatalogo.id, casoId, lineaId]
     );
 
     return { idObjetivo: result.insertId, tipo: tipoToInsert };
@@ -147,9 +147,10 @@ export const obtenerOCrearObjetivoImei = async (numObjetivo, nuc, tipo, ano) => 
       return { idObjetivo: existingObjetivo[0].idObjetivo, tipo: existingObjetivo[0].tipo };
     }
 
+    const { casoId, lineaId } = await casoYLineaPara(pool, numObjetivo, nuc, ano);
     const [result] = await pool.query(
-      "INSERT INTO objetivoImei (numObjetivo, nuc, tipo, ano, caso_id) VALUES (?, ?, ?, ?, ?)",
-      [numObjetivo, nuc, normalizedTipo, ano, await casoIdPara(pool, nuc, ano)]
+      "INSERT INTO objetivoImei (numObjetivo, nuc, tipo, ano, caso_id, linea_id) VALUES (?, ?, ?, ?, ?, ?)",
+      [numObjetivo, nuc, normalizedTipo, ano, casoId, lineaId]
     );
 
     return { idObjetivo: result.insertId, tipo: normalizedTipo };
@@ -165,9 +166,10 @@ export const registrarLineaSinUtilidad = async (numObjetivo, nuc, tipo, ano, del
   try {
     await connection.beginTransaction();
     const delitoCatalogo = await delitoPara(connection, delito);
+    const { casoId, lineaId } = await casoYLineaPara(connection, numObjetivo, nuc, ano);
     const [result] = await connection.query(
-      'INSERT INTO objetivo (numObjetivo, nuc, tipo, ano, delito, delito_id, caso_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [numObjetivo, nuc, tipo, ano, delitoCatalogo.nombre, delitoCatalogo.id, await casoIdPara(connection, nuc, ano)]
+      'INSERT INTO objetivo (numObjetivo, nuc, tipo, ano, delito, delito_id, caso_id, linea_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [numObjetivo, nuc, tipo, ano, delitoCatalogo.nombre, delitoCatalogo.id, casoId, lineaId]
     );
     await connection.query(
       'INSERT INTO contactos (contacto, idObjetivo) VALUES (?, ?)',
@@ -333,9 +335,10 @@ export const actualizarObjetivo = async (idObjetivo, { numObjetivo, nuc, tipo, a
   const [existingRows] = await pool.query('SELECT idObjetivo FROM objetivo WHERE idObjetivo = ?', [idObjetivo]);
   if (existingRows.length !== 1) return false;
   const delitoCatalogo = await delitoPara(pool, delito);
+  const { casoId, lineaId } = await casoYLineaPara(pool, numObjetivo, nuc, ano);
   const [result] = await pool.execute(
-    'UPDATE objetivo SET numObjetivo = ?, nuc = ?, tipo = ?, ano = ?, delito = ?, delito_id = ?, caso_id = ? WHERE idObjetivo = ?',
-    [numObjetivo, nuc, tipo, ano, delitoCatalogo.nombre, delitoCatalogo.id, await casoIdPara(pool, nuc, ano), idObjetivo],
+    'UPDATE objetivo SET numObjetivo = ?, nuc = ?, tipo = ?, ano = ?, delito = ?, delito_id = ?, caso_id = ?, linea_id = ? WHERE idObjetivo = ?',
+    [numObjetivo, nuc, tipo, ano, delitoCatalogo.nombre, delitoCatalogo.id, casoId, lineaId, idObjetivo],
   );
   return result.affectedRows >= 0;
 };
@@ -365,12 +368,13 @@ export const actualizarImei = async (idImei, { imei, numObjetivo, nuc, tipo, ano
       'UPDATE imei SET imei = ?, brand_name = ?, modelo = ? WHERE idImei = ?',
       [imei, brandName || null, modelo || null, idImei],
     );
+    const { casoId, lineaId } = await casoYLineaPara(connection, numObjetivo, nuc, ano);
     await connection.execute(
       `UPDATE objetivoImei o
        INNER JOIN imei i ON i.idObjetivo = o.idObjetivo
-       SET o.numObjetivo = ?, o.nuc = ?, o.tipo = ?, o.ano = ?, o.caso_id = ?
+       SET o.numObjetivo = ?, o.nuc = ?, o.tipo = ?, o.ano = ?, o.caso_id = ?, o.linea_id = ?
        WHERE i.idImei = ?`,
-      [numObjetivo, nuc, tipo, ano, await casoIdPara(connection, nuc, ano), idImei],
+      [numObjetivo, nuc, tipo, ano, casoId, lineaId, idImei],
     );
     await connection.commit();
     return true;

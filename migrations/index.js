@@ -4,5 +4,6 @@ import collationUnica from './002-collation-unica.js';
 import indicesUnicos from './003-indices-unicos-contactos-imei.js';
 import casosYDelitos from './004-casos-y-delitos.js';
 import oficiosConCaso from './005-oficios-con-caso.js';
+import lineas from './006-lineas.js';
 
-export default [nombresTablasOficios, collationUnica, indicesUnicos, casosYDelitos, oficiosConCaso];
+export default [nombresTablasOficios, collationUnica, indicesUnicos, casosYDelitos, oficiosConCaso, lineas];
