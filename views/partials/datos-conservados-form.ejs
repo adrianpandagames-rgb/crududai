@@ -2,7 +2,7 @@
   <hr class="mt-0 mb-3" />
   <p class="small text-muted">Solo NUC es obligatorio. Los demás campos son opcionales.</p>
   <% const secciones = [
-    ['Carpeta y recepción', camposDatosConservados.slice(0, 10)],
+    ['Carpeta y recepción', insertarAnoNuc(camposDatosConservados.slice(0, 10))],
     ['Líneas e IMEI', camposDatosConservados.slice(10, 12)],
     ['Utilidad y oficio MP', camposDatosConservados.slice(12, 16)],
     ['Responsables y entrega', camposDatosConservados.slice(16)]

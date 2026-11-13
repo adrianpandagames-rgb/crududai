@@ -2,7 +2,7 @@
   <hr class="mt-0 mb-3" />
   <p class="small text-muted">Solo NUC es obligatorio. Los demás campos son opcionales.</p>
   <% const seccionesViaAlcance = [
-    ['Carpeta y recepción', camposViaAlcance.slice(0, 10)],
+    ['Carpeta y recepción', insertarAnoNuc(camposViaAlcance.slice(0, 10))],
     ['Asunto y nota', [camposViaAlcance[10], camposViaAlcance[15]]],
     ['Responsables y entrega', [...camposViaAlcance.slice(11, 15), camposViaAlcance[16]]]
   ]; %>
@@ -26,7 +26,7 @@
             <% } else if (tipo === 'textarea') { %>
               <textarea id="va_<%= nombre %>" name="<%= nombre %>" rows="2" maxlength="5000" class="form-control form-control-sm"></textarea>
             <% } else { %>
-              <input id="va_<%= nombre %>" name="<%= nombre %>" type="<%= tipo %>" class="form-control form-control-sm" <%= nombre === 'nuc' ? 'required' : '' %> <%- tipo === 'text' ? 'maxlength="255"' : tipo === 'number' ? 'min="0" max="4294967295" step="1"' : '' %> />
+              <input id="va_<%= nombre %>" name="<%= nombre %>" type="<%= tipo %>" class="form-control form-control-sm" <%= ['nuc', 'ano'].includes(nombre) ? 'required' : '' %> <%- tipo === 'text' ? 'maxlength="255"' : tipo === 'number' ? 'min="0" max="4294967295" step="1"' : '' %> />
             <% } %>
           </div>
         <% }); %>

@@ -13,6 +13,7 @@ import { camposDatosConservados, validarDatosConservados, guardarDatosConservado
 import { validarPeriodo, validarFiltrosMetricas, obtenerMetricas, fuentesMetricas } from './metricasService.js';
 import { validarIdentificacion, guardarIdentificacion } from './identificacionesService.js';
 import { listarCarpetasResguardo, agregarCarpetaResguardo, carpetaResguardoExiste } from './carpetasResguardoService.js';
+import { anosDelNuc, conAnoNuc, enlazarOficio, enTransaccion, insertarAnoNuc } from './oficiosCaso.js';
 import pool from "./db.js";
 
 const router = forwardAsyncErrors(express.Router());
@@ -25,7 +26,17 @@ router.get('/metricas', async (_req, res) => {
     // The page still works without the catalog; run `npm run migrate:carpeta-resguardo` to create it.
     console.error('No fue posible cargar las carpetas resguardo:', error.code || 'Error de base de datos');
   }
-  res.render('pages/metricas', { agencias, fuentesMetricas, carpetasResguardo, camposDatosConservados, camposRecepcion, camposExtraccion, camposInspeccion, camposOficiosVarios, camposViaAlcance });
+  res.render('pages/metricas', { agencias, fuentesMetricas, carpetasResguardo, insertarAnoNuc, camposDatosConservados, camposRecepcion, camposExtraccion, camposInspeccion, camposOficiosVarios, camposViaAlcance });
+});
+
+// The years in which a NUC already has a case, so the form can fill "Año del NUC".
+router.get('/metricas/caso-anos', async (req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    return res.json({ anos: await anosDelNuc(pool, typeof req.query.nuc === 'string' ? req.query.nuc : '') });
+  } catch {
+    return res.status(500).json({ error: 'No fue posible consultar los años del NUC.' });
+  }
 });
 
 router.get('/metricas/carpetas-resguardo', async (_req, res) => {
@@ -51,12 +62,19 @@ router.post('/metricas/carpetas-resguardo', async (req, res) => {
   return res.status(201).json({ nombre, message: `Opción "${nombre}" agregada.` });
 });
 
-// The folder forms share one flow: validate, check the Sonora city when given, save.
-const registrarFormulario = (ruta, validar, guardar, { registro, exito, fallo }) => {
+// The folder forms share one flow: validate, check the Sonora city when given, save the record together with
+// its case and delito.
+const guardarConCaso = (tabla, guardar, datos, userId) => enTransaccion(pool, async (db) => {
+  const id = await guardar(db, datos, userId);
+  await enlazarOficio(db, tabla, id, datos);
+  return id;
+});
+
+const registrarFormulario = (ruta, tabla, validar, guardar, { registro, exito, fallo }) => {
   router.post(ruta, async (req, res) => {
     let datos;
     try {
-      datos = validar(req.body);
+      datos = conAnoNuc(validar)(req.body);
     } catch (error) {
       return res.status(400).json({ error: error.message });
     }
@@ -68,7 +86,7 @@ const registrarFormulario = (ruta, validar, guardar, { registro, exito, fallo })
       if ('carpeta_resguardo' in datos && !(await carpetaResguardoExiste(pool, datos.carpeta_resguardo))) {
         return res.status(400).json({ error: 'Selecciona una carpeta resguardo de la lista o agrégala con +.' });
       }
-      const id = await guardar(pool, datos, req.session.userId);
+      const id = await guardarConCaso(tabla, guardar, datos, req.session.userId);
       return res.status(201).json({ id, message: exito });
     } catch (error) {
       console.error(`Error al guardar ${registro}:`, error.code || 'Error de base de datos');
@@ -77,22 +95,22 @@ const registrarFormulario = (ruta, validar, guardar, { registro, exito, fallo })
   });
 };
 
-registrarFormulario('/metricas/via-alcance', validarViaAlcance, guardarViaAlcance, {
+registrarFormulario('/metricas/via-alcance', 'ViaAlcance', validarViaAlcance, guardarViaAlcance, {
   registro: 'vía alcance', exito: 'Vía alcance registrada correctamente.', fallo: 'No fue posible guardar vía alcance. Intenta nuevamente.',
 });
-registrarFormulario('/metricas/oficios-varios', validarOficiosVarios, guardarOficiosVarios, {
+registrarFormulario('/metricas/oficios-varios', 'OficiosVarios', validarOficiosVarios, guardarOficiosVarios, {
   registro: 'oficio', exito: 'Oficio registrado correctamente.', fallo: 'No fue posible guardar el oficio. Intenta nuevamente.',
 });
-registrarFormulario('/metricas/inspecciones', validarInspeccion, guardarInspeccion, {
+registrarFormulario('/metricas/inspecciones', 'Inspecciones', validarInspeccion, guardarInspeccion, {
   registro: 'inspección', exito: 'Inspección registrada correctamente.', fallo: 'No fue posible guardar la inspección. Intenta nuevamente.',
 });
-registrarFormulario('/metricas/extracciones', validarExtraccion, guardarExtraccion, {
+registrarFormulario('/metricas/extracciones', 'Extracciones', validarExtraccion, guardarExtraccion, {
   registro: 'extracción', exito: 'Extracción registrada correctamente.', fallo: 'No fue posible guardar la extracción. Intenta nuevamente.',
 });
-registrarFormulario('/metricas/recepciones', validarRecepcion, guardarRecepcion, {
+registrarFormulario('/metricas/recepciones', 'Recepciones', validarRecepcion, guardarRecepcion, {
   registro: 'recepción', exito: 'Recepción registrada correctamente.', fallo: 'No fue posible guardar la recepción. Intenta nuevamente.',
 });
-registrarFormulario('/metricas/datos-conservados', validarDatosConservados, guardarDatosConservados, {
+registrarFormulario('/metricas/datos-conservados', 'DatosConservados', validarDatosConservados, guardarDatosConservados, {
   registro: 'datos conservados', exito: 'Datos conservados registrados correctamente.', fallo: 'No fue posible guardar. Conservamos los campos para que puedas reintentar.',
 });
 
@@ -147,7 +165,7 @@ router.post('/metricas/registros/:id', requireRecordEditor, async (req, res) => 
 router.post('/metricas/identificaciones', async (req, res) => {
   let datos;
   try {
-    datos = validarIdentificacion(req.body);
+    datos = conAnoNuc(validarIdentificacion)(req.body);
   } catch (error) {
     return res.status(400).json({ error: error.message });
   }
@@ -157,7 +175,7 @@ router.post('/metricas/identificaciones', async (req, res) => {
       ['Sonora', datos.ciudad],
     );
     if (!ciudades.length) return res.status(400).json({ error: 'La ciudad no está en el catálogo de Sonora.' });
-    const id = await guardarIdentificacion(pool, datos, req.session.userId);
+    const id = await guardarConCaso('Identificaciones', guardarIdentificacion, datos, req.session.userId);
     return res.status(201).json({ id, message: 'Identificación registrada correctamente.' });
   } catch (error) {
     console.error('No fue posible guardar la identificación:', error.code || 'Error de base de datos');

@@ -2,7 +2,7 @@
   <hr class="mt-0 mb-3" />
   <p class="small text-muted">Solo NUC es obligatorio. Los demás campos son opcionales.</p>
   <% const seccionesExtraccion = [
-    ['Carpeta y documentos', camposExtraccion.slice(0, 9)],
+    ['Carpeta y documentos', insertarAnoNuc(camposExtraccion.slice(0, 9))],
     ['Agencia y resolución', camposExtraccion.slice(9, 13)],
     ['Indicios y análisis', camposExtraccion.slice(13, 17)],
     ['Responsables y entrega', camposExtraccion.slice(17)]
@@ -23,7 +23,7 @@
             <% } else if (tipo === 'textarea') { %>
               <textarea id="ext_<%= nombre %>" name="<%= nombre %>" rows="2" maxlength="5000" class="form-control form-control-sm"></textarea>
             <% } else { %>
-              <input id="ext_<%= nombre %>" name="<%= nombre %>" type="<%= tipo %>" class="form-control form-control-sm" <%= nombre === 'nuc' ? 'required' : '' %> <%- tipo === 'text' ? 'maxlength="255"' : tipo === 'number' ? 'min="0" max="4294967295" step="1"' : '' %> />
+              <input id="ext_<%= nombre %>" name="<%= nombre %>" type="<%= tipo %>" class="form-control form-control-sm" <%= ['nuc', 'ano'].includes(nombre) ? 'required' : '' %> <%- tipo === 'text' ? 'maxlength="255"' : tipo === 'number' ? 'min="0" max="4294967295" step="1"' : '' %> />
             <% } %>
           </div>
         <% }); %>

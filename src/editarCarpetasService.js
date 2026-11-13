@@ -11,6 +11,7 @@ import { camposExtraccion, validarExtraccion } from './extraccionesService.js';
 import { camposInspeccion, validarInspeccion } from './inspeccionesService.js';
 import { camposOficiosVarios, validarOficiosVarios } from './oficiosVariosService.js';
 import { camposViaAlcance, validarViaAlcance } from './viaAlcanceService.js';
+import { conAnoNuc, enlazarOficio, enTransaccion, insertarAnoNuc } from './oficiosCaso.js';
 const identificacion = [
   ['nuc','NUC','text'], ['oficioUdai','Oficio UDAI','text','oficio_udai'],
   ['fechaEnvio','Fecha de envío','date','fecha_envio'], ['oficioMp','Oficio MP','text','oficio_mp'],
@@ -19,13 +20,15 @@ const identificacion = [
   ['lineasDescritas','Líneas descritas (una por renglón)','lines','lineas_descritas'],
   ['elaboradoPor','Elaborado por','text','elaborado_por'], ['firma','Firma','text'], ['enviadoA','Enviado a','text','enviado_a'],
 ];
-const esquemas = [identificacion, [...camposDatosConservados, ['lineas','Líneas','number'], ['lineas_descritas','Líneas descritas (una por renglón)','lines']], camposRecepcion, camposExtraccion, camposInspeccion, camposOficiosVarios, camposViaAlcance];
-const validadores = [validarIdentificacion, validarDatosConservados, validarRecepcion, validarExtraccion, validarInspeccion, validarOficiosVarios, validarViaAlcance];
+// Every schema carries "Año del NUC" after the NUC; it is stored in the ano column of each table.
+const esquemas = [identificacion, [...camposDatosConservados, ['lineas','Líneas','number'], ['lineas_descritas','Líneas descritas (una por renglón)','lines']], camposRecepcion, camposExtraccion, camposInspeccion, camposOficiosVarios, camposViaAlcance]
+  .map(insertarAnoNuc);
+const validadores = [validarIdentificacion, validarDatosConservados, validarRecepcion, validarExtraccion, validarInspeccion, validarOficiosVarios, validarViaAlcance].map(conAnoNuc);
 
 function config(tipo, id) {
   const index = fuentesMetricas.findIndex(f => f.tipo === tipo);
   if (index < 0 || !/^\d+$/.test(String(id)) || !Number.isSafeInteger(Number(id)) || Number(id) < 1) throw Object.assign(new Error('Registro inválido.'), { status: 400 });
-  const campos = esquemas[index].map(([nombre, etiqueta, tipoCampo, columna]) => ({ nombre, etiqueta, tipo: ['agencia','ciudad','medio','destruccion'].includes(nombre) ? 'select' : tipoCampo, columna: index === 0 ? columna || nombre : nombre, required: index === 0 || nombre === 'nuc' }));
+  const campos = esquemas[index].map(([nombre, etiqueta, tipoCampo, columna]) => ({ nombre, etiqueta, tipo: ['agencia','ciudad','medio','destruccion'].includes(nombre) ? 'select' : tipoCampo, columna: index === 0 ? columna || nombre : nombre, required: index === 0 || nombre === 'nuc' || nombre === 'ano' }));
   return { ...fuentesMetricas[index], campos, validar: validadores[index] };
 }
 export async function obtenerCarpeta(db, tipo, id) {
@@ -56,9 +59,13 @@ export async function actualizarCarpeta(db, tipo, id, body) {
     throw Object.assign(new Error('Selecciona una carpeta resguardo de la lista.'), { status: 400 });
   }
   const values = c.campos.map(f => f.tipo === 'lines' && datos[f.nombre] != null ? JSON.stringify(datos[f.nombre]) : datos[f.nombre]);
-  const [result] = await db.execute(`UPDATE ${c.tabla} SET ${c.campos.map(f => `${f.columna} = ?`).join(', ')} WHERE id = ?`, [...values, id]);
-  if (!result.affectedRows) {
-    const [rows] = await db.execute(`SELECT id FROM ${c.tabla} WHERE id = ?`, [id]);
-    if (!rows.length) throw Object.assign(new Error('Registro no encontrado.'), { status: 404 });
-  }
+  // The record and its case and delito change together.
+  await enTransaccion(db, async (tx) => {
+    const [result] = await tx.execute(`UPDATE ${c.tabla} SET ${c.campos.map(f => `${f.columna} = ?`).join(', ')} WHERE id = ?`, [...values, id]);
+    if (!result.affectedRows) {
+      const [rows] = await tx.execute(`SELECT id FROM ${c.tabla} WHERE id = ?`, [id]);
+      if (!rows.length) throw Object.assign(new Error('Registro no encontrado.'), { status: 404 });
+    }
+    await enlazarOficio(tx, c.tabla, id, datos);
+  });
 }

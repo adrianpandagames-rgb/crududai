@@ -2,7 +2,7 @@
   <hr class="mt-0 mb-3" />
   <p class="small text-muted">Solo NUC es obligatorio. Los demás campos son opcionales.</p>
   <% const seccionesRecepcion = [
-    ['Carpeta y recepción', camposRecepcion.slice(0, 7)],
+    ['Carpeta y recepción', insertarAnoNuc(camposRecepcion.slice(0, 7))],
     ['Líneas y destrucción', camposRecepcion.slice(7, 12)],
     ['Responsables y entrega', camposRecepcion.slice(12)]
   ]; %>
@@ -24,7 +24,7 @@
                 <% } %>
               </select>
             <% } else { %>
-              <input id="rec_<%= nombre %>" name="<%= nombre %>" type="<%= tipo %>" class="form-control form-control-sm" <%= nombre === 'nuc' ? 'required' : '' %> <%- tipo === 'text' ? 'maxlength="255"' : '' %> />
+              <input id="rec_<%= nombre %>" name="<%= nombre %>" type="<%= tipo %>" class="form-control form-control-sm" <%= ['nuc', 'ano'].includes(nombre) ? 'required' : '' %> <%- tipo === 'text' ? 'maxlength="255"' : '' %> />
             <% } %>
           </div>
         <% }); %>
