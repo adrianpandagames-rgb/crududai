@@ -152,9 +152,28 @@ export function createDosPasosStore(pool) {
 }
 
 // Sign-ins that passed the password and wait for the second step. They live in memory, like the sessions,
-// for five minutes and five attempts; the cookie that names one only reaches /verificar.
+// for ten minutes (time for an e-mail to arrive) and five attempts; the cookie that names one only reaches /verificar.
 export const PENDIENTE_COOKIE = 'auth2fa';
-export const PENDIENTE_MS = 5 * 60 * 1000;
+export const PENDIENTE_MS = 10 * 60 * 1000;
+
+// The e-mail code, the backup for whoever does not have their passkey at hand. Six digits, good for one try
+// among the pending sign-in's five; at most three sends, a minute apart. Only its hash is kept.
+export const CODIGO_CORREO_MINUTOS = 10;
+export const MAX_ENVIOS_CORREO = 3;
+export const ESPERA_REENVIO_MS = 60 * 1000;
+export const generarCodigoCorreo = () => String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
+export const hashCodigoCorreo = (codigo) => crypto.createHash('sha256').update(String(codigo)).digest();
+export function codigoCorreoCoincide(hashGuardado, valor) {
+  const limpio = String(valor ?? '').replace(/\D/g, '');
+  if (!hashGuardado || limpio.length !== 6) return false;
+  return crypto.timingSafeEqual(hashGuardado, hashCodigoCorreo(limpio));
+}
+// "ana@example.com" → "a**@example.com": enough to recognize the address without revealing it.
+export function ocultarCorreo(email) {
+  const [usuario, dominio] = String(email || '').split('@');
+  if (!dominio) return '';
+  return `${usuario.slice(0, 1)}${'*'.repeat(Math.max(usuario.length - 1, 2))}@${dominio}`;
+}
 export const MAX_INTENTOS_PENDIENTE = 5;
 
 export function createPendientes({ ttlMs = PENDIENTE_MS, now = () => Date.now() } = {}) {

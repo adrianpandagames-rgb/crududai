@@ -40,8 +40,6 @@
       verificar.hidden = true;
       const aviso = document.getElementById('verificarSinSoporte');
       if (aviso) aviso.hidden = false;
-      const detalles = document.querySelector('details');
-      if (detalles) detalles.open = true;
     }
     verificar.addEventListener('click', async () => {
       verificar.disabled = true;

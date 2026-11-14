@@ -132,6 +132,32 @@ h2 {
     background: #0056b3;
 }
 
+/* Second sign-in step (/verificar): the e-mail option and the plain links under the main button. */
+.login-btn.login-btn-secondary {
+    background: transparent;
+    color: #007bff;
+    border: 1px solid #007bff;
+}
+
+.login-btn.login-btn-secondary:hover {
+    background: rgba(0, 123, 255, 0.08);
+}
+
+.login-container .login-link {
+    background: none;
+    border: none;
+    padding: 0;
+    color: #007bff;
+    font-size: 14px;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.login-container .mt-2 { margin-top: 8px; }
+.login-container .mt-3 { margin-top: 16px; }
+.login-container .text-center { text-align: center; }
+.login-container details summary { cursor: pointer; color: #007bff; font-size: 14px; }
+
 @media (max-width: 480px) {
     body {
         padding: 16px;

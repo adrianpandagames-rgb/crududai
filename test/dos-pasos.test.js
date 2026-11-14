@@ -69,7 +69,9 @@ function storeEnMemoria() {
   };
 }
 
-async function servidor(t, { obligatorio = false } = {}) {
+async function servidor(t, { obligatorio = false, correoFalla = false } = {}) {
+  const reloj = { ahora: Date.now() };
+  const correos = [];
   const store = storeEnMemoria();
   const pendientes = createPendientes();
   const session = { userId: 5, email: 'ana@example.com' };
@@ -84,6 +86,8 @@ async function servidor(t, { obligatorio = false } = {}) {
   app.use('/verificar', createVerificacionRouter({
     store, pendientes, config,
     esperaMs: () => 0,
+    now: () => reloj.ahora,
+    enviarCorreo: async (email, datos) => { correos.push([email, datos]); return { sent: !correoFalla }; },
     completarLogin: async (_req, _res, pendiente, metodo) => { completados.push([pendiente.userId, metodo]); return '/inicio'; },
     registrarFallo: (_req, pendiente, motivo) => fallos.push([pendiente.userId, motivo]),
   }));
@@ -105,7 +109,7 @@ async function servidor(t, { obligatorio = false } = {}) {
     body: form ? new URLSearchParams(body).toString() : JSON.stringify(body || {}),
   });
   const pendiente = () => pendientes.crear({ userId: 5, email: 'ana@example.com', credentialHash: 'hash' });
-  return { store, pendientes, session, completados, fallos, avisos, post, pendiente };
+  return { store, pendientes, session, completados, fallos, avisos, post, pendiente, correos, reloj };
 }
 
 async function registrar(ctx, autenticador, nombre = 'iPhone') {
@@ -269,4 +273,56 @@ test('when it is required, registering unlocks the session and the last passkey 
   await registrar(ctx, crearAutenticador(), 'PC');
   await ctx.post('/cuenta/dos-pasos/1/eliminar', { currentPassword: 'correcta' }, { form: true });
   assert.deepEqual(removidos, [[5, 1]]);
+});
+
+test('the e-mail code finishes the sign-in once, and wrong, old or repeated requests do not', async (t) => {
+  const ctx = await servidor(t);
+  const token = ctx.pendiente();
+  const pagina = await ctx.post('/verificar/correo/enviar', {}, { cookie: token, form: true });
+  assert.equal(pagina.status, 200);
+  const html = await pagina.text();
+  assert.ok(html.includes('a**@example.com'));
+  assert.ok(!html.includes('ana@example.com'), 'the page does not show the whole address');
+  const [[destino, { codigo, minutos }]] = ctx.correos;
+  assert.equal(destino, 'ana@example.com');
+  assert.match(codigo, /^[0-9]{6}$/);
+  assert.equal(minutos, 10);
+
+  // A second code cannot be asked for within a minute.
+  assert.equal((await ctx.post('/verificar/correo/enviar', {}, { cookie: token, form: true })).status, 429);
+  const otro = codigo === '000000' ? '000001' : '000000';
+  assert.equal((await ctx.post('/verificar/correo', { codigo: otro }, { cookie: token, form: true })).status, 401);
+  const ok = await ctx.post('/verificar/correo', { codigo }, { cookie: token, form: true });
+  assert.equal(ok.status, 303);
+  assert.equal(ok.headers.get('location'), '/inicio');
+  assert.deepEqual(ctx.completados, [[5, 'Código por correo']]);
+  assert.equal(ctx.fallos.length, 1);
+
+  // An expired code is refused.
+  const tarde = ctx.pendiente();
+  await ctx.post('/verificar/correo/enviar', {}, { cookie: tarde, form: true });
+  const vencido = ctx.correos.at(-1)[1].codigo;
+  ctx.reloj.ahora += 11 * 60 * 1000;
+  assert.equal((await ctx.post('/verificar/correo', { codigo: vencido }, { cookie: tarde, form: true })).status, 401);
+  assert.equal(ctx.completados.length, 1);
+});
+
+test('at most three e-mail codes per sign-in, and a failed send leaves no code to guess', async (t) => {
+  const ctx = await servidor(t);
+  const token = ctx.pendiente();
+  for (let i = 0; i < 3; i += 1) {
+    assert.equal((await ctx.post('/verificar/correo/enviar', {}, { cookie: token, form: true })).status, 200);
+    ctx.reloj.ahora += 61 * 1000;
+  }
+  assert.equal((await ctx.post('/verificar/correo/enviar', {}, { cookie: token, form: true })).status, 429);
+  assert.equal(ctx.correos.length, 3);
+  // Only the newest code works.
+  assert.equal((await ctx.post('/verificar/correo', { codigo: ctx.correos[0][1].codigo }, { cookie: token, form: true })).status,
+    ctx.correos[0][1].codigo === ctx.correos[2][1].codigo ? 303 : 401);
+
+  const roto = await servidor(t, { correoFalla: true });
+  const sinCorreo = roto.pendiente();
+  assert.equal((await roto.post('/verificar/correo/enviar', {}, { cookie: sinCorreo, form: true })).status, 502);
+  assert.equal(roto.pendientes.obtener(sinCorreo).correo.hash, null);
+  assert.equal((await roto.post('/verificar/correo', { codigo: roto.correos[0][1].codigo }, { cookie: sinCorreo, form: true })).status, 401);
 });

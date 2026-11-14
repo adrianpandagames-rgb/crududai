@@ -50,3 +50,25 @@ test('SMTP errors and rejected recipients report failure without leaking error d
     assert.equal(JSON.stringify([logs, result]).includes('smtp-secret'), false);
   }
 });
+
+test('e-mails go as formatted HTML with the same content in plain text, and escape what they show', async () => {
+  const { buildEmail } = await import('../src/userNotifications.js');
+  const codigo = buildEmail('codigo', 'ana@example.com', { codigo: '482913', minutos: 10, ip: '203.0.113.7' },
+    { now: new Date(Date.UTC(2026, 10, 14, 19)), withLogo: true });
+  assert.match(codigo.html, /482913/);
+  assert.match(codigo.html, /cid:logo@udai/);
+  assert.match(codigo.text, /Código: 482913/);
+  assert.match(codigo.text, /Dirección IP: 203\.0\.113\.7/);
+  assert.match(codigo.text, /14 de noviembre de 2026.*12:00/);
+  assert.match(codigo.text, /cambia tu contraseña/);
+  const creada = buildEmail('created', 'x"<b>@example.com', { temporaryPassword: '<script>' }, { baseUrl: 'https://app.example.mx' });
+  assert.ok(!creada.html.includes('<script>'));
+  assert.ok(!creada.html.includes('x"<b>'));
+  assert.match(creada.html, /href="https:\/\/app\.example\.mx\/"/);
+  assert.ok(!buildEmail('created', 'a@example.com', { temporaryPassword: 'x' }, { baseUrl: 'javascript:alert(1)' }).html.includes('javascript:'));
+});
+
+test('the sign-in code e-mail needs its code', async () => {
+  const notify = createUserNotifier({ env, logger: { error() {} }, createTransport() { assert.fail('Unexpected transport'); } });
+  assert.equal((await notify('user@example.com', 'codigo', { minutos: 10 })).sent, false);
+});

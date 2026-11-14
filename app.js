@@ -351,6 +351,7 @@ app.use('/verificar', createVerificacionRouter({
   config: webauthn,
   completarLogin: completarLoginDosPasos,
   esperaMs: (req, pendiente) => loginRateLimiter.retryAfterMs(req.ip, pendiente.email),
+  enviarCorreo: (email, datos) => notifyUser(email, 'codigo', datos),
   registrarFallo: (req, pendiente, motivo) => {
     loginRateLimiter.recordFailure(req.ip, pendiente.email);
     writeAuditLog({ userId: pendiente.userId, userEmail: pendiente.email, action: 'LOGIN_FAILED', requestPath: '/verificar',

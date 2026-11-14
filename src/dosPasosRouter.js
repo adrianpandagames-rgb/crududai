@@ -4,7 +4,8 @@ import {
 } from '@simplewebauthn/server';
 import { requireSameOrigin } from './requestSecurity.js';
 import {
-  MAX_INTENTOS_PENDIENTE, MAX_PASSKEYS, PENDIENTE_COOKIE, nombrePasskey, opcionesCookiePendiente,
+  CODIGO_CORREO_MINUTOS, ESPERA_REENVIO_MS, MAX_ENVIOS_CORREO, MAX_INTENTOS_PENDIENTE, MAX_PASSKEYS, PENDIENTE_COOKIE,
+  codigoCorreoCoincide, generarCodigoCorreo, hashCodigoCorreo, nombrePasskey, ocultarCorreo, opcionesCookiePendiente,
 } from './dosPasosService.js';
 
 const CHALLENGE_MS = 5 * 60 * 1000;
@@ -18,7 +19,10 @@ const leerCookie = (req, nombre) => {
 // `completarLogin(req, res, pendiente, metodo)` (app.js, which owns the sessions) does, and returns where to go,
 // or null when the account changed meanwhile (disabled, or its password changed).
 // `registrarFallo(req, pendiente, motivo)` writes the failed attempt to the audit log and the rate limiter.
-export function createVerificacionRouter({ store, pendientes, config, completarLogin, registrarFallo, esperaMs }) {
+// `enviarCorreo(email, { codigo, minutos, ip })` mails the code and resolves to { sent }.
+export function createVerificacionRouter({
+  store, pendientes, config, completarLogin, registrarFallo, esperaMs, enviarCorreo, now = () => Date.now(),
+}) {
   const router = express.Router();
 
   router.use((req, res, next) => {
@@ -32,8 +36,11 @@ export function createVerificacionRouter({ store, pendientes, config, completarL
     pendientes.quitar(leerCookie(req, PENDIENTE_COOKIE));
     res.clearCookie(PENDIENTE_COOKIE, { ...opcionesCookiePendiente(), maxAge: undefined });
   };
-  const pagina = (res, status, { error = null } = {}) => res.status(status).render('pages/verificar', {
-    error, passkeysDisponibles: Boolean(config),
+  const pagina = (res, status, pendiente, { error = null, aviso = null } = {}) => res.status(status).render('pages/verificar', {
+    error, aviso, passkeysDisponibles: Boolean(config),
+    correoOculto: ocultarCorreo(pendiente?.email),
+    codigoEnviado: Boolean(pendiente?.correo && pendiente.correo.expira > now()),
+    puedeEnviar: Boolean(pendiente) && (pendiente.correo?.envios || 0) < MAX_ENVIOS_CORREO,
   });
   const bloqueado = (req, pendiente) => {
     const ms = esperaMs(req, pendiente);
@@ -57,8 +64,58 @@ export function createVerificacionRouter({ store, pendientes, config, completarL
   };
 
   router.get('/', (req, res) => {
-    if (!pendienteDe(req)) return res.redirect('/');
-    return pagina(res, 200);
+    const pendiente = pendienteDe(req);
+    if (!pendiente) return res.redirect('/');
+    return pagina(res, 200, pendiente);
+  });
+
+  router.post('/correo/enviar', async (req, res, next) => {
+    const pendiente = pendienteDe(req);
+    if (!pendiente) return res.redirect(303, '/');
+    const correo = pendiente.correo || { envios: 0, ultimo: 0 };
+    if (correo.envios >= MAX_ENVIOS_CORREO) {
+      return pagina(res, 429, pendiente, { error: 'Ya se enviaron los códigos permitidos. Usa el último que recibiste o vuelve a iniciar sesión.' });
+    }
+    const faltan = correo.ultimo + ESPERA_REENVIO_MS - now();
+    if (faltan > 0) {
+      return pagina(res, 429, pendiente, { error: `Espera ${Math.ceil(faltan / 1000)} segundos para pedir otro código.` });
+    }
+    try {
+      const codigo = generarCodigoCorreo();
+      // A new code replaces the previous one.
+      pendiente.correo = {
+        hash: hashCodigoCorreo(codigo), expira: now() + CODIGO_CORREO_MINUTOS * 60 * 1000, envios: correo.envios + 1, ultimo: now(),
+      };
+      const { sent } = await enviarCorreo(pendiente.email, { codigo, minutos: CODIGO_CORREO_MINUTOS, ip: req.ip });
+      if (!sent) {
+        pendiente.correo.hash = null;
+        return pagina(res, 502, pendiente, { error: 'No se pudo enviar el correo. Usa tu llave de acceso o un código de recuperación.' });
+      }
+      return pagina(res, 200, pendiente, { aviso: `Te enviamos un código a ${ocultarCorreo(pendiente.email)}. Revisa también la carpeta de spam.` });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.post('/correo', async (req, res, next) => {
+    const pendiente = pendienteDe(req);
+    if (!pendiente) return res.redirect(303, '/');
+    const espera = bloqueado(req, pendiente);
+    if (espera) return pagina(res, 429, pendiente, { error: espera });
+    const codigo = String(req.body?.codigo || '');
+    req.body = {};
+    const vigente = pendiente.correo?.expira > now() ? pendiente.correo.hash : null;
+    if (!codigoCorreoCoincide(vigente, codigo)) {
+      const { agotado, error } = fallo(req, res, pendiente, vigente ? 'El código del correo no es correcto.' : 'El código expiró. Pide uno nuevo.');
+      return agotado ? res.status(401).render('index', { error, success: null }) : pagina(res, 401, pendiente, { error });
+    }
+    try {
+      pendiente.correo = null;
+      const destino = await completar(req, res, pendiente, 'Código por correo');
+      return res.redirect(303, destino || '/');
+    } catch (error) {
+      return next(error);
+    }
   });
 
   router.post('/opciones', async (req, res, next) => {
@@ -120,13 +177,13 @@ export function createVerificacionRouter({ store, pendientes, config, completarL
     const pendiente = pendienteDe(req);
     if (!pendiente) return res.redirect(303, '/');
     const espera = bloqueado(req, pendiente);
-    if (espera) return pagina(res, 429, { error: espera });
+    if (espera) return pagina(res, 429, pendiente, { error: espera });
     const codigo = String(req.body?.codigo || '');
     req.body = {};
     try {
       if (!await store.usarCodigo(pendiente.userId, codigo)) {
         const { agotado, error } = fallo(req, res, pendiente, 'El código de recuperación no es válido o ya se usó.');
-        return agotado ? res.status(401).render('index', { error, success: null }) : pagina(res, 401, { error });
+        return agotado ? res.status(401).render('index', { error, success: null }) : pagina(res, 401, pendiente, { error });
       }
       const destino = await completar(req, res, pendiente, 'Código de recuperación');
       return res.redirect(303, destino || '/');
