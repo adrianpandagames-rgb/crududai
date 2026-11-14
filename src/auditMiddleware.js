@@ -8,7 +8,7 @@ const mutations = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 // arranging a table's columns, which saves after every drag, nor the browser checking the app's service worker.
 // Downloads built in the browser report themselves to /auditoria/exportacion, which writes its own entry.
 const backgroundPaths = new Set(['/health', '/health/ready', '/api/route-toast', '/tareas/eventos', '/tareas/tablero', '/cuenta/tablas', '/sw.js',
-  '/auditoria/exportacion', ...automaticAuditPaths]);
+  '/auditoria/exportacion', '/cuenta/dos-pasos/opciones', ...automaticAuditPaths]);
 const presentationParameters = new Set(['page', 'pagina', 'pageSize', 'partial', 'message', 'type', 'toastMessage']);
 
 // Inside a mounted router req.path loses its prefix ("/planeacion-geografica/importar" reads "/importar"),

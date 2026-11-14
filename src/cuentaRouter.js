@@ -11,7 +11,7 @@ import { createTablasStore, normalizarConfigTabla, tablaValida } from './tablasS
 // `cambiarContrasena(req, res, { actual, nueva })` lives in app.js, which owns the sessions it has to rotate.
 export function createCuentaRouter(pool, {
   cuentas = createCuentaStore(pool), notificaciones = createNotificacionesStore(pool), tablas = createTablasStore(pool),
-  cambiarContrasena,
+  cambiarContrasena, dosPasos = null, dosPasosDisponible = false, dosPasosObligatorio = false,
 } = {}) {
   const router = express.Router();
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_FOTO_BYTES, files: 1, fields: 2 } }).single('foto');
@@ -24,7 +24,8 @@ export function createCuentaRouter(pool, {
   const takeFlash = (req) => {
     const flash = req.session.flash || {};
     delete req.session.flash;
-    return { message: flash.message || null, error: flash.error || null };
+    // Recovery codes are shown once, right after they are made, and never kept anywhere readable.
+    return { message: flash.message || null, error: flash.error || null, codigos: flash.codigos || null };
   };
 
   router.use((req, res, next) => {
@@ -35,9 +36,13 @@ export function createCuentaRouter(pool, {
 
   router.get('/', async (req, res, next) => {
     try {
-      const cuenta = await cuentas.get(req.session.userId, req.session.role);
+      const [cuenta, passkeys, codigosRestantes] = await Promise.all([
+        cuentas.get(req.session.userId, req.session.role),
+        dosPasos ? dosPasos.listar(req.session.userId) : [],
+        dosPasos ? dosPasos.codigosRestantes(req.session.userId) : 0,
+      ]);
       return res.render('pages/cuenta', {
-        ...takeFlash(req), cuenta, email: req.session.email, temas, paginasInicio: paginasInicioPara(req.session.role),
+        ...takeFlash(req), cuenta, passkeys, codigosRestantes, dosPasosDisponible, dosPasosObligatorio, email: req.session.email, temas, paginasInicio: paginasInicioPara(req.session.role),
         MAX_NOMBRE_LENGTH, maxFotoMb: MAX_FOTO_BYTES / 1024 / 1024,
       });
     } catch (error) {

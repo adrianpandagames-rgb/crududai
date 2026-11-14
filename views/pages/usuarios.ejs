@@ -124,6 +124,7 @@
               <table class="table user-table mb-0">
                 <thead><tr><th>Usuario</th><th>Rol</th><th>Puesto</th><th>Estado</th><th>Último acceso</th><th>Telegram</th><th class="text-end">Más</th></tr></thead>
                 <tbody>
+                  <% const dosPasosDe = typeof conDosPasos !== 'undefined' ? conDosPasos : new Set(); %>
                   <% users.forEach((user) => { %>
                     <% const isSelf = user.id === currentUser.id; %>
                     <% const locked = user.isInitialAdmin && !isSelf; %>
@@ -133,6 +134,7 @@
                         <div class="user-flags">
                           <% if (isSelf) { %><span class="badge bg-info text-dark">Tú</span><% } %>
                           <% if (user.isInitialAdmin) { %><span class="badge bg-dark">Administrador inicial</span><% } %>
+                          <% if (dosPasosDe.has(Number(user.id))) { %><span class="badge bg-success">Dos pasos</span><% } %>
                           <% if (user.isActive && user.neverLoggedIn) { %>
                             <span class="badge bg-warning text-dark">Nunca ha entrado</span>
                           <% } else if (user.isActive && user.mustChangePassword) { %>
@@ -197,6 +199,14 @@
                               <button class="btn btn-sm btn-outline-secondary" type="submit" <%= locked ? 'disabled' : '' %>
                                 <% if (locked) { %>title="Solo el administrador inicial puede cambiar su contraseña"<% } %>>Generar contraseña</button>
                             </form>
+                            <% if (dosPasosDe.has(Number(user.id))) { %>
+                            <form action="/usuarios/<%= user.id %>/restablecer-dos-pasos" method="POST"
+                              data-confirm="<%= `¿Quitar la verificación en dos pasos de ${user.email}? Se borrarán sus llaves de acceso y códigos de recuperación, y se cerrarán sus sesiones. Hazlo solo si perdió su dispositivo.` %>"
+                              data-confirm-action="Quitar dos pasos">
+                              <button class="btn btn-sm btn-outline-danger" type="submit" <%= locked ? 'disabled' : '' %>
+                                <% if (locked) { %>title="Solo el administrador inicial puede quitar su verificación en dos pasos"<% } %>>Quitar dos pasos</button>
+                            </form>
+                            <% } %>
                           </div>
                         </details>
                       </td>

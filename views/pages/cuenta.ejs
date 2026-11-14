@@ -73,6 +73,79 @@
             </form>
           </section>
 
+          <section class="card p-4 mb-4" id="dos-pasos" aria-labelledby="dos-pasos-titulo">
+            <h2 class="h5 mb-2" id="dos-pasos-titulo">Verificación en dos pasos</h2>
+            <% const fecha = (valor) => valor ? new Date(valor).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' }) : 'Nunca'; %>
+            <% if (codigos && codigos.length) { %>
+            <div class="alert alert-warning" role="alert">
+              <p class="fw-semibold mb-2">Tus códigos de recuperación. Guárdalos ahora: no se volverán a mostrar.</p>
+              <p class="small mb-2">Cada uno sirve una sola vez para entrar si no tienes tu dispositivo a la mano.</p>
+              <ul class="list-unstyled font-monospace row row-cols-2 mb-0">
+                <% codigos.forEach((codigo) => { %><li class="col"><%= codigo %></li><% }) %>
+              </ul>
+            </div>
+            <% } %>
+            <% if (passkeys.length) { %>
+            <p class="mb-3"><span class="badge bg-success">Activada</span> Al iniciar sesión se pide, además de la contraseña, una de estas llaves de acceso.
+              Te quedan <%= codigosRestantes %> códigos de recuperación sin usar.</p>
+            <ul class="list-group mb-3">
+              <% passkeys.forEach((passkey) => { %>
+              <li class="list-group-item">
+                <div class="d-flex flex-wrap justify-content-between gap-2">
+                  <div>
+                    <div class="fw-semibold"><%= passkey.nombre %></div>
+                    <div class="small text-muted">Agregada: <%= fecha(passkey.creada) %> · Último uso: <%= fecha(passkey.usada) %></div>
+                  </div>
+                  <% if (dosPasosObligatorio && passkeys.length === 1) { %>
+                  <span class="small text-muted align-self-center">Es obligatoria: agrega otra para poder quitar esta.</span>
+                  <% } else { %>
+                  <details>
+                    <summary class="btn btn-sm btn-outline-danger">Quitar</summary>
+                    <form action="/cuenta/dos-pasos/<%= passkey.id %>/eliminar" method="POST" class="mt-2">
+                      <label class="form-label small" for="quitar-<%= passkey.id %>">Contraseña actual</label>
+                      <input class="form-control form-control-sm mb-2" type="password" id="quitar-<%= passkey.id %>" name="currentPassword" required autocomplete="current-password" />
+                      <button class="btn btn-sm btn-danger" type="submit">Quitar llave</button>
+                    </form>
+                  </details>
+                  <% } %>
+                </div>
+              </li>
+              <% }) %>
+            </ul>
+            <% } else { %>
+            <p class="mb-3"><span class="badge bg-secondary">Desactivada</span> Agrega una llave de acceso para que, además de la contraseña,
+              se pida la huella, el rostro o el PIN de tu celular o computadora al iniciar sesión.</p>
+            <% } %>
+
+            <% if (dosPasosDisponible) { %>
+            <form id="registrarPasskey" autocomplete="off" class="mb-3">
+              <label for="passkeyNombre" class="form-label">Nombre del dispositivo</label>
+              <div class="d-flex flex-wrap gap-2">
+                <input type="text" id="passkeyNombre" name="nombre" class="form-control flex-fill w-auto" maxlength="80" placeholder="Ej. Mi celular" />
+                <button class="btn btn-primary" type="submit">Agregar este dispositivo</button>
+              </div>
+              <div class="form-text">Ábrelo desde el celular para usar su huella o rostro. Desde una computadora puedes usar Windows Hello o escanear un código QR con el celular.</div>
+              <div class="alert alert-danger mt-2 mb-0" id="registrarPasskeyError" role="alert" hidden></div>
+            </form>
+            <% } else { %>
+            <p class="small text-muted">Las llaves de acceso no están disponibles en este servidor: falta configurar su dominio.</p>
+            <% } %>
+
+            <% if (passkeys.length) { %>
+            <details>
+              <summary class="small">Generar códigos de recuperación nuevos</summary>
+              <form action="/cuenta/dos-pasos/codigos" method="POST" class="mt-2">
+                <label class="form-label small" for="codigosPassword">Contraseña actual</label>
+                <div class="d-flex flex-wrap gap-2">
+                  <input class="form-control form-control-sm flex-fill w-auto" type="password" id="codigosPassword" name="currentPassword" required autocomplete="current-password" />
+                  <button class="btn btn-sm btn-outline-primary" type="submit">Generar códigos</button>
+                </div>
+                <div class="form-text">Los códigos anteriores dejarán de servir.</div>
+              </form>
+            </details>
+            <% } %>
+          </section>
+
           <section class="card p-4 mb-4" id="preferencias" aria-labelledby="preferencias-titulo">
             <h2 class="h5 mb-3" id="preferencias-titulo">Preferencias</h2>
             <form action="/cuenta/preferencias" method="POST">
@@ -113,6 +186,10 @@
       </div>
     </main>
     <%- include('../includes/scripts') %>
+    <% if (dosPasosDisponible) { %>
+    <script src="/vendor/simplewebauthn-browser.js"></script>
+    <script src="/public/js/dos-pasos.js"></script>
+    <% } %>
     <%- include('../includes/footer') %>
   </body>
 </html>

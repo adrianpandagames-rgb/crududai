@@ -46,6 +46,10 @@ import {
 } from './src/usuariosService.js';
 import { createLoginRateLimiter, LOGIN_WINDOW_MS } from './src/loginRateLimit.js';
 import { forwardAsyncErrors, handleErrors } from './src/errorHandling.js';
+import {
+  PENDIENTE_COOKIE, PENDIENTE_MS, configWebauthn, createDosPasosStore, createPendientes, opcionesCookiePendiente,
+} from './src/dosPasosService.js';
+import { createDosPasosCuentaRouter, createVerificacionRouter } from './src/dosPasosRouter.js';
 
 
 const app = forwardAsyncErrors(express());
@@ -114,6 +118,19 @@ app.locals.auditSession = (req) => {
 
 const cuentas = createCuentaStore(pool);
 const notificaciones = createNotificacionesStore(pool);
+const dosPasos = createDosPasosStore(pool);
+const loginsPendientes = createPendientes();
+setInterval(() => loginsPendientes.podar(), PENDIENTE_MS).unref();
+const webauthn = configWebauthn(process.env);
+if (!webauthn) console.warn('Verificación en dos pasos: configura PUBLIC_BASE_URL (o WEBAUTHN_ORIGIN) con el dominio HTTPS para permitir llaves de acceso.');
+// Everyone must have a passkey: whoever signs in without one registers it before using anything else.
+// DOS_PASOS_OBLIGATORIO=0 turns that off in an emergency. Without a domain nobody could register one, so it
+// cannot be required then (requiring it would lock everyone out).
+const dosPasosObligatorio = Boolean(webauthn) && process.env.DOS_PASOS_OBLIGATORIO !== '0';
+if (process.env.DOS_PASOS_OBLIGATORIO !== '0' && !webauthn) console.warn('Verificación en dos pasos NO es obligatoria: falta el dominio.');
+const ACTIVAR_DOS_PASOS = '/activar-dos-pasos';
+// The only pages open to a session that still has to register its passkey.
+const rutasParaActivar = new Set([ACTIVAR_DOS_PASOS, '/cuenta/dos-pasos', '/cuenta/dos-pasos/opciones']);
 
 // Every notice (tasks, processed Ruta files, password changes) is kept in the person's notification list,
 // which survives restarts; the toast is only the moment it arrives. Toasts queue up, so two in a row are
@@ -227,6 +244,9 @@ const requireAuth = async (req, res, next) => {
     if (session.mustChangePassword && requestPath !== '/cambiar-contrasena') {
       return res.redirect('/cambiar-contrasena');
     }
+    if (!session.mustChangePassword && dosPasosObligatorio && !session.dosPasosActivo && !rutasParaActivar.has(requestPath)) {
+      return res.redirect(ACTIVAR_DOS_PASOS);
+    }
     next();
   } catch (error) {
     next(error);
@@ -290,6 +310,62 @@ app.use('/imagen-publica', createPublicImageRouter(pool));
 app.set("view engine", "ejs");
 app.set("views", "./views");
 
+// Opens the session once every step of the sign-in passed, and returns the page to go to.
+// dosPasosActivo says whether the account has a passkey; without one, a required second step sends the session
+// to register it first.
+const abrirSesion = async (req, res, user, { details = null, dosPasosActivo = false } = {}) => {
+  const authToken = crypto.randomBytes(24).toString('hex');
+  const shouldRemember = false;
+  sessions.set(authToken, {
+    dosPasosActivo,
+    userId: user.id,
+    credentialHash: user.password,
+    email: user.email,
+    isAdmin: Number(user.is_admin) === 1 || user.role === 'admin',
+    role: Number(user.is_admin) === 1 ? 'admin' : (user.role || 'usuario'),
+    mustChangePassword: Number(user.must_change_password) === 1,
+    rememberMe: shouldRemember,
+    lastActivity: Date.now()
+  });
+  res.cookie('auth', authToken, buildSessionCookieOptions(shouldRemember));
+  writeAuditLog({ userId: user.id, userEmail: user.email, action: 'LOGIN', requestPath: '/login', statusCode: 302, ipAddress: req.ip, details });
+
+  if (Number(user.must_change_password) === 1) return '/cambiar-contrasena';
+  if (dosPasosObligatorio && !dosPasosActivo) return ACTIVAR_DOS_PASOS;
+  const cuenta = await cuentas.get(user.id, userRoleOf(user)).catch(() => null);
+  return cuenta?.preferencias.inicio || inicioPorDefecto(userRoleOf(user));
+};
+
+// The second step passed. The account is read again: it may have been disabled, or its password changed,
+// in the minutes since the password was typed.
+const completarLoginDosPasos = async (req, res, pendiente, metodo) => {
+  const [rows] = await pool.execute('SELECT * FROM users WHERE id = ? AND is_active = 1', [pendiente.userId]);
+  if (rows.length !== 1 || rows[0].password !== pendiente.credentialHash) return null;
+  loginRateLimiter.recordSuccess(pendiente.email);
+  return abrirSesion(req, res, rows[0], { details: { segundoPaso: metodo }, dosPasosActivo: true });
+};
+
+app.use('/verificar', createVerificacionRouter({
+  store: dosPasos,
+  pendientes: loginsPendientes,
+  config: webauthn,
+  completarLogin: completarLoginDosPasos,
+  esperaMs: (req, pendiente) => loginRateLimiter.retryAfterMs(req.ip, pendiente.email),
+  registrarFallo: (req, pendiente, motivo) => {
+    loginRateLimiter.recordFailure(req.ip, pendiente.email);
+    writeAuditLog({ userId: pendiente.userId, userEmail: pendiente.email, action: 'LOGIN_FAILED', requestPath: '/verificar',
+      statusCode: 401, ipAddress: req.ip, details: { motivo: `Segundo paso: ${motivo}` } });
+  },
+}));
+
+// The browser half of WebAuthn, served from the installed package so its version follows package.json.
+const webauthnBrowserBundle = fileURLToPath(new URL('./node_modules/@simplewebauthn/browser/dist/bundle/index.umd.min.js', import.meta.url));
+app.get('/vendor/simplewebauthn-browser.js', (_req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.type('application/javascript');
+  res.sendFile(webauthnBrowserBundle);
+});
+
 app.post('/login', requireSameOrigin, async (req, res) => {
   const { email, password } = req.body;
     const normalizedEmail = String(email || '').trim().toLowerCase();
@@ -332,26 +408,15 @@ app.post('/login', requireSameOrigin, async (req, res) => {
             return res.render('index', { error: 'Invalid credentials.', success: null });
         }
 
+        // With a passkey on the account the password alone opens nothing: the session waits for /verificar.
+        if (await dosPasos.activo(user.id)) {
+          const pendiente = loginsPendientes.crear({ userId: user.id, email: user.email, credentialHash: user.password });
+          res.cookie(PENDIENTE_COOKIE, pendiente, opcionesCookiePendiente());
+          return res.redirect(303, '/verificar');
+        }
+
         loginRateLimiter.recordSuccess(normalizedEmail);
-
-        const authToken = crypto.randomBytes(24).toString('hex');
-        const shouldRemember = false;
-        sessions.set(authToken, {
-          userId: user.id,
-          credentialHash: user.password,
-          email: user.email,
-          isAdmin: Number(user.is_admin) === 1 || user.role === 'admin',
-          role: Number(user.is_admin) === 1 ? 'admin' : (user.role || 'usuario'),
-          mustChangePassword: Number(user.must_change_password) === 1,
-          rememberMe: shouldRemember,
-          lastActivity: Date.now()
-        });
-        res.cookie('auth', authToken, buildSessionCookieOptions(shouldRemember));
-        writeAuditLog({ userId: user.id, userEmail: user.email, action: 'LOGIN', requestPath: '/login', statusCode: 302, ipAddress: req.ip });
-
-        if (Number(user.must_change_password) === 1) return res.redirect('/cambiar-contrasena');
-        const cuenta = await cuentas.get(user.id, userRoleOf(user)).catch(() => null);
-        return res.redirect(cuenta?.preferencias.inicio || inicioPorDefecto(userRoleOf(user)));
+        return res.redirect(await abrirSesion(req, res, user));
     } catch (error) {
         console.error(error.stack || error);
         writeAuditLog({ userEmail: normalizedEmail, action: 'LOGIN_FAILED', requestPath: '/login', statusCode: 500, ipAddress: req.ip });
@@ -567,7 +632,33 @@ const cambiarContrasenaPropia = async (req, res, { actual, nueva }) => {
   return { warning: notification.sent ? null : notification.warning };
 };
 
-app.use('/cuenta', requireAuth, createCuentaRouter(pool, { cuentas, notificaciones, cambiarContrasena: cambiarContrasenaPropia }));
+// Removing a passkey or replacing the recovery codes asks for the password, under the same limit as the login,
+// so an unattended open session cannot be used to turn the second step off.
+const confirmarContrasena = async (req, password) => {
+  const retryAfterMs = loginRateLimiter.retryAfterMs(req.ip, req.session.email);
+  if (retryAfterMs > 0) return `Demasiados intentos fallidos. Intenta de nuevo en ${Math.ceil(retryAfterMs / 60000)} minuto(s).`;
+  if (await verifyPassword(password, req.session.credentialHash)) return null;
+  loginRateLimiter.recordFailure(req.ip, req.session.email);
+  return 'La contraseña actual no es correcta.';
+};
+
+app.use('/cuenta/dos-pasos', requireAuth, createDosPasosCuentaRouter({
+  store: dosPasos, config: webauthn, confirmarContrasena, avisar: notificar, obligatorio: dosPasosObligatorio,
+}));
+app.use('/cuenta', requireAuth, createCuentaRouter(pool, {
+  cuentas, notificaciones, cambiarContrasena: cambiarContrasenaPropia, dosPasos, dosPasosDisponible: Boolean(webauthn),
+  dosPasosObligatorio,
+}));
+
+// Where a session without a passkey waits until it registers one. Right after that it shows the recovery codes
+// once, with the way into the app.
+app.get(ACTIVAR_DOS_PASOS, requireAuth, (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const codigos = req.session.flash?.codigos || null;
+  delete req.session.flash;
+  if (req.session.dosPasosActivo && !codigos) return res.redirect(paginaDeInicio(req.session));
+  return res.render('pages/activar-dos-pasos', { codigos, inicio: paginaDeInicio(req.session) });
+});
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const generateSecurePassword = () => crypto.randomBytes(24).toString('base64url');
@@ -593,9 +684,9 @@ const toUsers = (req, res, flash) => redirectWithFlash(req, res, '/usuarios', fl
 
 app.get('/usuarios', requireAdmin, async (req, res, next) => {
   try {
-    const { users, counts } = await listarUsuarios(pool, decryptTelegramId);
+    const [{ users, counts }, conDosPasos] = await Promise.all([listarUsuarios(pool, decryptTelegramId), dosPasos.usuariosConDosPasos()]);
     return res.render('pages/usuarios', {
-      ...takeFlash(req, res), users, counts, roleLabels, roleDescriptions, userRoles, userPuestos, puestoLabels,
+      ...takeFlash(req, res), users, counts, roleLabels, roleDescriptions, userRoles, userPuestos, puestoLabels, conDosPasos,
       currentUserIsInitialAdmin: users.some((user) => user.id === req.session.userId && user.isInitialAdmin),
     });
   } catch (error) {
@@ -744,6 +835,34 @@ app.post('/usuarios/:id/restablecer-contrasena', requireAdmin, async (req, res, 
         : 'Contraseña restablecida. No se pudo enviar la contraseña temporal.',
       error: notification.sent ? null : `${notification.warning} Revisa la configuración del correo y vuelve a restablecer la contraseña para generar y enviar una nueva.`,
     });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// For someone who lost their phone and their recovery codes: removes every passkey and code, so the next sign-in
+// asks only for the password. Their open sessions are closed.
+app.post('/usuarios/:id/restablecer-dos-pasos', requireAdmin, async (req, res, next) => {
+  const userId = Number.parseInt(req.params.id, 10);
+  if (!Number.isSafeInteger(userId) || userId < 1) return toUsers(req, res, { error: 'Usuario inválido.' });
+
+  try {
+    const [users] = await pool.execute('SELECT id, is_initial_admin, email FROM users WHERE id = ?', [userId]);
+    if (users.length !== 1) return toUsers(req, res, { error: 'Usuario no encontrado.' });
+    if (protectsInitialAdmin(users[0], req)) {
+      return toUsers(req, res, { error: 'Solo el administrador inicial puede quitar su verificación en dos pasos.' });
+    }
+    if (!await dosPasos.eliminarTodo(userId)) {
+      return toUsers(req, res, { message: `${users[0].email} no tenía la verificación en dos pasos activada.` });
+    }
+    revokeUserSessions(userId);
+    if (userId === req.session.userId) res.clearCookie('auth', buildSessionCookieOptions());
+    notificar(userId, {
+      title: 'Verificación en dos pasos',
+      message: 'Un administrador quitó las llaves de acceso de tu cuenta. Al iniciar sesión registra de nuevo tu dispositivo.',
+      url: '/cuenta#dos-pasos',
+    });
+    return toUsers(req, res, { message: `Verificación en dos pasos quitada a ${users[0].email}. Se cerraron sus sesiones.` });
   } catch (error) {
     return next(error);
   }

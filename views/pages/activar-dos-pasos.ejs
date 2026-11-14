@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <%- include('../includes/head') %>
+  </head>
+  <body>
+    <div class="password-modal-backdrop"></div>
+    <div class="password-modal" role="dialog" aria-modal="true" aria-labelledby="activar-titulo">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h1 class="modal-title h5" id="activar-titulo">Activa la verificación en dos pasos</h1>
+          </div>
+          <div class="modal-body">
+            <% if (codigos && codigos.length) { %>
+            <div class="alert alert-success">Verificación en dos pasos activada.</div>
+            <p class="fw-semibold mb-1">Tus códigos de recuperación. Guárdalos ahora: no se volverán a mostrar.</p>
+            <p class="small mb-2">Cada uno sirve una sola vez para entrar si no tienes tu dispositivo a la mano.</p>
+            <ul class="list-unstyled font-monospace row row-cols-2 mb-3">
+              <% codigos.forEach((codigo) => { %><li class="col"><%= codigo %></li><% }) %>
+            </ul>
+            <a href="<%= inicio %>" class="btn btn-primary w-100">Ya los guardé, continuar</a>
+            <% } else { %>
+            <p>Para usar el sistema, además de la contraseña se pedirá la huella, el rostro o el PIN de tu dispositivo.
+              Regístralo ahora; solo toma un momento.</p>
+            <form id="registrarPasskey" autocomplete="off">
+              <div class="mb-3">
+                <label for="passkeyNombre" class="form-label">Nombre del dispositivo</label>
+                <input type="text" id="passkeyNombre" name="nombre" class="form-control" maxlength="80" placeholder="Ej. Mi celular" />
+              </div>
+              <div class="alert alert-danger" id="registrarPasskeyError" role="alert" hidden></div>
+              <button class="btn btn-primary w-100" type="submit">Registrar este dispositivo</button>
+            </form>
+            <p class="small text-muted mt-3 mb-2">En el celular se usa la huella o el rostro. En una computadora puedes usar Windows Hello
+              o elegir «Usar un teléfono» y escanear el código QR con tu celular.</p>
+            <a href="/logout" class="small">Cerrar sesión</a>
+            <% } %>
+          </div>
+        </div>
+      </div>
+    </div>
+    <%- include('../includes/scripts') %>
+    <script src="/vendor/simplewebauthn-browser.js"></script>
+    <script src="/public/js/dos-pasos.js"></script>
+  </body>
+</html>

@@ -6,5 +6,6 @@ import casosYDelitos from './004-casos-y-delitos.js';
 import oficiosConCaso from './005-oficios-con-caso.js';
 import lineas from './006-lineas.js';
 import auditoriaRegistroCambios from './007-auditoria-registro-cambios.js';
+import dosPasos from './008-dos-pasos.js';
 
-export default [nombresTablasOficios, collationUnica, indicesUnicos, casosYDelitos, oficiosConCaso, lineas, auditoriaRegistroCambios];
+export default [nombresTablasOficios, collationUnica, indicesUnicos, casosYDelitos, oficiosConCaso, lineas, auditoriaRegistroCambios, dosPasos];
