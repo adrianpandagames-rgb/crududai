@@ -6,11 +6,11 @@ import { auditActivity, auditRequestAction } from '../src/auditMiddleware.js';
 test('all page filters and search endpoints are audited without a page allowlist', () => {
   for (const path of ['/Crud', '/imei', '/ubicaciones', '/georeferenciacion', '/metricas/resumen', '/auditoria', '/nueva-pagina']) {
     assert.equal(auditRequestAction({ method: 'GET', path, query: { cualquierFiltro: 'dato' } }), 'SEARCH');
-    assert.equal(auditRequestAction({ method: 'GET', path, query: {} }), 'CONSULTA');
+    assert.equal(auditRequestAction({ method: 'GET', path, query: {} }), null);
   }
   assert.equal(auditRequestAction({ method: 'POST', path: '/api/telefono/validar' }), 'SEARCH');
   assert.equal(auditRequestAction({ method: 'POST', path: '/nueva-pagina/buscar' }), 'SEARCH');
-  assert.equal(auditRequestAction({ method: 'GET', path: '/imei', query: { page: '2', partial: 'true' } }), 'CONSULTA');
+  assert.equal(auditRequestAction({ method: 'GET', path: '/imei', query: { page: '2', partial: 'true' } }), null);
 });
 
 test('middleware records one event including complete filters, failures and authenticated identity', async (t) => {
@@ -45,7 +45,7 @@ test('middleware records one event including complete filters, failures and auth
   assert.equal(events[2].statusCode, 503);
   assert.equal(events[2].action, 'SEARCH');
   await fetch(`${base}/metricas`);
-  assert.equal(events[3].action, 'CONSULTA');
+  assert.equal(events.length, 3, 'opening a page is not logged');
   for (const path of ['/health', '/health/ready', '/api/route-toast', '/public/style.css', '/anonimo?q=uno']) await fetch(base + path);
-  assert.equal(events.length, 4);
+  assert.equal(events.length, 3);
 });

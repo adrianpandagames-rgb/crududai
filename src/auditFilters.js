@@ -6,7 +6,8 @@ export const AUDIT_TIME_ZONE = 'America/Hermosillo';
 export const AUDIT_PAGE_SIZE = 50;
 
 // Requests the pages make by themselves, plus the public landing page. New entries are no longer
-// written for them (see auditMiddleware.js); older ones stay hidden unless "automaticas" is checked.
+// written for them, nor for opening a page (see auditMiddleware.js); older ones, page visits included,
+// stay hidden unless "automaticas" is checked.
 export const automaticAuditPaths = ['/', '/api/localidades', '/api/ubicaciones/heatmap', '/medidores/resumen'];
 
 export const auditResults = {
@@ -116,6 +117,7 @@ export function buildAuditFilters(query = {}) {
     values.push(term, term, term, term, term);
   }
   if (!filters.automaticas) {
+    clauses.push(`(${auditOperationSql}) <> 'CONSULTA'`);
     clauses.push(`SUBSTRING_INDEX(request_path, '?', 1) NOT IN (${automaticAuditPaths.map(() => '?').join(', ')})`);
     values.push(...automaticAuditPaths);
   }

@@ -73,7 +73,7 @@ test('renders an empty dashboard without errors', async () => {
 
 test('the auto-refresh endpoint stays out of the audit log', () => {
   assert.equal(auditRequestAction({ method: 'GET', path: '/medidores/resumen', query: {} }), null);
-  assert.equal(auditRequestAction({ method: 'GET', path: '/medidores', query: {} }), 'CONSULTA');
+  assert.equal(auditRequestAction({ method: 'GET', path: '/medidores', query: {} }), null);
 });
 
 test('the Google Geocoding quota moved here from the users page', async () => {

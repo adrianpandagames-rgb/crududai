@@ -37,7 +37,7 @@ test('automatic requests are hidden by default and no longer written', () => {
   for (const path of ['/', '/api/localidades', '/api/ubicaciones/heatmap']) {
     assert.equal(auditRequestAction({ method: 'GET', path, query: { estado: 'Sonora' } }), null);
   }
-  assert.equal(auditRequestAction({ method: 'GET', path: '/ubicaciones', query: {} }), 'CONSULTA');
+  assert.equal(auditRequestAction({ method: 'GET', path: '/ubicaciones', query: {} }), null);
 });
 
 test('filter links keep only the filters in use', () => {
@@ -123,7 +123,7 @@ test('mounted routers are audited with their full path', async (t) => {
   await fetch(`${base}/planeacion-geografica/importar`, { method: 'POST' });
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.deepEqual(events.map(({ requestPath, action }) => `${action} ${requestPath}`),
-    ['CONSULTA /planeacion-geografica', 'POST /planeacion-geografica/importar']);
+    ['POST /planeacion-geografica/importar']);
 });
 
 test('the header lights up the section being viewed, sub-pages included', async () => {

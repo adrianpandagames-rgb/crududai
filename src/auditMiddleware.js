@@ -22,7 +22,8 @@ export function auditRequestAction(req) {
     if (exportPathPattern.test(path)) return 'EXPORT';
     const filtered = Object.entries(req.query || {}).some(([key, value]) =>
       !presentationParameters.has(key) && String(value ?? '').trim() !== '');
-    return filtered || /\/(buscar|search|consulta)(\/|$)/i.test(path) ? 'SEARCH' : 'CONSULTA';
+    // Only searches are logged; opening a page is not an action on the data.
+    return filtered || /\/(buscar|search|consulta)(\/|$)/i.test(path) ? 'SEARCH' : null;
   }
   if (req.method === 'POST' && (/\/(buscar|search|consulta)(\/|$)/i.test(path) || path === '/api/telefono/validar')) return 'SEARCH';
   return mutations.has(req.method) ? req.method : null;
@@ -37,7 +38,7 @@ export function auditActivity(req, res, next) {
   const action = auditRequestAction(req);
   const path = fullPath(req);
   const { auditPool, auditSession } = req.app.locals;
-  const registro = action && action !== 'SEARCH' && action !== 'CONSULTA'
+  const registro = action && action !== 'SEARCH'
     ? registroAuditado(req, path, { pool: auditPool, ...auditSession?.(req) }) : null;
   const antes = registro && registro.tipo !== 'exportar' ? registro.leer() : null;
 
