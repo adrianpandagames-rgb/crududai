@@ -112,8 +112,8 @@ export function buildAuditFilters(query = {}) {
   if (filters.ip) { clauses.push('ip_address = ?'); values.push(filters.ip); }
   if (filters.texto) {
     const term = `%${filters.texto.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
-    clauses.push('(request_path LIKE ? OR details LIKE ? OR user_email LIKE ?)');
-    values.push(term, term, term);
+    clauses.push('(request_path LIKE ? OR details LIKE ? OR user_email LIKE ? OR registro LIKE ? OR cambios LIKE ?)');
+    values.push(term, term, term, term, term);
   }
   if (!filters.automaticas) {
     clauses.push(`SUBSTRING_INDEX(request_path, '?', 1) NOT IN (${automaticAuditPaths.map(() => '?').join(', ')})`);

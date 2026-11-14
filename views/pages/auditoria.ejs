@@ -14,7 +14,8 @@
       .audit-failed table { margin: 0; }
       .audit-table td { vertical-align: top; }
       .audit-table .filter-link { color: inherit; text-decoration: underline dotted; text-underline-offset: 3px; }
-      .audit-table pre { max-width: 420px; max-height: 320px; overflow: auto; font-size: .75rem; }
+      .audit-table .audit-detalle { min-width: 260px; max-width: 460px; max-height: 360px; overflow: auto; font-size: .78rem; white-space: pre-wrap; word-break: break-word; }
+      .audit-registro { max-width: 240px; }
       .audit-table details summary { cursor: pointer; white-space: nowrap; }
       .audit-searched { max-width: 340px; }
       .audit-pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; margin-top: 1rem; }
@@ -178,11 +179,11 @@
             <div class="table-responsive">
               <table data-tabla="auditoria" class="table table-sm mb-0 audit-table">
                 <thead>
-                  <tr><th>Fecha</th><th>Usuario</th><th>Sección</th><th>Acción</th><th>Qué buscó / parámetros</th><th>Resultado</th><th>IP</th><th>Detalle</th></tr>
+                  <tr><th>Fecha</th><th>Usuario</th><th>Sección</th><th>Acción</th><th>Registro</th><th>Qué buscó / parámetros</th><th>Resultado</th><th>IP</th><th>Detalle</th></tr>
                 </thead>
                 <tbody>
                   <% if (entries.length === 0) { %>
-                    <tr><td colspan="8" class="text-center text-muted py-4"><%= filterError ? 'Corrige los filtros para consultar la actividad.' : 'No hay actividad que coincida con los filtros.' %></td></tr>
+                    <tr><td colspan="9" class="text-center text-muted py-4"><%= filterError ? 'Corrige los filtros para consultar la actividad.' : 'No hay actividad que coincida con los filtros.' %></td></tr>
                   <% } %>
                   <% entries.forEach((entry) => { %>
                     <tr>
@@ -194,6 +195,7 @@
                       </td>
                       <td><%= entry.section %><div class="small text-muted"><%= entry.origin %></div></td>
                       <td><span class="badge bg-secondary"><%= entry.action %></span></td>
+                      <td class="text-break audit-registro"><%= entry.registro || '—' %></td>
                       <td class="text-break audit-searched"><%= entry.searched %></td>
                       <td class="text-nowrap"><span class="badge <%= resultBadges[entry.result] %>"><%= entry.resultLabel %></span><div class="small text-muted"><%= entry.status_code %></div></td>
                       <td class="text-nowrap">
@@ -204,12 +206,7 @@
                       <td>
                         <details>
                           <summary>Ver</summary>
-                          <div class="small mt-2">Ruta: <code><%= entry.request_path %></code></div>
-                          <% if (entry.details) { %>
-                            <pre class="mt-2 mb-0 text-wrap"><%= JSON.stringify(entry.details, null, 2) %></pre>
-                          <% } else { %>
-                            <div class="small text-muted mt-1">Sin información adicional</div>
-                          <% } %>
+                          <pre class="audit-detalle mt-2 mb-0"><%= entry.detalle %></pre>
                         </details>
                       </td>
                     </tr>

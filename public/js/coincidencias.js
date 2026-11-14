@@ -99,6 +99,7 @@ function download(name, content) {
   link.href = url;
   link.download = name;
   link.click();
+  window.registrarExportacion?.(name);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 const csvCell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;

@@ -10,7 +10,7 @@
   const resetIdleTimer = () => {
     clearTimeout(idleTimer);
     idleTimer = setTimeout(() => {
-      fetch('/logout', {
+      fetch('/logout?motivo=inactividad', {
         method: 'GET',
         credentials: 'same-origin'
       }).finally(() => {

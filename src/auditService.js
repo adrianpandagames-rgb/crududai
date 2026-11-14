@@ -4,7 +4,7 @@ import { presentAuditEntry } from './auditPresentation.js';
 
 export const AUDIT_EXPORT_LIMIT = 10000;
 
-const entryColumns = `user_email, method, request_path, status_code, ip_address, details,
+const entryColumns = `user_email, method, request_path, status_code, registro, cambios, ip_address, details,
   ${auditOperationSql} AS operation, ${auditResourceSql} AS resource,
   UNIX_TIMESTAMP(created_at) AS createdTs`;
 
@@ -79,10 +79,10 @@ export async function exportarAuditoriaCsv(pool, { where, values }) {
     `SELECT ${entryColumns} FROM audit_logs ${where} ORDER BY id DESC LIMIT ?`,
     [...values, AUDIT_EXPORT_LIMIT],
   );
-  const header = ['Fecha', 'Usuario', 'Sección', 'Origen', 'Acción', 'Qué buscó / parámetros', 'Ruta', 'Estado', 'Resultado', 'IP'];
+  const header = ['Fecha', 'Usuario', 'Sección', 'Origen', 'Acción', 'Registro', 'Cambios (antes → después)', 'Qué buscó / parámetros', 'Ruta', 'Estado', 'Resultado', 'IP'];
   const lines = rows.map(presentRow).map((entry) => [
     `${entry.day} ${entry.time}`, entry.user_email, entry.section, entry.origin, entry.action,
-    entry.searched, entry.request_path, entry.status_code, entry.resultLabel, entry.ip_address || '',
+    entry.registro, entry.cambios, entry.searched, entry.request_path, entry.status_code, entry.resultLabel, entry.ip_address || '',
   ].map(csvCell).join(','));
   // The BOM makes Excel open the file as UTF-8 so accents survive.
   return { csv: `﻿${[header.map(csvCell).join(','), ...lines].join('\r\n')}\r\n`, rows: rows.length };

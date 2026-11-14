@@ -26,8 +26,17 @@ export function auditRequestPath(requestPath, query = {}) {
   return requestPath;
 }
 
+// Downloads and imports, by path. The same expressions run in JavaScript (new entries) and in MySQL
+// (filtering, and entries written before exports and imports had their own action).
+const exportRegex = '/(exportar|exportar-xlsx|exportar-kmz|descargar|csv|pdf|reporte)(/|$)';
+const importRegex = '/(importar|import-csv)(/|$)|^/limpieza/subir/?$';
+export const exportPathPattern = new RegExp(exportRegex, 'i');
+
 export const auditOperationSql = `CASE
-  WHEN method IN ('LOGIN', 'LOGIN_FAILED', 'SEARCH', 'CONSULTA') THEN method
+  WHEN method IN ('LOGIN', 'LOGOUT', 'LOGIN_FAILED') THEN method
+  WHEN method = 'EXPORT' OR (method IN ('SEARCH', 'CONSULTA') AND LOWER(SUBSTRING_INDEX(request_path, '?', 1)) REGEXP '${exportRegex}') THEN 'EXPORTACION'
+  WHEN method IN ('SEARCH', 'CONSULTA') THEN method
+  WHEN method = 'POST' AND LOWER(request_path) REGEXP '${importRegex}' THEN 'IMPORTACION'
   WHEN method = 'DELETE' OR LOWER(request_path) REGEXP '/(eliminar|delete)(/|$)' THEN 'ELIMINADO'
   WHEN method IN ('PUT', 'PATCH')
     OR LOWER(request_path) REGEXP '/(editar|modificar|update|restablecer-contrasena|rol|estado|mover|puesto)(/|$)'
@@ -79,8 +88,8 @@ export const auditResourceSql = `CASE
 
 export const auditActionLabels = {
   CONSULTA: 'Consulta de página o datos',
-  LOGIN: 'Inicio de sesión', LOGIN_FAILED: 'Intento de sesión fallido', SEARCH: 'Búsqueda',
-  REGISTRO: 'Creado', EDITADO: 'Editado', ELIMINADO: 'Eliminado',
+  LOGIN: 'Inicio de sesión', LOGOUT: 'Cierre de sesión', LOGIN_FAILED: 'Intento de sesión fallido', SEARCH: 'Búsqueda',
+  REGISTRO: 'Creado', EDITADO: 'Editado', ELIMINADO: 'Eliminado', EXPORTACION: 'Exportación', IMPORTACION: 'Importación',
   OTRO: 'Otra acción',
 };
 
@@ -114,12 +123,22 @@ const specificActions = [
   [/^\/spiderfoot\/buscar\/?$/i, 'Búsqueda en SpiderFoot'],
   [/^\/spiderfoot\/detener\//i, 'Detuvo búsqueda de SpiderFoot'],
   [/^\/spiderfoot\/eliminar\//i, 'Eliminó búsqueda de SpiderFoot'],
+  [/^\/auditoria\/exportar\/?$/i, 'Exportó bitácora de auditoría'],
+  [/^\/ruta\/exportar\//i, 'Exportó ruta (CSV)'],
+  [/^\/ruta\/exportar-xlsx\//i, 'Exportó ruta (Excel)'],
+  [/^\/ruta\/exportar-kmz\//i, 'Exportó ruta (KMZ)'],
+  [/^\/georeferenciacion\/exportar\//i, 'Exportó georreferenciación (CSV)'],
+  [/^\/georeferenciacion\/exportar-xlsx\//i, 'Exportó georreferenciación (Excel)'],
+  [/^\/limpieza\/descargar\//i, 'Descargó sábana limpia'],
+  [/^\/maigret\/[^/]+\/(reporte|pdf)\/?$/i, 'Descargó reporte de Maigret'],
+  [/^\/spiderfoot\/[^/]+\/csv\/?$/i, 'Descargó CSV de SpiderFoot'],
+  [/^\/planeacion-geografica\/importar\/?$/i, 'Importó planeación geográfica'],
   [/^\/(medidores|usuarios)\/google-geocoding\/reiniciar\/?$/i, 'Reinició contador de Geocoding'],
   [/\/(editar|modificar)(\/|$)/i, 'Editó registro'],
 ];
 
 export function describeAuditAction(entry) {
-  if (!['CONSULTA', 'SEARCH', 'LOGIN', 'LOGIN_FAILED'].includes(entry.operation)) {
+  if (!['CONSULTA', 'SEARCH', 'LOGIN', 'LOGOUT', 'LOGIN_FAILED'].includes(entry.operation)) {
     const path = String(entry.request_path || '').split('?')[0];
     const match = specificActions.find(([pattern]) => pattern.test(path));
     if (match) return match[1];

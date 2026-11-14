@@ -270,6 +270,7 @@
     link.href = cy.png({ full: true, scale: 2, bg: getComputedStyle(container).backgroundColor, maxWidth: 12000, maxHeight: 12000 });
     link.download = `red-${currentNumber || 'general'}.png`;
     link.click();
+    window.registrarExportacion?.(link.download);
   });
   setInterval(() => {
     if (autoCheck.checked && !document.hidden) load({ quiet: true });

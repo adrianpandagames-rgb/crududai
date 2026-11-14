@@ -58,6 +58,7 @@ function download(name, content) {
   link.href = url;
   link.download = name;
   link.click();
+  window.registrarExportacion?.(name);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 const safeLine = (line) => String(line).replace(/[^a-zA-Z0-9_-]/g, '_');

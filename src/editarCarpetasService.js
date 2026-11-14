@@ -31,6 +31,13 @@ function config(tipo, id) {
   const campos = esquemas[index].map(([nombre, etiqueta, tipoCampo, columna]) => ({ nombre, etiqueta, tipo: ['agencia','ciudad','medio','destruccion'].includes(nombre) ? 'select' : tipoCampo, columna: index === 0 ? columna || nombre : nombre, required: index === 0 || nombre === 'nuc' || nombre === 'ano' }));
   return { ...fuentesMetricas[index], campos, validar: validadores[index] };
 }
+// The table and fields of a record type, for the audit log's before/after; null for an unknown type or id.
+export function camposCarpeta(tipo, id) {
+  try {
+    const { tabla, campos } = config(tipo, id);
+    return { tabla, campos };
+  } catch { return null; }
+}
 export async function obtenerCarpeta(db, tipo, id) {
   const c = config(tipo, id);
   const columns = c.campos.map(f => {

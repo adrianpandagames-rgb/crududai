@@ -22,6 +22,7 @@ import { startImeiMetadataDailyJob } from './src/imeiMetadataService.js';
 import { hashPassword, verifyPassword } from './src/passwordUtils.js';
 import { sanitizeAuditData } from './src/auditDetails.js';
 import { auditActivity } from './src/auditMiddleware.js';
+import { MAX_CAMBIOS, MAX_REGISTRO } from './src/auditCambios.js';
 import { requireSameOrigin } from './src/requestSecurity.js';
 import { createTelegramApiRouter } from './src/telegramApiRouter.js';
 import { decryptTelegramId, encryptTelegramId, telegramIdHash } from './src/telegramIdCrypto.js';
@@ -85,11 +86,13 @@ const loginRateLimiter = createLoginRateLimiter();
 const MAX_EMAIL_LENGTH = 254;
 setInterval(() => loginRateLimiter.prune(), LOGIN_WINDOW_MS).unref();
 
-const writeAuditLog = ({ userId = null, userEmail = '', action, requestPath, statusCode, ipAddress, details = null }) => {
+// registro names the record the action touched; cambios holds its values before and after, as plain text.
+const writeAuditLog = ({ userId = null, userEmail = '', action, requestPath, statusCode, ipAddress, registro = null, cambios = null, details = null }) => {
   pool.execute(
-    `INSERT INTO audit_logs (user_id, user_email, method, request_path, status_code, ip_address, details)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [userId, userEmail, action, requestPath, statusCode, ipAddress, details === null ? null : JSON.stringify(sanitizeAuditData(details))],
+    `INSERT INTO audit_logs (user_id, user_email, method, request_path, status_code, registro, cambios, ip_address, details)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [userId, userEmail, action, requestPath, statusCode, registro ? String(registro).slice(0, MAX_REGISTRO) : null,
+      cambios ? String(cambios).slice(0, MAX_CAMBIOS) : null, ipAddress, details === null ? null : JSON.stringify(sanitizeAuditData(details))],
   ).catch((error) => console.error('Unable to write audit log:', error.message));
 };
 
@@ -100,6 +103,13 @@ const getAuthToken = (req) => {
   const cookiePairs = cookieHeader.split(';').map((part) => part.trim());
   const authCookie = cookiePairs.find((cookie) => cookie.startsWith('auth='));
   return authCookie ? authCookie.slice('auth='.length) : null;
+};
+
+// The audit middleware reads an edited record before the route runs, only for a signed-in user.
+app.locals.auditPool = pool;
+app.locals.auditSession = (req) => {
+  const session = sessions.get(getAuthToken(req));
+  return session && !session.revoked ? { userId: session.userId } : null;
 };
 
 const cuentas = createCuentaStore(pool);
@@ -163,6 +173,8 @@ const requireAuth = async (req, res, next) => {
   const now = Date.now();
   if (isSessionExpired(session, now)) {
     sessions.delete(token);
+    writeAuditLog({ userId: session.userId, userEmail: session.email, action: 'LOGOUT', requestPath: '/logout', statusCode: 302,
+      ipAddress: req.ip, details: { motivo: 'Sesión expirada' } });
     res.clearCookie('auth', buildSessionCookieOptions());
     return res.redirect('/');
   }
@@ -349,6 +361,12 @@ app.post('/login', requireSameOrigin, async (req, res) => {
 
 app.get('/logout', (req, res) => {
   const token = getAuthToken(req);
+  const session = token ? sessions.get(token) : null;
+  if (session && !session.revoked) {
+    // The page signs out by itself after 20 idle minutes (views/includes/scripts.ejs) and says so.
+    writeAuditLog({ userId: session.userId, userEmail: session.email, action: 'LOGOUT', requestPath: '/logout', statusCode: 302,
+      ipAddress: req.ip, details: { motivo: req.query.motivo === 'inactividad' ? 'Inactividad' : 'Cerró sesión' } });
+  }
   if (token) endSession(token);
 
   res.clearCookie('auth', buildSessionCookieOptions());
@@ -619,6 +637,18 @@ app.get('/auditoria', requireAdmin, async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+// Files the browser builds itself (Coincidencias, Planeación geográfica, the Red telefónica image) never reach
+// the server, so the page reports each download here.
+app.post('/auditoria/exportacion', requireAuth, (req, res) => {
+  const text = (value, max) => (typeof value === 'string' ? value.trim().slice(0, max) : '');
+  const pagina = text(req.body?.pagina, 200).split('?')[0];
+  const archivo = text(req.body?.archivo, 200);
+  if (!pagina.startsWith('/') || !archivo) return res.status(400).end();
+  writeAuditLog({ userId: req.session.userId, userEmail: req.session.email, action: 'EXPORT', requestPath: pagina, statusCode: 200,
+    ipAddress: req.ip, registro: `Archivo: ${archivo}`, details: { archivo, metodo: 'Descarga desde el navegador' } });
+  return res.status(204).end();
 });
 
 app.get('/auditoria/exportar', requireAdmin, async (req, res, next) => {
