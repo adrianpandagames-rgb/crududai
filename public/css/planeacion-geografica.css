@@ -82,3 +82,4 @@ html[data-theme="dark"] .planning-selected-chip { background: #16324f; color: #e
 /* "Combinada": size buttons in the antenna popup. */
 .planning-size-menu { min-width: 220px; }
 .planning-size-menu .btn-group { display: flex; }
+.planning-manual-azimuth { flex: 0 0 7.5rem; }

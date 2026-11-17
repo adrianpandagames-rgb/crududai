@@ -180,52 +180,11 @@ if (!window.L) {
 
   const layers = L.featureGroup().addTo(map);
   const overnightLayer = L.layerGroup().addTo(map);
-  // A point typed by hand. It lives in its own layer, so redrawing the coverage never removes it.
+  // The coordinate typed by hand (see drawManual), kept apart so redrawing the file never removes it.
   const manualLayer = L.layerGroup().addTo(map);
-  const manualInput = byId('planningManual');
-  const manualStatus = byId('planningManualStatus');
-  const manualClear = byId('planningManualClear');
-  function manualMessage(text, error = false) {
-    manualStatus.textContent = text;
-    manualStatus.classList.toggle('text-danger', error);
-    manualStatus.classList.toggle('text-muted', !error);
-    manualInput.classList.toggle('is-invalid', error);
-  }
-  byId('planningManualForm').addEventListener('submit', (event) => {
-    event.preventDefault();
-    let coords;
-    try {
-      coords = parseSearchCoordinates(manualInput.value);
-    } catch (error) {
-      manualMessage(error.message, true);
-      return;
-    }
-    if (!coords) {
-      manualMessage('Escribe latitud y longitud, por ejemplo 29.0729, -110.9559.', true);
-      return;
-    }
-    const { latitude, longitude } = coords;
-    const label = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
-    const icon = document.createElement('div');
-    icon.className = 'planning-route-marker planning-manual-marker';
-    icon.innerHTML = MANUAL_PIN;
-    icon.style.height = '44px';
-    manualLayer.clearLayers();
-    L.marker([latitude, longitude], {
-      icon: L.divIcon({ className: '', html: icon, iconSize: [40, 44], iconAnchor: [20, 44], tooltipAnchor: [0, -46] }),
-      keyboard: false, title: `Coordenada manual: ${label}`, zIndexOffset: 1000,
-    }).bindTooltip(`Coordenada manual<br>${label}`).addTo(manualLayer);
-    map.setView([latitude, longitude], Math.max(map.getZoom(), 15));
-    manualClear.hidden = false;
-    manualMessage(`Pin azul en ${label}.`);
-  });
-  manualClear.addEventListener('click', () => {
-    manualLayer.clearLayers();
-    manualInput.value = '';
-    manualClear.hidden = true;
-    manualMessage('Marca un punto en el mapa con un pin azul. No necesita archivo y no se guarda.');
-    manualInput.focus();
-  });
+  let manualPoint = null;
+  let manualEstimate = null;
+  let manualRequest = 0;
   let data = null;
   const selectedRows = new Set();
   let selectionActive = false;
@@ -962,6 +921,7 @@ if (!window.L) {
   }
   // Only a new file or a new selection re-frames the map; style changes keep the current view.
   function draw({ fit: shouldFit = false } = {}) {
+    drawManual();
     if (!data || !radius.reportValidity()) return;
     layers.clearLayers();
     const seen = new Set();
@@ -1270,6 +1230,133 @@ if (!window.L) {
     input.addEventListener('change', () => { if (data) overnightSummary(); });
   }
   byId('planningOvernightSettings').addEventListener('submit', (event) => event.preventDefault());
+
+  // A point typed by hand, drawn like one more antenna with the map's settings (coverage mode, beam, reach,
+  // palette, saturation, opacity and marker size). It lives in its own layer and needs no imported file.
+  const manualInput = byId('planningManual');
+  const manualAzimuth = byId('planningManualAzimuth');
+  const manualStatus = byId('planningManualStatus');
+  const manualClear = byId('planningManualClear');
+  function manualMessage(text, error = false) {
+    manualStatus.textContent = text;
+    manualStatus.classList.toggle('text-danger', error);
+    manualStatus.classList.toggle('text-muted', !error);
+  }
+  function manualRange() {
+    return rangeMode.value === 'estimated' && manualEstimate?.range != null ? manualEstimate.range : Number(radius.value);
+  }
+  function drawManual() {
+    manualLayer.clearLayers();
+    if (!manualPoint) return;
+    const { lat, lng, azimuth } = manualPoint;
+    const centre = [lat, lng];
+    const label = `${lat.toFixed(6)}, ${lng.toFixed(6)}${azimuth === null ? '' : ` · azimut ${azimuth}°`}`;
+    const reach = manualRange();
+    const withCoverage = coverageMode.value === 'sector' || coverageMode.value === 'range';
+    if (withCoverage && radius.checkValidity()) {
+      // No records behind it, so it takes the base colour of the palette, as "Un solo color" does.
+      const color = adjustSaturation(paletteById(paletteId).colors[3], saturation.value);
+      const asCircle = coverageMode.value === 'range' || azimuth === null;
+      const dashArray = coverageMode.value === 'sector' && azimuth === null ? '1 5'
+        : rangeMode.value === 'estimated' && manualEstimate && manualEstimate.range == null ? '6 5' : null;
+      const fill = { pane: 'coverageFill', stroke: false, fillColor: color, fillOpacity: 1, interactive: false };
+      const line = { pane: 'coverageLine', color, weight: 1.5, fill: false, interactive: false, dashArray };
+      if (asCircle) {
+        L.circle(centre, { ...fill, radius: reach }).addTo(manualLayer);
+        L.circle(centre, { ...line, radius: reach }).addTo(manualLayer);
+      } else {
+        const sector = coverageSector(lat, lng, azimuth, reach, Number(beam.value));
+        L.polygon(sector, fill).addTo(manualLayer);
+        L.polygon(sector, line).addTo(manualLayer);
+      }
+    }
+    // The blue pin keeps it apart from the red antennas; it follows the chosen marker size.
+    const size = markerSize.value === 'combinada' ? STYLE_DEFAULTS.markerSize : markerSize.value;
+    const pinWidth = Math.round(28 * PIN_SCALES[size]);
+    const pinHeight = Math.round(40 * PIN_SCALES[size]);
+    const icon = document.createElement('div');
+    icon.className = 'planning-route-marker';
+    icon.innerHTML = MANUAL_PIN;
+    const svg = icon.querySelector('svg');
+    svg.setAttribute('width', pinWidth);
+    svg.setAttribute('height', pinHeight);
+    const width = Math.max(40, pinWidth + 12);
+    icon.style.width = `${width}px`;
+    icon.style.height = `${pinHeight}px`;
+    const tooltip = withCoverage ? `Coordenada manual<br>${label}<br>Alcance: ${reach} m` : `Coordenada manual<br>${label}`;
+    L.marker(centre, {
+      icon: L.divIcon({ className: '', html: icon, iconSize: [width, pinHeight], iconAnchor: [width / 2, pinHeight], tooltipAnchor: [0, -(pinHeight + 2)] }),
+      keyboard: false, title: `Coordenada manual: ${label}`, zIndexOffset: 1000,
+    }).bindTooltip(tooltip).addTo(manualLayer);
+  }
+  // The estimated reach is asked like the file's antennas; they travel along so they count as neighbours,
+  // but only the manual point's answer is used and the file's own estimates are left untouched.
+  async function requestManualEstimate() {
+    if (!manualPoint || rangeMode.value !== 'estimated') return;
+    const request = ++manualRequest;
+    const neighbours = new Map();
+    for (const point of data?.points || []) neighbours.set(`${point.lat},${point.lng}`, { lat: point.lat, lng: point.lng, azimuth: null });
+    const antennas = [manualPoint, ...[...neighbours.values()].slice(0, 4999)];
+    try {
+      const response = await fetch('/planeacion-geografica/alcance', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operador: operator.value, antenas: antennas }),
+      });
+      if (response.redirected || response.status === 401) throw new Error('Tu sesión terminó. Vuelve a iniciar sesión.');
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'No fue posible calcular el alcance estimado.');
+      if (request !== manualRequest) return;
+      manualEstimate = result.alcances[0];
+      manualMessage(`Coordenada manual: ${describeEstimate(manualEstimate)}.`);
+    } catch (error) {
+      if (request !== manualRequest) return;
+      manualEstimate = null;
+      manualMessage(`${error.message || 'No fue posible conectar con el servidor.'} Se usa el alcance fijo.`, true);
+    }
+    drawManual();
+  }
+  byId('planningManualForm').addEventListener('submit', (event) => {
+    event.preventDefault();
+    let coords;
+    try {
+      coords = parseSearchCoordinates(manualInput.value);
+      if (!coords) throw new Error('Escribe latitud y longitud, por ejemplo 29.0729, -110.9559.');
+    } catch (error) {
+      manualInput.classList.add('is-invalid');
+      manualMessage(error.message, true);
+      return;
+    }
+    manualInput.classList.remove('is-invalid');
+    const rawAzimuth = manualAzimuth.value.trim();
+    const azimuth = rawAzimuth === '' ? null : Number(rawAzimuth);
+    if (azimuth !== null && !(Number.isFinite(azimuth) && azimuth >= 0 && azimuth <= 360)) {
+      manualAzimuth.classList.add('is-invalid');
+      manualMessage('El azimut va de 0 a 360°, o déjalo vacío para ver solo el rango.', true);
+      return;
+    }
+    manualAzimuth.classList.remove('is-invalid');
+    manualPoint = { lat: coords.latitude, lng: coords.longitude, azimuth };
+    manualEstimate = null;
+    manualMessage('');
+    drawManual();
+    map.setView([manualPoint.lat, manualPoint.lng], Math.max(map.getZoom(), 15));
+    manualClear.hidden = false;
+    requestManualEstimate();
+  });
+  manualClear.addEventListener('click', () => {
+    manualRequest++;
+    manualPoint = null;
+    manualEstimate = null;
+    manualLayer.clearLayers();
+    manualInput.value = '';
+    manualAzimuth.value = '';
+    manualInput.classList.remove('is-invalid');
+    manualAzimuth.classList.remove('is-invalid');
+    manualClear.hidden = true;
+    manualMessage('');
+    manualInput.focus();
+  });
+
   coverageMode.addEventListener('change', () => draw());
   beam.addEventListener('change', () => draw());
   radius.addEventListener('change', () => draw());
@@ -1277,10 +1364,13 @@ if (!window.L) {
     operator.disabled = rangeMode.value !== 'estimated';
     if (rangeMode.value === 'estimated' && !estimates) requestEstimates();
     else draw();
+    if (rangeMode.value === 'estimated' && !manualEstimate) requestManualEstimate();
   });
   operator.addEventListener('change', () => {
     estimates = null;
+    manualEstimate = null;
     requestEstimates();
+    requestManualEstimate();
   });
   colorMode.addEventListener('change', () => draw());
   markerSize.addEventListener('change', () => {
