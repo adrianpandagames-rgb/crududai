@@ -80,6 +80,15 @@
             <option value="todos">Todos los operadores</option>
           </select>
         </div>
+        <form id="planningManualForm" class="col-xl-6 mb-2" novalidate>
+          <label for="planningManual" class="form-label">Coordenada manual</label>
+          <div class="input-group">
+            <input id="planningManual" type="text" class="form-control" placeholder="29.0729, -110.9559 o 29°4'22.4&quot;N 110°57'21.2&quot;W" autocomplete="off" aria-describedby="planningManualStatus" />
+            <button id="planningManualSubmit" class="btn btn-outline-primary" type="submit">Ubicar</button>
+            <button id="planningManualClear" class="btn btn-outline-secondary" type="button" hidden>Quitar</button>
+          </div>
+          <p id="planningManualStatus" class="small text-muted mb-0 mt-1" role="status">Marca un punto en el mapa con un pin azul. No necesita archivo y no se guarda.</p>
+        </form>
       </div>
       <div id="planningTimeFilter" class="row align-items-end mb-2" hidden>
         <div class="col-sm-5 col-xl-4 mb-2">
@@ -212,7 +221,7 @@
   </main>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="/public/js/ruta-upload.js"></script>
-  <script type="module" src="/public/js/planeacion-geografica.js?v=27"></script>
+  <script type="module" src="/public/js/planeacion-geografica.js?v=28"></script>
   <%- include('../includes/footer') %>
 </body>
 </html>

@@ -9,6 +9,8 @@ import {
   findLastCommunications, COMMUNICATION_KINDS, lastCommunicationCells, lastCommunicationClipboard,
 } from './planeacion-ultima.js?v=5';
 
+import { parseSearchCoordinates } from './coordenadas.js?v=1';
+
 const byId = (id) => document.getElementById(id);
 const status = byId('planningStatus');
 const PAGE_SIZE = 200;
@@ -16,6 +18,8 @@ const PAGE_SIZE = 200;
 const ROUTE_PIN = '<svg viewBox="0 0 24 34" width="28" height="40" aria-hidden="true">'
   + '<path d="M12 1C5.9 1 1 5.8 1 11.8 1 20 12 33 12 33s11-13 11-21.2C23 5.8 18.1 1 12 1z" fill="#d93a2b" stroke="#a3261b" stroke-width="1.2"/>'
   + '<circle cx="12" cy="12" r="4.2" fill="#7a1a12"/></svg>';
+// The same pin in blue for a coordinate typed by hand, so it never reads as an antenna.
+const MANUAL_PIN = ROUTE_PIN.replace('#d93a2b', '#0d6efd').replace('#a3261b', '#0a4fb5').replace('#7a1a12', '#ffffff');
 // Imported files live only in this page: leaving or reloading it discards them. Earlier versions
 // kept the last import in sessionStorage; wipe anything they left behind.
 try {
@@ -176,6 +180,52 @@ if (!window.L) {
 
   const layers = L.featureGroup().addTo(map);
   const overnightLayer = L.layerGroup().addTo(map);
+  // A point typed by hand. It lives in its own layer, so redrawing the coverage never removes it.
+  const manualLayer = L.layerGroup().addTo(map);
+  const manualInput = byId('planningManual');
+  const manualStatus = byId('planningManualStatus');
+  const manualClear = byId('planningManualClear');
+  function manualMessage(text, error = false) {
+    manualStatus.textContent = text;
+    manualStatus.classList.toggle('text-danger', error);
+    manualStatus.classList.toggle('text-muted', !error);
+    manualInput.classList.toggle('is-invalid', error);
+  }
+  byId('planningManualForm').addEventListener('submit', (event) => {
+    event.preventDefault();
+    let coords;
+    try {
+      coords = parseSearchCoordinates(manualInput.value);
+    } catch (error) {
+      manualMessage(error.message, true);
+      return;
+    }
+    if (!coords) {
+      manualMessage('Escribe latitud y longitud, por ejemplo 29.0729, -110.9559.', true);
+      return;
+    }
+    const { latitude, longitude } = coords;
+    const label = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+    const icon = document.createElement('div');
+    icon.className = 'planning-route-marker planning-manual-marker';
+    icon.innerHTML = MANUAL_PIN;
+    icon.style.height = '44px';
+    manualLayer.clearLayers();
+    L.marker([latitude, longitude], {
+      icon: L.divIcon({ className: '', html: icon, iconSize: [40, 44], iconAnchor: [20, 44], tooltipAnchor: [0, -46] }),
+      keyboard: false, title: `Coordenada manual: ${label}`, zIndexOffset: 1000,
+    }).bindTooltip(`Coordenada manual<br>${label}`).addTo(manualLayer);
+    map.setView([latitude, longitude], Math.max(map.getZoom(), 15));
+    manualClear.hidden = false;
+    manualMessage(`Pin azul en ${label}.`);
+  });
+  manualClear.addEventListener('click', () => {
+    manualLayer.clearLayers();
+    manualInput.value = '';
+    manualClear.hidden = true;
+    manualMessage('Marca un punto en el mapa con un pin azul. No necesita archivo y no se guarda.');
+    manualInput.focus();
+  });
   let data = null;
   const selectedRows = new Set();
   let selectionActive = false;
