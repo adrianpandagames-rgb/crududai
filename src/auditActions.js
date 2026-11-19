@@ -9,7 +9,7 @@ export const auditResources = {
   TELEFONO: 'Teléfono', RED: 'Red telefónica', AUDITORIA: 'Auditoría', METRICAS: 'Métricas',
   MAIGRET: 'Maigret', SPIDERFOOT: 'SpiderFoot', IMAGEN: 'Búsqueda por imagen', NOMBRE: 'RastroX',
   COINCIDENCIA: 'Coincidencias de antenas', PERFIL: 'Perfil', TAREA: 'Tarea', CUENTA: 'Mi cuenta',
-  LIMPIEZA: 'Limpieza de sábana',
+  LIMPIEZA: 'Limpieza de sábana', PDF: 'Desbloqueo PDF',
 };
 
 const metricTypes = {
@@ -60,6 +60,7 @@ export const auditResourceSql = `CASE
   WHEN LOWER(request_path) REGEXP '^/maigret(/|$)' THEN 'MAIGRET'
   WHEN LOWER(request_path) REGEXP '^/(api/bot/)?spiderfoot(/|$)' THEN 'SPIDERFOOT'
   WHEN LOWER(request_path) REGEXP '^/imagenes(/|$)' THEN 'IMAGEN'
+  WHEN LOWER(request_path) REGEXP '^/desbloqueo-pdf(/|$)' THEN 'PDF'
   WHEN LOWER(request_path) REGEXP '^/nombres(/|$)' THEN 'NOMBRE'
   WHEN LOWER(request_path) REGEXP '^/perfiles(/|$)' THEN 'PERFIL'
   WHEN LOWER(request_path) REGEXP '^/tareas(/|$)' THEN 'TAREA'
@@ -107,6 +108,7 @@ const specificActions = [
   [/^\/georeferenciacion\/eliminar\//i, 'Eliminó georreferenciación'],
   [/^\/imagenes\/subir\/?$/i, 'Subió imagen'],
   [/^\/imagenes\/eliminar\//i, 'Eliminó imagen'],
+  [/^\/desbloqueo-pdf\/desbloquear\/?$/i, 'Desbloqueó PDF'],
   [/^\/perfiles\/?$/i, 'Registró perfil'],
   [/^\/perfiles\/eliminar\//i, 'Eliminó perfil'],
   [/^\/tareas\/?$/i, 'Registró tarea'],

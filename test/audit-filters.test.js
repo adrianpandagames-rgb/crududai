@@ -149,6 +149,7 @@ test('the menu is grouped and each role keeps exactly its links', async () => {
     '[Datos conservados]', 'Ficha de línea o caso', 'Líneas', 'IMEI', 'Perfiles', 'Limpieza',
     '[Mapeo]', 'Ubicaciones', 'Georeferenciación', 'Planeación geográfica', 'Ruta', 'Coincidencias de antenas',
     '[OSINT]', 'Líneas Internacionales', 'Maigret', 'SpiderFoot', 'RastroX', 'Búsqueda por imagen',
+    '[Herramientas]', 'Desbloqueo PDF',
     '[Administración]', 'Usuarios', 'Auditoría', 'Medidores', 'Red telefónica',
     'Mi cuenta', 'Notificaciones', 'Cerrar sesión',
   ]);

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <%- include('../includes/head') %>
+  </head>
+  <body>
+    <%- include('../includes/header') %>
+
+    <main class="container page-offset">
+      <div class="row justify-content-md-center mb-5">
+        <div class="col-md-12 mt-5">
+          <h2 class="text-center title">DESBLOQUEO PDF <hr /></h2>
+        </div>
+      </div>
+
+      <% if (message) { %>
+        <div class="alert <%= messageType === 'error' ? 'alert-danger' : 'alert-success' %>"><%= message %></div>
+      <% } %>
+
+      <div class="row justify-content-md-center mb-4">
+        <div class="col-md-6 mb-4">
+          <div class="card p-4">
+            <h3 class="text-center mb-4">Quitar restricciones</h3>
+            <form action="/desbloqueo-pdf/desbloquear" method="POST" enctype="multipart/form-data">
+              <div class="mb-3">
+                <label for="pdf" class="form-label">PDF (hasta <%= maxMegabytes %> MB)</label>
+                <div id="pdfDropZone" class="csv-drop-zone">
+                  <p id="pdfDropHint" class="small text-muted mb-2">Arrastra y suelta el PDF aquí o selecciónalo.</p>
+                  <input type="file" id="pdf" name="pdf" class="form-control" required accept="application/pdf,.pdf"
+                    aria-describedby="pdfDropHint pdfDropStatus" />
+                  <p id="pdfDropStatus" class="small mb-0 mt-2" role="status" aria-live="polite"></p>
+                </div>
+              </div>
+              <div class="mb-3">
+                <label for="contrasena" class="form-label">Contraseña de apertura (solo si el PDF la pide para abrirse)</label>
+                <input type="password" id="contrasena" name="contrasena" class="form-control" autocomplete="off" />
+              </div>
+              <button type="submit" class="btn btn-primary w-100">Desbloquear y descargar</button>
+            </form>
+            <ul class="small text-muted mt-3 mb-0 ps-3">
+              <li>Quita las restricciones de impresión, copia y edición. El PDF se procesa en este servidor, sin enviarlo a servicios externos, y no se guarda.</li>
+              <li>Si el PDF pide contraseña para <strong>abrirse</strong>, hace falta esa contraseña; sin ella no se puede desbloquear.</li>
+              <li>La descarga empieza sola; el archivo se llama igual que el original con «-desbloqueado».</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </main>
+    <script src="/public/js/desbloqueo-pdf.js"></script>
+    <%- include('../includes/scripts') %>
+    <%- include('../includes/footer') %>
+  </body>
+</html>
