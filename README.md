@@ -1,360 +1,129 @@
 # CRUD UDAI
 
-## Delito en Líneas
-
-El campo opcional Delito se captura al registrar una línea (con CSV o sin
-utilidad), se modifica desde Editar y aparece en la tabla y la búsqueda.
-Cada registro de objetivo conserva su propio delito; no se propaga a otros
-registros con el mismo NUC.
-
-Después de subir el código al VPS, desde la carpeta del proyecto ejecuta:
-
-```sh
-npm run migrate:lineas-delito
-pm2 restart crududai --env production
-```
-
-La migración usa las variables DB_HOST, DB_PORT, DB_USER, DB_PASSWORD y DB_NAME
-del entorno o del archivo .env. La cuenta necesita permiso ALTER sobre objetivo.
-Puede repetirse: si delito ya existe, no modifica la tabla. Los asuntos
-existentes conservan sus datos y quedan sin delito hasta que se editen.
-Ejecuta la migración antes de reiniciar con el código actualizado.
-Como alternativa para una ejecución manual única en MySQL, selecciona la base
-correcta y ejecuta el contenido de BD/lineas_delito.sql; no es necesario usar
-ambos métodos.
-
-## Entrecalles en Georreferenciación
-
-Al importar un CSV o XLSX con latitud y longitud, se obtiene la dirección con
-Google Geocoding y se calculan las entrecalles con la red vial de OpenStreetMap.
-Configura `GOOGLE_GEOCODING_API_KEY`. Las entrecalles se calculan desde MySQL:
-el módulo ya no consulta Overpass ni necesita `OVERPASS_API_URL`.
-
-Para instalar o actualizar la red vial:
-
-1. Descarga [mexico-latest.osm.pbf de Geofabrik](https://download.geofabrik.de/north-america/mexico.html)
-   y guárdalo en `data/osm/mexico-latest.osm.pbf`.
-2. Ejecuta `npm run import:red-vial` (o añade la ruta de otro archivo PBF).
-3. Ejecuta `node scripts/check-red-vial.js` para comprobar la red importada.
-
-Se importan las vías transitables del rectángulo 26–33° N, 115–108° O,
-que cubre Sonora y una zona limítrofe; no es un recorte administrativo exacto.
-El lector trabaja en flujo y conserva nodos de esa región en memoria (hasta
-4 GB de heap). Una actualización solo se activa cuando finaliza correctamente;
-las versiones anteriores se conservan para no interrumpir archivos en proceso.
-Actualiza el extracto periódicamente. Los archivos grandes están excluidos de Git.
-
-Antes de consultar servicios externos se busca la coordenada en MySQL, usando
-la precisión almacenada de nueve decimales. Si existe, se reutilizan la dirección,
-el lugar y las entrecalles encontradas. Si las entrecalles están pendientes o el
-servicio falló anteriormente, se calculan con la red local, sin consultar Google
-ni Overpass. Para direcciones guardadas sin nombre de calle se identifica la vía
-más próxima; si hay dos candidatas a distancias similares se solicita revisión.
-Las coordenadas nuevas se consultan en Google y guardan; las repetidas
-dentro de un archivo reutilizan el resultado en memoria.
-
-El campo `ubicacion` se guarda como `Calle principal, entre Calle X y Calle Y,
-Colonia, C.P. 83000` y `lugar` como `Ciudad, Estado`. El número exterior no se
-incluye. Los componentes ausentes se omiten; las entrecalles se incluyen solo
-cuando están disponibles ambas. Los componentes de Google se conservan en JSON
-para reconstruir el formato sin nuevas consultas. Ejecuta
-`node scripts/format-georeferenciacion.js` para convertir registros anteriores
-con componentes suficientes; los casos ambiguos conservan su dirección original.
-
-Las exportaciones incluyen `entre_calle_1`, `entre_calle_2`, `estado_entrecalles`
-y `fuente_entrecalles`. Los nombres y el estado también se guardan en la tabla
-de ubicaciones. Las columnas de MySQL se agregan al abrir el módulo; la cuenta
-de base de datos necesita permiso ALTER sobre `georeferenciacion_ubicaciones`.
-Los archivos ya procesados no se recalculan: vuelve a importarlos para obtener
-las entrecalles.
-
-`ENCONTRADAS` indica dos cruces sugeridos, `REQUIERE_REVISION` indica datos
-insuficientes o ambiguos, `RED_LOCAL_NO_CARGADA` indica que falta importar el mapa,
-`SERVICIO_NO_DISPONIBLE` puede aparecer en resultados anteriores del proveedor
-y `NO_APLICA` indica que no se obtuvo una dirección válida. Se exige coincidencia
-del nombre de calle, cercanía de hasta 60 metros y conexiones viales reales;
-se recorre hasta 800 metros en cada dirección. Esquinas, ramificaciones y cruces
-sin nombre requieren revisión. La ausencia de entrecalles no elimina la dirección.
-Cuando un extremo conecta con varias calles, se conservan sus nombres separados
-por `/` y el estado queda en `REQUIERE_REVISION`. Si solo se conoce un extremo,
-se conserva ese nombre en su columna; no se asigna una segunda calle.
-
-Las consultas viales reutilizan zonas cercanas por archivo y conservan los
-identificadores originales de nodos para distinguir puentes de cruces conectados.
-Fuera de la cobertura o sin datos suficientes se solicita revisión.
-Verifica los resultados antes de utilizarlos.
-Datos viales: [© OpenStreetMap contributors](https://www.openstreetmap.org/copyright).
-
-## Docker
-
-Para ejecutar la aplicación y MySQL en contenedores con una copia de tus datos
-actuales, sigue [la guía de Docker](DOCKER.md).
-
-![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?logo=node.js&logoColor=white)
-![Express](https://img.shields.io/badge/Express-4.x-000000?logo=express&logoColor=white)
-![MySQL](https://img.shields.io/badge/MySQL-8.x-4479A1?logo=mysql&logoColor=white)
-![License](https://img.shields.io/badge/License-ISC-blue)
-
-Aplicación web desarrollada con Node.js, Express y MySQL para gestionar información relacionada con estudiantes, objetivos, contactos e IMEIs.
-
-## Descripción general
-
-Este proyecto ofrece una interfaz web para:
-
-- gestionar estudiantes y sus datos básicos;
-- registrar objetivos y contactos asociados;
-- almacenar IMEIs y validar posibles duplicados o coincidencias;
-- consultar metadatos de IMEI mediante una API externa;
-- importar archivos CSV compatibles con Excel en Ruta para numerar antenas y completar sus ubicaciones;
-- autenticar usuarios con sesiones y opción de recordar sesión.
-
-La aplicación usa EJS como motor de vistas y sirve contenido estático desde la carpeta public.
-
-## Tecnologías utilizadas
-
-- Node.js
-- Express
-- EJS
-- MySQL / mysql2
-- bcrypt
-- dotenv
-- multer
-- CORS
-- Node test runner para pruebas
-
-## Estructura del proyecto
-
-- app.js: punto de entrada principal del servidor.
-- src/: lógica de base de datos, enrutamiento, sesiones, servicios de IMEI y controladores.
-- views/: plantillas EJS para las páginas y parciales.
-- public/: archivos estáticos como CSS, JS e imágenes.
-- BD/: scripts SQL para crear y cargar tablas base.
-- test/: pruebas automatizadas del proyecto.
+Aplicación web interna para administrar objetivos, líneas telefónicas, contactos, IMEI, georreferenciación y otras herramientas de consulta. Está construida con Node.js, Express, EJS y MySQL. Incluye autenticación, administración de usuarios, bitácora de actividad y una API para el bot de Telegram.
 
 ## Requisitos
 
-Antes de ejecutar la aplicación asegúrate de tener instalado:
+- Node.js 22.x y npm.
+- MySQL 8.x con una base de datos creada y permisos para las migraciones.
+- Una copia local de las variables de entorno, basada en `.env.example`.
 
-- Node.js 18 o superior
-- MySQL
-- npm
+Para la opción de contenedores se requiere Docker Desktop con Docker Compose; consulta [DOCKER.md](DOCKER.md).
 
-## Instalación
+## Inicio local
 
-1. Clona el repositorio:
+1. Instala dependencias:
 
-   ```bash
-   git clone <url-del-repositorio>
-   cd crududai
+   ```sh
+   npm ci
    ```
 
-2. Instala las dependencias:
+   El proyecto incluye `xlsx-0.20.3.tgz`, requerido por `npm ci`.
 
-   ```bash
-   npm install
+2. Crea la base de datos MySQL y copia `.env.example` a `.env`. Completa al menos `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` y `DB_NAME`.
+
+3. Si ya tienes una base compatible con el esquema de la aplicación, crea un respaldo y aplica las migraciones pendientes:
+
+   ```sh
+   npm run migrate
    ```
 
-3. Crea una base de datos en MySQL y carga los scripts SQL de la carpeta BD.
+   `npm run migrate` aplica las migraciones versionadas de `migrations/`; no crea por sí solo una base nueva desde cero. Las migraciones alteran el esquema y MySQL no puede revertir automáticamente cada cambio DDL. Para una instalación nueva, prepara primero el esquema base requerido por la aplicación.
 
-   Ejemplo:
+4. Inicia el servidor:
 
-   ```bash
-   mysql -u <usuario> -p
-   CREATE DATABASE crudnodejs;
-   use crudnodejs;
-   source BD/imei.sql;
+   ```sh
+   npm run dev
    ```
 
-4. Ejecuta las migraciones de usuarios, incluida la que permite forzar el cambio de una contraseña temporal:
+   Para ejecutarlo sin nodemon, usa `npm start`. La configuración local predeterminada escucha HTTP en el puerto `3600` y HTTPS en `3443`; configura `HOST`, `PORT` y `HTTPS_PORT` según tu entorno. Si no proporcionas certificados TLS, la aplicación crea certificados locales autofirmados.
 
-   ```bash
-   npm run migrate:user-status
-   npm run migrate:initial-admin
-   npm run migrate:must-change-password
-   npm run migrate:telegram-users
-   ```
+## Configuración
 
-   En Hostinger, ejecuta `npm run migrate:telegram-users` desde la terminal del proyecto después de actualizar el código. También puedes seleccionar la base de datos correcta y ejecutar una sola vez el contenido de `BD/telegram_users.sql` en el cliente MySQL o phpMyAdmin.
+La lista de variables y sus comentarios está en [`.env.example`](.env.example). No guardes credenciales reales en Git.
 
-   Genera una clave con `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"` y configúrala como `TELEGRAM_ID_ENCRYPTION_KEY` en las variables de entorno de Hostinger. Conserva una copia segura: perder esta clave impide descifrar los IDs. Usa la misma clave en cada instancia conectada a esa base de datos y reinicia Node y el bot después del despliegue.
+Entre las variables opcionales están:
 
-   En **Administración de usuarios**, captura para cada correo el ID que la persona obtiene con `/miid` y pulsa **Guardar ID**. Puedes modificarlo o borrar el campo para desvincularlo. Los IDs que ya estaban en `TELEGRAM_ALLOWED_USER_IDS` no se pueden asignar automáticamente porque no indican el correo correspondiente; vincúlalos manualmente. La lista deja de controlar el acceso.
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`: envío de avisos por correo.
+- `PUBLIC_BASE_URL` y opciones `WEBAUTHN_*`: dominio HTTPS y configuración de llaves de acceso para la verificación en dos pasos.
+- `IMEI_API_KEY`, `IMEI_SERVICE_ID` y `PHONE_VALIDATION_ACCESS_KEY`: servicios externos de consulta.
+- `GOOGLE_GEOCODING_API_KEY` y `CARTO_API_KEY`: georreferenciación y mapa de medidores.
+- Variables `TELEGRAM_*`: integración del bot. Consulta la [guía del bot](telegram_bot/README.md).
 
-## Configuración por entorno
+En producción, configura HTTPS detrás del proxy o alojamiento correspondiente y define `TRUST_PROXY` solo para proxies confiables. Las sesiones de la aplicación se guardan en memoria y se invalidan al reiniciar el proceso.
 
-Este proyecto usa variables de entorno para separar desarrollo y producción. Crea dos archivos en la raíz del proyecto:
+## Migraciones
 
-- `.env.development`
-- `.env.production`
+El comando `npm run migrate` aplica las migraciones versionadas. Puedes consultar su estado o revisar pendientes sin aplicarlas:
 
-### Ejemplo para desarrollo
-
-```env
-DB_HOST=localhost
-DB_USER=root
-DB_PASSWORD=tu_password
-DB_NAME=crudnodejs_dev
-
-HOST=0.0.0.0
-PORT=3600
-HTTPS_PORT=3443
-NODE_ENV=development
-
-IMEI_API_KEY=tu_api_key
-IMEI_SERVICE_ID=0
+```sh
+npm run migrate -- --estado
+npm run migrate -- --revisar
 ```
 
-### Ejemplo para producción
+Haz un respaldo antes de cambiar el esquema. Hay también comandos independientes para cambios específicos; sus nombres están declarados en `package.json` y sus implementaciones en `scripts/`. Por ejemplo:
 
-```env
-DB_HOST=servidor-produccion
-DB_USER=usuario_app
-DB_PASSWORD=tu_password_segura
-DB_NAME=crudnodejs_prod
-
-HOST=0.0.0.0
-PORT=80
-HTTPS_PORT=443
-NODE_ENV=production
-
-IMEI_API_KEY=tu_api_key
-IMEI_SERVICE_ID=0
+```sh
+npm run migrate:lineas-delito
+npm run migrate:telegram-users
+npm run migrate:audit-logs
 ```
 
-> Nunca guardes secretos reales en el repositorio. Agrega `.env.development` y `.env.production` al `.gitignore` o usa un archivo local no versionado.
+Ejecuta una migración con la configuración de base de datos del entorno antes de habilitar la función que depende de ella. Para el despliegue de Docker y la copia de datos actuales, sigue los pasos de [DOCKER.md](DOCKER.md).
 
-### Scripts recomendados
+## Funciones con datos o servicios externos
 
-En `package.json` puedes dejar esto:
+### Georreferenciación y entrecalles
 
-```json
-"scripts": {
-  "dev": "cross-env NODE_ENV=development nodemon app.js",
-  "start": "cross-env NODE_ENV=production node app.js"
-}
+La georreferenciación puede usar Google Geocoding y una red vial local de OpenStreetMap. Configura `GOOGLE_GEOCODING_API_KEY`. Para importar o revisar la red vial:
+
+```sh
+npm run import:red-vial
+node scripts/check-red-vial.js
 ```
 
-Entonces ejecutas:
+El importador espera un archivo PBF; por defecto usa `data/osm/mexico-latest.osm.pbf`. Los archivos grandes de mapas no se incluyen en Git. Los resultados y las entrecalles pueden requerir revisión, especialmente fuera de la cobertura de la red vial. Datos viales: [© OpenStreetMap contributors](https://www.openstreetmap.org/copyright).
 
-```bash
-npm run dev
-```
+### Delito en líneas
 
-O en producción:
+El campo de delito es opcional y pertenece a cada registro individual. Para actualizar un despliegue que aún no tiene la columna, ejecuta `npm run migrate:lineas-delito` con sus credenciales de base de datos.
 
-```bash
-npm start
-```
+### Bot de Telegram
 
-La aplicación quedará disponible en:
+El bot está implementado en Python y se configura aparte del servidor web. Consulta [telegram_bot/README.md](telegram_bot/README.md) para instalarlo, configurarlo y administrar el proceso.
 
-- HTTP: http://localhost:3600
-- HTTPS: https://localhost:3443
+## Docker
 
-El puerto HTTP redirige automáticamente a HTTPS.
+La guía [DOCKER.md](DOCKER.md) describe cómo preparar una copia de la base MySQL existente e iniciar la aplicación y MySQL en contenedores. La preparación requiere `mysqldump`. Los volúmenes de Docker conservan los datos entre reinicios; no uses `docker compose down -v` si quieres conservarlos.
 
-### Nota sobre `cross-env`
+## Scripts disponibles
 
-En Windows, `NODE_ENV=development` puede no funcionar como se espera en consola. Por eso se recomienda `cross-env` para que el valor se establezca correctamente en todos los sistemas operativos.
+Los principales scripts definidos en `package.json` son:
 
-## Pruebas
+| Comando | Uso |
+| --- | --- |
+| `npm run dev` | Servidor local con nodemon |
+| `npm start` | Servidor Node.js |
+| `npm run build` | Comprobación sintáctica de `app.js` |
+| `npm test` | Pruebas con el ejecutor integrado de Node.js |
+| `npm run migrate` | Migrador principal |
+| `npm run import:red-vial` | Importación de la red vial desde PBF |
 
-Para ejecutar la suite de pruebas:
+También hay comandos `migrate:*` para cambios individuales de esquema. Consulta `package.json` para la lista completa.
 
-```bash
-npm test
-```
+## Estructura
 
-## Notas importantes
+- `app.js`: configuración y arranque de Express.
+- `src/`: rutas, servicios, autenticación y acceso a datos.
+- `views/` y `public/`: vistas EJS y recursos del navegador.
+- `BD/`, `migrations/` y `scripts/`: SQL, migraciones y tareas de mantenimiento.
+- `telegram_bot/`: cliente de Telegram en Python.
+- `test/`: pruebas automatizadas.
+- `docs/` y `manuales/`: documentación complementaria.
 
-- La app genera certificados HTTPS locales automáticamente si no existen en la carpeta certs.
-- Algunas rutas están protegidas por autenticación basada en cookies.
-- Las contraseñas generadas al crear o restablecer un usuario son temporales; el usuario debe reemplazarlas en el modal mostrado al iniciar sesión.
-- El proyecto incluye lógica para revisar metadatos de IMEI de forma programada.
+## Despliegue y otros documentos
 
-## Flujo típico de uso
-
-1. Iniciar sesión desde la pantalla inicial.
-2. Navegar a la sección de objetivos o IMEIs.
-3. Registrar contactos, objetivos y dispositivos.
-4. Revisar coincidencias y alertas de posible duplicidad.
-
-## Capturas de pantalla
-
-Pronto se agregarán capturas de la interfaz para mostrar el flujo principal de la aplicación.
-
-## Ejemplos de uso
-
-- Crear un objetivo nuevo desde la vista de estudiantes.
-- Registrar un IMEI asociado a un objetivo existente.
-- Consultar coincidencias para detectar posibles duplicados.
-- Revisar la información de marca y modelo recuperada desde la API de IMEI.
-
-Si deseas, también puedo preparar una versión del README en inglés o agregar ejemplos más detallados de uso.
-
-## Iniciar el servidor al iniciar sesión en Windows
-
-Windows no inicia un archivo `.ps1` directamente desde la lista de aplicaciones
-de inicio. Crea un acceso directo y, en sus propiedades, configura:
-
-```text
-Destino: %SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "C:\ruta\completa\crududai\run.server.ps1"
-Iniciar en: C:\ruta\completa\crududai
-```
-
-Escribe únicamente el valor de cada línea en el campo con ese nombre; no incluyas
-las etiquetas `Destino:` ni `Iniciar en:`. Reemplaza las rutas por la ubicación
-del proyecto y agrega el acceso directo a la carpeta de inicio de Windows
-(abre `shell:startup`). El script ejecuta `npm run dev`;
-los registros quedan en `%LOCALAPPDATA%\CRUDUDAI\logs\server.stdout.log` y
-`server.stderr.log`.
-
-## Crear un ejecutable Windows y ejecutarlo como servicio (`correlatador`)
-
-Si quieres un "ejecutable" que pueda iniciarse y ejecutarse en segundo plano con un nombre fácil de identificar, sigue estos pasos.
-
-1) Generar el ejecutable (requiere `pkg`):
-
-```powershell
-npm install
-npm run package:win
-```
-
-El ejecutable resultante quedará en `dist\correlatador.exe`.
-
-2) Instalar como servicio de Windows (ejecutar PowerShell como Administrador):
-
-```powershell
-.\tools\install-service.ps1 -ExePath "C:\ruta\completa\a\tu\repo\dist\correlatador.exe"
-```
-
-Si omites `-ExePath`, el script usa `dist\correlatador.exe` por defecto.
-
-3) Detener y desinstalar el servicio (Administrador):
-
-```powershell
-.\tools\uninstall-service.ps1
-```
-
-Notas:
-
-- El servicio creado se llamará `correlatador` y puede gestionarse desde `services.msc` o con `Start-Service`/`Stop-Service`.
-- Asegúrate de construir el ejecutable compatible con tu arquitectura (el script usa `node18-win-x64`).
-- Si prefieres no instalar como servicio, puedes ejecutar el exe directamente; para iniciarlo sin consola usa un acceso directo con la opción de inicio minimizado.
-# Correos de usuarios
-
-Al crear una cuenta, restablecer una contraseña desde administración o guardar una
-nueva contraseña, se envía un correo al usuario. Al crear la cuenta o restablecer la contraseña, el correo
-incluye la contraseña temporal, que debe cambiarse al iniciar sesión y no se muestra
-al administrador. Solo se guarda su hash en la base de datos. El aviso de cambio
-de contraseña por el usuario no incluye la contraseña.
-
-Configura `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` y `SMTP_FROM`
-en `.env` (en Docker, `.env.docker`) y reinicia la aplicación. Consulta `.env.example`.
-El puerto 587 exige STARTTLS; el 465 utiliza TLS desde la conexión, según la
-[configuración SMTP de Nodemailer](https://nodemailer.com/smtp).
-Si el proveedor exige una contraseña de aplicación, úsala en `SMTP_PASSWORD`.
-Sin configuración o ante un error de envío, la operación se conserva y la pantalla
-muestra una advertencia. Los correos fallidos no se reintentan automáticamente.
-Si falla el correo de creación o restablecimiento, revisa SMTP y vuelve a restablecer
-la contraseña para generar y enviar una nueva.
+- [DOCKER.md](DOCKER.md): ejecución local en Docker.
+- [telegram_bot/README.md](telegram_bot/README.md): instalación y comandos del bot.
+- [GEOREFERENCIACION.md](GEOREFERENCIACION.md): detalles de georreferenciación.
+- [SECURITY-FIXES.md](SECURITY-FIXES.md): registro de correcciones de seguridad.
